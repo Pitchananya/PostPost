@@ -1050,19 +1050,116 @@ const VOICES = [
   { id:'witty', emoji:'😄', th:'มีอารมณ์ขัน', en:'Witty', alt_th:'Witty', alt_en:'อารมณ์ขัน', sample_th:'ขนาดดอกกุหลาบยังต้องบำรุง ผิวเราก็เหมือนกัน', sample_en:'Even roses need care — your skin does too.' },
 ];
 
+// 12 Brand Archetypes — "PROMPT for Branding" 2026 Updated Version
 const ARCHETYPES = [
-  { id:'creator', icon:'🎨', th:'The Creator', en:'The Creator', sub_th:'สร้างสรรค์ · จินตนาการ', sub_en:'Imaginative · expressive' },
-  { id:'sage', icon:'📖', th:'The Sage', en:'The Sage', sub_th:'รู้ลึก · ให้ความจริง', sub_en:'Wise · truth-seeking' },
-  { id:'caregiver', icon:'🤍', th:'The Caregiver', en:'The Caregiver', sub_th:'ใส่ใจ · ห่วงใย', sub_en:'Nurturing · caring' },
-  { id:'innocent', icon:'☀️', th:'The Innocent', en:'The Innocent', sub_th:'บริสุทธิ์ · ดีงาม', sub_en:'Pure · optimistic' },
-  { id:'jester', icon:'🎭', th:'The Jester', en:'The Jester', sub_th:'สนุก · ฮา', sub_en:'Playful · funny' },
-  { id:'magician', icon:'✨', th:'The Magician', en:'The Magician', sub_th:'เปลี่ยนแปลง · มหัศจรรย์', sub_en:'Transformative · visionary' },
-  { id:'ruler', icon:'👑', th:'The Ruler', en:'The Ruler', sub_th:'มั่นใจ · ผู้นำ', sub_en:'Authoritative · leader' },
-  { id:'hero', icon:'🛡', th:'The Hero', en:'The Hero', sub_th:'กล้าหาญ · เอาชนะ', sub_en:'Brave · triumphant' },
-  { id:'regular', icon:'🙂', th:'The Regular Guy', en:'The Regular Guy', sub_th:'เพื่อนบ้าน · เข้าถึงง่าย', sub_en:'Relatable · friendly' },
-  { id:'rebel', icon:'🔥', th:'The Rebel', en:'The Rebel', sub_th:'ต่อต้านกฎ · แหวกแนว', sub_en:'Disruptive · bold' },
-  { id:'explorer', icon:'🧭', th:'The Explorer', en:'The Explorer', sub_th:'ผจญภัย · อิสระ', sub_en:'Adventurous · free' },
-  { id:'lover', icon:'💗', th:'The Lover', en:'The Lover', sub_th:'สัมพันธ์ · ใกล้ชิด', sub_en:'Intimate · sensual' },
+  { id:'hero', icon:'🛡', th:'The Hero', en:'The Hero', sub_th:'กล้าหาญ · พิชิต', sub_en:'Brave · triumphant',
+    tone:'Inspiring, motivating, confident', emotion:'Courage, determination, victory',
+    persuasion:'Inspiring through challenges and triumphs', cta:'Take on a challenge, be brave, conquer',
+    story:"Hero's journey, overcoming impossible odds",
+    thai:'Modern sports heroes (e.g. Panipak), overcoming adversity',
+    persona:'Courageous mentor, inspiring leader',
+    brands:['Nike','Under Armour','Marvel'], actors:['Chris Hemsworth','Nadech Kugimiya','Panipak Wongpattanakit'],
+    aiPrompt:"Act as 'The Hero'. Use an empowering, motivating tone that inspires the audience to overcome obstacles.",
+    sub:['The Warrior','The Athlete','The Rescuer'], hybrid:'+ Caregiver — protecting and empowering the vulnerable' },
+  { id:'rebel', icon:'🔥', th:'The Outlaw', en:'The Outlaw', sub_th:'ขบถ · แหวกกฎ', sub_en:'Rebellious · disruptive',
+    tone:'Rebellious, bold, daring', emotion:'Liberation, individuality, disruption',
+    persuasion:'Provoking desire for change and challenging the status quo', cta:'Break the rules, assert independence, disrupt',
+    story:'Rebellious underdog, breaking free from the system',
+    thai:'Thai underground culture, rap/hip-hop scene, social movements',
+    persona:'Daring rebel, unconventional thinker',
+    brands:['Tesla','Liquid Death','Harley-Davidson'], actors:['Keanu Reeves','Billie Eilish','TaitosmitH'],
+    aiPrompt:"Act as 'The Outlaw'. Use bold, disruptive language that challenges the status quo and embraces rebellion.",
+    sub:['The Disruptor','The Provocateur','The Maverick'], hybrid:'+ Magician — disrupting the industry with visionary tech (e.g. Tesla)' },
+  { id:'magician', icon:'✨', th:'The Magician', en:'The Magician', sub_th:'เปลี่ยนแปลง · วิสัยทัศน์', sub_en:'Transformative · visionary',
+    tone:'Mysterious, intriguing, visionary', emotion:'Wonder, possibilities, transformation',
+    persuasion:'Offering transformative solutions and cutting-edge insights', cta:'Discover secrets, unlock potential, transform',
+    story:'Magical transformation, turning the impossible into reality',
+    thai:'Mutelu (สายมู), modern spiritual trends, astrology apps',
+    persona:'Wise visionary, tech or spiritual guide',
+    brands:['OpenAI','Apple','Disney'], actors:['Benedict Cumberbatch','Anya Taylor-Joy','Nanon Korapat'],
+    aiPrompt:"Act as 'The Magician'. Use visionary, transformative language that highlights innovation and mystical/technological wonders.",
+    sub:['The Alchemist','The Visionary','The Catalyst'], hybrid:'+ Creator — making complex technology magical and beautifully designed (e.g. Apple)' },
+  { id:'jester', icon:'🎭', th:'The Jester', en:'The Jester', sub_th:'สนุก · ขำขัน', sub_en:'Playful · funny',
+    tone:'Humorous, playful, satirical', emotion:'Joy, amusement, stress-relief',
+    persuasion:'Using humor, memes, and wit to engage and persuade', cta:'Embrace humor, enjoy the moment, share the laugh',
+    story:'Amusing anecdotes, clever wordplay, viral trends',
+    thai:'Thai meme culture, TikTok trends, sitcom humor',
+    persona:'Entertaining friend, witty commentator',
+    brands:['TikTok','Netflix','Deadpool'], actors:['Ryan Reynolds','Awkwafina','Oat Pramote'],
+    aiPrompt:"Act as 'The Jester'. Use highly engaging, humorous language incorporating modern memes and witty punchlines.",
+    sub:['The Entertainer','The Satirist','The Trickster'], hybrid:'+ Everyman — making entertainment accessible and relatable (e.g. TikTok)' },
+  { id:'lover', icon:'💗', th:'The Lover', en:'The Lover', sub_th:'รัก · ใกล้ชิด', sub_en:'Intimate · sensual',
+    tone:'Romantic, sensual, passionate', emotion:'Love, desire, indulgence',
+    persuasion:'Appealing to the desire for deep connection and aesthetics', cta:'Indulge in romance, express affection, treat yourself',
+    story:'Love story, evoking sensory details and passions',
+    thai:'T-Pop romance, Y-series (ซีรีส์วาย) tropes, fandoms',
+    persona:'Passionate admirer, devoted partner',
+    brands:['Dior','Tinder','Chanel'], actors:['Sydney Sweeney','PP Krit','Baifern Pimchanok'],
+    aiPrompt:"Act as 'The Lover'. Use sensory, passionate language that focuses on aesthetics, desire, and deep connections.",
+    sub:['The Romantic','The Sensualist','The Matchmaker'], hybrid:'+ Creator — passionate expression through art and aesthetics' },
+  { id:'caregiver', icon:'🤍', th:'The Caregiver', en:'The Caregiver', sub_th:'ใส่ใจ · ห่วงใย', sub_en:'Nurturing · caring',
+    tone:'Nurturing, gentle, compassionate', emotion:'Compassion, security, warmth',
+    persuasion:'Emphasizing care, support, and holistic wellness', cta:'Seek support, prioritize self-care, protect loved ones',
+    story:'Nurturing relationships, providing safety in chaos',
+    thai:'Family values, modern wellness & spa culture, holistic health',
+    persona:'Nurturing supporter, trusted confidant',
+    brands:['Volvo','Kleenex','Dove'], actors:['Tom Hanks','Sandra Bullock','Aff Taksaorn'],
+    aiPrompt:"Act as 'The Caregiver'. Use empathetic, warm language that prioritizes safety, well-being, and nurturing support.",
+    sub:['The Healer','The Guardian','The Samaritan'], hybrid:'+ Innocent — pure, safe, and transparent care' },
+  { id:'innocent', icon:'☀️', th:'The Innocent', en:'The Innocent', sub_th:'บริสุทธิ์ · ดีงาม', sub_en:'Pure · optimistic',
+    tone:'Pure, optimistic, simple', emotion:'Happiness, trust, nostalgia',
+    persuasion:'Emphasizing simplicity, transparency, and goodness', cta:'Embrace simplicity, trust the process, stay hopeful',
+    story:'Tales of innocence, purity, and returning to basics',
+    thai:'Nostalgic Y2K trends, simple local lifestyle (สโลว์ไลฟ์)',
+    persona:'Innocent optimist, pure-hearted friend',
+    brands:['Muji','Babi Mild','Nintendo'], actors:['Tom Holland','Millie Bobby Brown','Becky Rebecca'],
+    aiPrompt:"Act as 'The Innocent'. Use pure, transparent, and optimistic language that highlights simplicity and joy.",
+    sub:['The Dreamer','The Purist','The Optimist'], hybrid:'+ Explorer — finding joy in simple adventures and nature' },
+  { id:'sage', icon:'📖', th:'The Sage', en:'The Sage', sub_th:'รอบรู้ · ให้ความจริง', sub_en:'Wise · truth-seeking',
+    tone:'Wise, knowledgeable, reflective', emotion:'Wisdom, enlightenment, clarity',
+    persuasion:'Sharing data-backed knowledge and profound insights', cta:"Seek knowledge, understand the 'why', reflect",
+    story:'Parables, philosophical stories, deep-dives',
+    thai:'Podcasts, Dhamma online, tech thought-leaders',
+    persona:'Knowledgeable expert, trusted teacher',
+    brands:['Perplexity','Wikipedia','Google'], actors:['Morgan Freeman','Natalie Portman','Suthichai Yoon'],
+    aiPrompt:"Act as 'The Sage'. Use factual, insightful, and reflective language that educates and provides profound clarity.",
+    sub:['The Expert','The Mentor','The Detective'], hybrid:'+ Hero — using deep knowledge to solve massive world problems' },
+  { id:'explorer', icon:'🧭', th:'The Explorer', en:'The Explorer', sub_th:'ผจญภัย · อิสระ', sub_en:'Adventurous · free',
+    tone:'Adventurous, independent, fearless', emotion:'Excitement, freedom, curiosity',
+    persuasion:'Encouraging exploration and stepping out of comfort zones', cta:'Explore new horizons, embrace freedom, wander',
+    story:'Adventure stories, travel narratives, discovering the unknown',
+    thai:'Cafe hopping, glamping, sustainable local tourism',
+    persona:'Adventurous explorer, independent spirit',
+    brands:['Jeep','Airbnb','The North Face'], actors:['Jason Momoa','Shailene Woodley','Weir Sukollawat'],
+    aiPrompt:"Act as 'The Explorer'. Use adventurous, energetic language that encourages stepping out of bounds and discovering the new.",
+    sub:['The Adventurer','The Pioneer','The Wanderer'], hybrid:'+ Creator — innovating through discovery and new experiences' },
+  { id:'ruler', icon:'👑', th:'The Ruler', en:'The Ruler', sub_th:'มีอำนาจ · ผู้นำ', sub_en:'Authoritative · leader',
+    tone:'Authoritative, refined, commanding', emotion:'Power, respect, exclusivity',
+    persuasion:'Demonstrating leadership, quality, and authority', cta:'Take charge, aspire to greatness, lead the pack',
+    story:'Success stories, tales of legacy and leadership',
+    thai:'Hi-So culture, premium luxury lifestyle, successful entrepreneurs',
+    persona:'Confident leader, respected authority',
+    brands:['Rolex','Louis Vuitton','Mercedes-Benz'], actors:['Meryl Streep','Cillian Murphy','Aum Patchrapa'],
+    aiPrompt:"Act as 'The Ruler'. Use elegant, authoritative language that conveys exclusivity, premium quality, and leadership.",
+    sub:['The Leader','The Aristocrat','The Judge'], hybrid:'+ Sage — leading through unquestionable expertise and legacy' },
+  { id:'creator', icon:'🎨', th:'The Creator', en:'The Creator', sub_th:'สร้างสรรค์ · จินตนาการ', sub_en:'Imaginative · expressive',
+    tone:'Innovative, expressive, imaginative', emotion:'Inspiration, creativity, self-expression',
+    persuasion:'Showcasing originality, innovation, and design', cta:'Create, express yourself, unleash imagination',
+    story:'Stories of creation, artistic journeys, building from scratch',
+    thai:'Thai contemporary art, T-Pop wave, creative agencies',
+    persona:'Creative artist, expressive innovator',
+    brands:['Canva','YouTube','Lego'], actors:['Taylor Swift','Zendaya','Stamp Apiwat'],
+    aiPrompt:"Act as 'The Creator'. Use imaginative, dynamic language that inspires self-expression and innovative thinking.",
+    sub:['The Artist','The Innovator','The Entrepreneur'], hybrid:'+ Jester — fun, engaging, and highly imaginative expression' },
+  { id:'regular', icon:'🙂', th:'The Everyman', en:'The Everyman', sub_th:'เข้าถึงง่าย · ติดดิน', sub_en:'Relatable · down-to-earth',
+    tone:'Relatable, honest, down-to-earth', emotion:'Belonging, comfort, validation',
+    persuasion:'Relating to common everyday experiences and values', cta:'Connect with others, celebrate the ordinary, join us',
+    story:'Everyday anecdotes, relatable life scenarios',
+    thai:'Street food culture, relatable office worker (มนุษย์เงินเดือน) life',
+    persona:'Relatable friend, everyday companion',
+    brands:['Shopee','Uniqlo','IKEA'], actors:['Paul Rudd','Florence Pugh','Sunny Suwanmethanont'],
+    aiPrompt:"Act as 'The Everyman'. Use highly relatable, conversational language that speaks to everyday people naturally.",
+    sub:['The Citizen','The Regular Guy/Gal','The Networker'], hybrid:'+ Caregiver — community-driven support and relatable empathy' },
 ];
 
 const PRODUCTS = [
@@ -1218,7 +1315,7 @@ function pageProfile() {
         </div>
         <p class="cardSub">${T('บุคลิกหลักของแบรนด์ตามทฤษฎี Jungian — AI จะใช้กำหนดมุมมองและภาษาในทุกคอนเทนต์',"Your brand's Jungian archetype — AI uses this to shape voice in every post")}</p>
       </div>
-      <button class="btn ghost sm" style="color:var(--blue)">${I('info',13,'#2563EB')} ${T('อ่านคู่มือ','Read guide')}</button>
+      <button class="btn ghost sm" style="color:var(--blue)" data-archeguide="1">${I('info',13,'#2563EB')} ${T('อ่านคู่มือ','Read guide')}</button>
     </div>
     <div class="grid g4" style="gap:10px">
       ${ARCHETYPES.map(a => `<button class="brandTile ${a.id===state.archetype?'active':''}" data-archetype="${a.id}" style="min-height:88px;padding:12px">
@@ -2772,6 +2869,52 @@ render();
       toast('ออกจากระบบแล้ว', 'success');
     }
   }, true);
+
+  // Brand Archetype guide modal (2026 reference data)
+  function archeGuideModal(){
+    var lang = state.lang;
+    var L = function(th,en){ return lang==='th'?th:en; };
+    var field = function(lab,val){ return '<div style="font-size:12px;color:var(--muted);line-height:1.5"><b style="color:var(--ink2)">'+lab+': </b>'+val+'</div>'; };
+    var rows = ARCHETYPES.map(function(a){
+      var brandPills = a.brands.map(function(b){ return '<span class="pill" style="height:22px;font-size:11px">'+b+'</span>'; }).join(' ');
+      var subPills = a.sub.map(function(s){ return '<span class="pill lavender" style="height:20px;font-size:10.5px">'+s+'</span>'; }).join(' ');
+      return '<div style="border:1px solid var(--line);border-radius:16px;padding:16px;display:flex;gap:14px">'
+        + '<div style="width:44px;height:44px;border-radius:12px;background:var(--cream2);display:grid;place-items:center;font-size:22px;flex-shrink:0">'+a.icon+'</div>'
+        + '<div style="flex:1;min-width:0">'
+          + '<div style="font-size:15px;font-weight:800;color:var(--purple)">'+a.en+'</div>'
+          + '<div style="font-size:12.5px;color:var(--ink2);font-style:italic;margin:2px 0 8px">'+a.tone+'</div>'
+          + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 16px">'
+            + field(L('อารมณ์ที่สื่อ','Emotional appeal'),a.emotion)
+            + field(L('วิธีโน้มน้าว','Persuasion'),a.persuasion)
+            + field('Call-to-action',a.cta)
+            + field(L('เปอร์โซนา','Persona'),a.persona)
+            + field(L('อ้างอิงวัฒนธรรมไทย','Thai cultural cue'),a.thai)
+            + field(L('การเล่าเรื่อง','Storytelling'),a.story)
+          + '</div>'
+          + '<div style="margin-top:8px;padding:10px 12px;border-radius:10px;background:var(--purple);color:#fff;font-size:11.5px;line-height:1.5"><b style="color:var(--orange)">AI System Prompt: </b>'+a.aiPrompt+'</div>'
+          + '<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;align-items:center"><span style="font-size:10.5px;color:var(--muted)">'+L('Sub-archetypes:','Sub-archetypes:')+'</span>'+subPills+'</div>'
+          + '<div style="margin-top:6px;font-size:11.5px;color:var(--muted)"><b style="color:var(--ink2)">'+L('ผสมกับ archetype อื่น','Hybrid')+': </b>'+a.hybrid+'</div>'
+          + '<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;align-items:center"><span style="font-size:10.5px;color:var(--muted)">'+L('แบรนด์ตัวอย่าง','Example brands')+':</span>'+brandPills+'</div>'
+        + '</div>'
+      + '</div>';
+    }).join('');
+    var ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(16,8,30,.6);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:28px;font-family:Prompt,sans-serif';
+    ov.innerHTML = '<div style="background:#fff;border-radius:24px;max-width:800px;width:100%;max-height:88vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 70px rgba(38,20,71,.4)">'
+      + '<div style="padding:20px 24px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px">'
+        + '<div style="flex:1"><div style="font-size:18px;font-weight:800;color:var(--purple)">'+L('คู่มือ Brand Archetype','Brand Archetype Guide')+'</div>'
+        + '<div style="font-size:12px;color:var(--muted)">'+L('12 บุคลิกแบรนด์ · ฉบับอัปเดต 2026 — AI จะใช้ System Prompt ของ archetype ที่เลือกในการสร้างคอนเทนต์','12 brand personalities · 2026 Updated Version — AI uses the selected archetype prompt')+'</div></div>'
+        + '<button class="btn outline sm" data-archeclose="1">'+L('ปิด','Close')+'</button>'
+      + '</div>'
+      + '<div style="overflow-y:auto;padding:18px;display:flex;flex-direction:column;gap:12px">'+rows+'</div>'
+    + '</div>';
+    ov.addEventListener('click', function(e){ if (e.target===ov || e.target.closest('[data-archeclose]')) ov.remove(); });
+    document.addEventListener('keydown', function esc(e){ if (e.key==='Escape'){ ov.remove(); document.removeEventListener('keydown', esc); } });
+    document.body.appendChild(ov);
+  }
+  document.addEventListener('click', function(e){
+    if (e.target.closest('[data-archeguide]')) archeGuideModal();
+  });
 
   // boot — a returning user with a valid token lands straight in the app
   (async function(){
