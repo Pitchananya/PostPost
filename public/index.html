@@ -1030,11 +1030,13 @@ function pageOnboarding() {
 // ====================================================================
 // SHARED DATA
 // ====================================================================
-const BRANDS = [
+let BRANDS = [
   { id:'hp', name:'HappyPrice Shop', sub_th:'สกินแคร์ · 34 สินค้า', sub_en:'Skincare · 34 products', mark:'HP', color:'linear-gradient(135deg,#FB923C,#F97316)', ch:['facebook','instagram'] },
   { id:'mn', name:'MintNature', sub_th:'ชาสมุนไพร · 12 สินค้า', sub_en:'Herbal tea · 12 products', mark:'MN', color:'linear-gradient(135deg,#818CF8,#4F46E5)', ch:['facebook','tiktok'] },
   { id:'bc', name_th:'คาเฟ่บ้านน้ำใจ', name_en:'Baan Café', sub_th:'คาเฟ่ · 8 สาขา', sub_en:'Café · 8 locations', mark:'คา', color:'linear-gradient(135deg,#34D399,#059669)', ch:['facebook','instagram','tiktok'] },
 ];
+const MAX_BRANDS = 5;
+try { var _savedBrands = localStorage.getItem('postpost_brands'); if (_savedBrands) { var _pb = JSON.parse(_savedBrands); if (Array.isArray(_pb) && _pb.length) BRANDS = _pb; } } catch(e){}
 
 const VOICES = [
   { id:'friendly', emoji:'🤗', th:'เป็นกันเอง', en:'Friendly', alt_th:'Friendly', alt_en:'เป็นกันเอง', sample_th:'สวัสดีค่าคุณลูกค้า วันนี้พีร์มีของดีมาฝาก ✨', sample_en:'Hey! We picked something just for you ✨' },
@@ -1235,7 +1237,7 @@ function pageProfile() {
       </div>
       <div style="display:flex;gap:8px">
         <span class="pill blue">${T('แผน Pro · ได้สูงสุด 5 แบรนด์','Pro · up to 5 brands')}</span>
-        <button class="btn outline sm">${I('plus',14)} ${T('เพิ่มแบรนด์','Add brand')}</button>
+        <button class="btn outline sm" data-addbrand="1">${I('plus',14)} ${T('เพิ่มแบรนด์','Add brand')}</button>
       </div>
     </div>
     <div class="grid g4">
@@ -1253,11 +1255,11 @@ function pageProfile() {
           <span>·</span><span>${T('เชื่อมแล้ว','connected')}</span>
         </div>
       </button>`).join('')}
-      <button class="brandTile add">
+      ${BRANDS.length < MAX_BRANDS ? `<button class="brandTile add" data-addbrand="1">
         ${I('plus',22)}
         <b style="color:var(--ink2);font-size:13px;margin-top:6px">${T('เพิ่มแบรนด์','Add brand')}</b>
-        <div class="bSub">${T('ใช้ได้อีก 2 แบรนด์','2 slots left')}</div>
-      </button>
+        <div class="bSub">${T('ใช้ได้อีก '+(MAX_BRANDS-BRANDS.length)+' แบรนด์',(MAX_BRANDS-BRANDS.length)+' slots left')}</div>
+      </button>` : ''}
     </div>
   </div>
 
@@ -2940,9 +2942,80 @@ render();
     if (e.target.closest('[data-archeguide]')) archeGuideModal();
   });
 
+  // Add-brand modal — creates a real brand, persists to localStorage
+  var BRAND_COLORS = [
+    'linear-gradient(135deg,#FB923C,#F97316)','linear-gradient(135deg,#818CF8,#4F46E5)',
+    'linear-gradient(135deg,#34D399,#059669)','linear-gradient(135deg,#F472B6,#DB2777)',
+    'linear-gradient(135deg,#38BDF8,#0284C7)','linear-gradient(135deg,#FBBF24,#D97706)',
+  ];
+  function saveBrands(){ try { localStorage.setItem('postpost_brands', JSON.stringify(BRANDS)); } catch(e){} }
+  function addBrandModal(){
+    if (BRANDS.length >= MAX_BRANDS) {
+      toast(state.lang==='th'?'แผน Pro เพิ่มได้สูงสุด 5 แบรนด์':'Pro plan allows up to 5 brands','error');
+      return;
+    }
+    var L = function(th,en){ return state.lang==='th'?th:en; };
+    var ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(16,8,30,.6);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:28px;font-family:Prompt,sans-serif';
+    ov.innerHTML = '<div style="background:#fff;border-radius:24px;max-width:460px;width:100%;box-shadow:0 24px 70px rgba(38,20,71,.4);overflow:hidden">'
+      + '<div style="padding:20px 24px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px">'
+        + '<div style="width:40px;height:40px;border-radius:10px;background:var(--orange-soft);color:var(--orange3);display:grid;place-items:center;font-size:20px;font-weight:800">+</div>'
+        + '<div style="flex:1;font-size:18px;font-weight:800;color:var(--purple)">'+L('เพิ่มแบรนด์ใหม่','Add a new brand')+'</div>'
+        + '<button class="btn outline sm" data-bclose="1">'+L('ปิด','Close')+'</button>'
+      + '</div>'
+      + '<div style="padding:22px;display:flex;flex-direction:column;gap:14px">'
+        + '<div><label class="label">'+L('ชื่อแบรนด์','Brand name')+' <span style="color:var(--red)">*</span></label>'
+          + '<input class="input" id="ppBrandName" placeholder="'+L('เช่น Rose Garden Beauty','e.g. Rose Garden Beauty')+'" /></div>'
+        + '<div><label class="label">'+L('หมวด / ประเภทธุรกิจ','Category / business type')+'</label>'
+          + '<input class="input" id="ppBrandCat" placeholder="'+L('เช่น สกินแคร์, คาเฟ่, แฟชั่น','e.g. Skincare, Café, Fashion')+'" /></div>'
+        + '<div><label class="label">'+L('ช่องทางที่เชื่อม','Connected channels')+'</label>'
+          + '<div style="display:flex;gap:8px" id="ppBrandCh">'
+          + ['facebook','instagram','tiktok'].map(function(c){ return '<button type="button" data-ch="'+c+'" class="btn outline sm" style="flex:1">'+c+'</button>'; }).join('')
+          + '</div></div>'
+      + '</div>'
+      + '<div style="padding:14px 24px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:8px">'
+        + '<button class="btn outline" data-bclose="1">'+L('ยกเลิก','Cancel')+'</button>'
+        + '<button class="btn primary" data-bsave="1">'+L('เพิ่มแบรนด์','Add brand')+'</button>'
+      + '</div></div>';
+    var chosenCh = [];
+    ov.addEventListener('click', function(e){
+      if (e.target===ov || e.target.closest('[data-bclose]')) { ov.remove(); return; }
+      var chBtn = e.target.closest('[data-ch]');
+      if (chBtn) {
+        var c = chBtn.dataset.ch, i = chosenCh.indexOf(c);
+        if (i>=0){ chosenCh.splice(i,1); chBtn.classList.remove('primary'); chBtn.classList.add('outline'); }
+        else { chosenCh.push(c); chBtn.classList.add('primary'); chBtn.classList.remove('outline'); }
+        return;
+      }
+      if (e.target.closest('[data-bsave]')) {
+        var name = (ov.querySelector('#ppBrandName').value||'').trim();
+        var cat = (ov.querySelector('#ppBrandCat').value||'').trim();
+        if (!name) { toast(L('กรอกชื่อแบรนด์ก่อน','Enter a brand name'),'error'); return; }
+        var mark = name.replace(/\s+/g,'').slice(0,2).toUpperCase();
+        var brand = {
+          id: 'b'+Date.now(), name: name, mark: mark,
+          sub_th: cat||L('แบรนด์ใหม่','New brand'), sub_en: cat||'New brand',
+          color: BRAND_COLORS[BRANDS.length % BRAND_COLORS.length],
+          ch: chosenCh.slice(),
+        };
+        BRANDS.push(brand);
+        saveBrands();
+        state.brand = brand.id;
+        ov.remove();
+        render();
+        toast(L('เพิ่มแบรนด์ "'+name+'" แล้ว','Brand "'+name+'" added'),'success');
+      }
+    });
+    document.body.appendChild(ov);
+    var ni = ov.querySelector('#ppBrandName'); if (ni) ni.focus();
+  }
+  document.addEventListener('click', function(e){
+    if (e.target.closest('[data-addbrand]')) addBrandModal();
+  });
+
   // no dead clicks — any button without a wired action gives feedback
   var HANDLED = '[data-go],[data-lang],[data-set],[data-set-step],[data-toggle],'
-    + '[data-voice],[data-brand],[data-product],[data-archetype],[data-archeguide],[data-archeclose]';
+    + '[data-voice],[data-brand],[data-product],[data-archetype],[data-archeguide],[data-archeclose],[data-addbrand]';
   document.addEventListener('click', function(e){
     var b = e.target.closest('button, a');
     if (!b) return;
