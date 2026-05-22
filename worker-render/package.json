@@ -1,0 +1,17 @@
+{
+  "name": "oem-content-factory-image-worker",
+  "version": "1.0.0",
+  "description": "Long-running image-gen worker for OEM Content Factory — handles GPT-5.4 calls that exceed Supabase Edge Function 150s wall-clock",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.4",
+    "express": "^4.19.2"
+  }
+}

@@ -1,0 +1,74 @@
+# ====== Secrets & Environment ======
+# 🚨 ห้าม commit เด็ดขาด — มี API keys, tokens, passwords
+.env
+.env.local
+.env.*.local
+.env.production
+*.env
+
+# ====== Dependencies ======
+node_modules/
+package-lock.json.backup
+
+# ====== Logs ======
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+
+# ====== OS ======
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ====== Editor / IDE ======
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.cursor/
+.claude/settings.local.json
+.claude/projects/
+
+# ====== Build / Deploy ======
+.vercel/
+.next/
+.cache/
+dist/
+build/
+
+# ====== Runtime ======
+*.pid
+*.seed
+*.pid.lock
+
+# ====== Test coverage ======
+coverage/
+.nyc_output/
+
+# ====== Temp / Backup ======
+*.tmp
+*.bak
+*.old
+*~
+
+# ====== Project-specific ======
+# Composer output cache (ถ้ามี)
+backend/cache/
+public/uploads/
+
+# ====== Sensitive runtime data ======
+sessions/
+tokens/
+
+# ====== Local-only — do NOT push ======
+.chrome-profile-shopee/
+__pycache__/
+*.pyc
+supabase/.temp/
+design/
+design.zip
+*.zip
+D:/Temp/

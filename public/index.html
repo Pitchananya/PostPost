@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>PostPost — Design</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      /* PostPost tokens (user-specified overrides) */
+      --cf-primary: #F97316;
+      --cf-primary-hover: #EA580C;
+      --cf-primary-press: #C2410C;
+      --cf-primary-soft: #FFF1E6;
+      --cf-primary-ring: rgba(249, 115, 22, 0.18);
+      --cf-accent: #2563EB;
+      --cf-accent-soft: #EFF4FF;
+
+      --cf-bg: #FAFAF7;        /* warm off-white app canvas */
+      --cf-surface: #FFFFFF;
+      --cf-surface-2: #F6F5F1; /* warm gray panels */
+      --cf-surface-3: #EFEEE8;
+
+      --cf-ink-0: #0B1220;     /* headings */
+      --cf-ink-1: #1F2937;     /* body */
+      --cf-ink-2: #5B6472;     /* secondary */
+      --cf-ink-3: #97A0AE;     /* tertiary / placeholder */
+
+      --cf-border: #E8E5DD;
+      --cf-border-2: #D8D4CA;
+      --cf-border-strong: #C0BCB1;
+
+      --cf-success: #16A34A;
+      --cf-success-soft: #E7F7EC;
+      --cf-warning: #D97706;
+      --cf-warning-soft: #FFF4DC;
+      --cf-danger: #DC2626;
+      --cf-danger-soft: #FDECEC;
+
+      --cf-r-sm: 8px;
+      --cf-r: 12px;
+      --cf-r-lg: 16px;
+      --cf-r-xl: 24px;
+      --cf-r-full: 9999px;
+
+      --cf-shadow-1: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 1px rgba(16, 24, 40, 0.02);
+      --cf-shadow-2: 0 6px 16px -6px rgba(16, 24, 40, 0.10), 0 2px 4px -2px rgba(16, 24, 40, 0.06);
+      --cf-shadow-3: 0 24px 48px -16px rgba(16, 24, 40, 0.18), 0 8px 16px -8px rgba(16, 24, 40, 0.08);
+      --cf-shadow-glow: 0 12px 28px -10px rgba(249, 115, 22, 0.45), 0 4px 10px -4px rgba(249, 115, 22, 0.30);
+
+      --cf-font: "Prompt", "IBM Plex Sans Thai", "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+      --cf-font-mono: "JetBrains Mono", ui-monospace, monospace;
+    }
+
+    html, body, #root { height: 100%; }
+    html, body { background: var(--cf-bg); margin: 0; font-family: var(--cf-font); color: var(--cf-ink-1); }
+
+    /* Base look for everything inside an artboard */
+    .cf {
+      font-family: var(--cf-font);
+      color: var(--cf-ink-1);
+      background: var(--cf-bg);
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      position: relative;
+      font-size: 14px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+    .cf *, .cf *::before, .cf *::after { box-sizing: border-box; }
+
+    /* ===== Typography helpers ===== */
+    .cf .h-display { font-weight: 600; letter-spacing: -0.02em; line-height: 1.05; color: var(--cf-ink-0); }
+    .cf .h1 { font-weight: 600; font-size: 32px; letter-spacing: -0.01em; line-height: 1.15; color: var(--cf-ink-0); }
+    .cf .h2 { font-weight: 600; font-size: 22px; letter-spacing: -0.005em; color: var(--cf-ink-0); }
+    .cf .h3 { font-weight: 600; font-size: 16px; color: var(--cf-ink-0); }
+    .cf .body { font-size: 14px; color: var(--cf-ink-1); }
+    .cf .muted { color: var(--cf-ink-2); }
+    .cf .micro { font-size: 12px; color: var(--cf-ink-2); }
+    .cf .eyebrow { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--cf-ink-2); }
+    .cf .mono { font-family: var(--cf-font-mono); }
+
+    /* ===== Buttons ===== */
+    .cf .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      height: 40px; padding: 0 16px; border-radius: var(--cf-r);
+      font-family: inherit; font-size: 14px; font-weight: 500;
+      border: 1px solid transparent; cursor: pointer; user-select: none;
+      transition: background .15s ease, box-shadow .15s ease, border-color .15s ease, color .15s ease;
+      white-space: nowrap;
+    }
+    .cf .btn-primary { background: var(--cf-primary); color: white; box-shadow: var(--cf-shadow-glow); }
+    .cf .btn-primary:hover { background: var(--cf-primary-hover); }
+    .cf .btn-primary:active { background: var(--cf-primary-press); }
+    .cf .btn-secondary { background: var(--cf-surface); color: var(--cf-ink-0); border-color: var(--cf-border); box-shadow: var(--cf-shadow-1); }
+    .cf .btn-secondary:hover { background: var(--cf-surface-2); }
+    .cf .btn-ghost { background: transparent; color: var(--cf-ink-1); }
+    .cf .btn-ghost:hover { background: var(--cf-surface-2); }
+    .cf .btn-lg { height: 52px; padding: 0 24px; font-size: 16px; border-radius: 14px; }
+    .cf .btn-sm { height: 32px; padding: 0 12px; font-size: 13px; border-radius: 10px; }
+
+    /* ===== Input ===== */
+    .cf .input, .cf .textarea {
+      width: 100%; display: block;
+      background: var(--cf-surface); color: var(--cf-ink-0);
+      border: 1px solid var(--cf-border); border-radius: 10px;
+      font-family: inherit; font-size: 14px;
+      padding: 0 12px; height: 42px;
+      transition: border-color .15s ease, box-shadow .15s ease;
+      outline: none;
+    }
+    .cf .textarea { padding: 10px 12px; height: auto; line-height: 1.5; resize: none; }
+    .cf .input::placeholder, .cf .textarea::placeholder { color: var(--cf-ink-3); }
+    .cf .input:focus, .cf .textarea:focus { border-color: var(--cf-primary); box-shadow: 0 0 0 3px var(--cf-primary-ring); }
+    .cf .label { display: block; font-size: 13px; font-weight: 500; color: var(--cf-ink-1); margin-bottom: 6px; }
+    .cf .hint { font-size: 12px; color: var(--cf-ink-2); margin-top: 6px; }
+
+    /* ===== Card ===== */
+    .cf .card {
+      background: var(--cf-surface);
+      border: 1px solid var(--cf-border);
+      border-radius: var(--cf-r);
+      box-shadow: var(--cf-shadow-1);
+    }
+
+    /* ===== Pill / badge ===== */
+    .cf .pill {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 4px 10px; border-radius: var(--cf-r-full);
+      font-size: 12px; font-weight: 500;
+      background: var(--cf-surface-2); color: var(--cf-ink-1);
+      border: 1px solid var(--cf-border);
+    }
+    .cf .pill-orange { background: var(--cf-primary-soft); color: #9A3412; border-color: #FED7AA; }
+    .cf .pill-blue { background: var(--cf-accent-soft); color: #1D4ED8; border-color: #DBE5FF; }
+    .cf .pill-green { background: var(--cf-success-soft); color: #166534; border-color: #C8EBD2; }
+
+    /* ===== Sidebar nav row ===== */
+    .cf .navrow {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 12px; border-radius: 10px;
+      color: var(--cf-ink-1); font-size: 14px; font-weight: 500;
+      cursor: pointer; transition: background .12s ease, color .12s ease;
+    }
+    .cf .navrow:hover { background: var(--cf-surface-2); }
+    .cf .navrow.is-active { background: var(--cf-primary-soft); color: #9A3412; }
+    .cf .navrow.is-active svg { color: var(--cf-primary); }
+
+    /* ===== Misc ===== */
+    .cf hr.divider { border: 0; border-top: 1px solid var(--cf-border); margin: 0; }
+    .cf .dot { width: 8px; height: 8px; border-radius: 999px; display: inline-block; }
+    .cf .ring-avatar {
+      width: 36px; height: 36px; border-radius: 999px;
+      background: linear-gradient(135deg, #FFD3A8, #FDA46A);
+      display: inline-flex; align-items: center; justify-content: center;
+      color: #7C2D12; font-weight: 600; font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <!-- data-presets="react" → compile JSX only; keep async/await native (no regenerator) -->
+  <script type="text/babel" data-presets="react" src="icons.jsx"></script>
+  <script type="text/babel" data-presets="react" src="lang.jsx"></script>
+  <script type="text/babel" data-presets="react" src="api.jsx"></script>
+  <script type="text/babel" data-presets="react" src="screen-landing.jsx"></script>
+  <script type="text/babel" data-presets="react" src="screen-auth.jsx"></script>
+  <script type="text/babel" data-presets="react" src="screen-onboarding.jsx"></script>
+  <script type="text/babel" data-presets="react" src="dashboard-shell.jsx"></script>
+  <script type="text/babel" data-presets="react" src="dashboard-topics.jsx"></script>
+  <script type="text/babel" data-presets="react" src="dashboard-profile.jsx"></script>
+  <script type="text/babel" data-presets="react" src="dashboard-generate-tabs.jsx"></script>
+  <script type="text/babel" data-presets="react" src="dashboard-generate.jsx"></script>
+  <script type="text/babel" data-presets="react" src="dashboard-avatar.jsx"></script>
+  <script type="text/babel" data-presets="react" src="dashboard-ops.jsx"></script>
+  <script type="text/babel" data-presets="react" src="app.jsx"></script>
+</body>
+</html>

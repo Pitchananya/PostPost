@@ -1,0 +1,186 @@
+{
+  "name": "OEM Content Factory — Auto Post (FB + IG + TikTok)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "oem-post",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "webhook-1",
+      "name": "Webhook (from Backend)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 300],
+      "webhookId": "oem-post"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            { "conditions": { "options": { "caseSensitive": false, "typeValidation": "loose" }, "combinator": "and", "conditions": [ { "leftValue": "={{ $json.test }}", "rightValue": "true", "operator": { "type": "boolean", "operation": "true" } } ] } }
+          ]
+        },
+        "options": {}
+      },
+      "id": "switch-test",
+      "name": "Is Test Ping?",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [420, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true, message: 'pong' } }}",
+        "options": {}
+      },
+      "id": "respond-test",
+      "name": "Respond OK (test)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [640, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nreturn (item.platforms || []).map(p => ({ json: { ...item, platform: p } }));"
+      },
+      "id": "split-platforms",
+      "name": "Fan-out by Platform",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [640, 400]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            { "outputKey": "facebook", "conditions": { "combinator": "and", "conditions": [ { "leftValue": "={{ $json.platform }}", "rightValue": "facebook", "operator": { "type": "string", "operation": "equals" } } ] } },
+            { "outputKey": "instagram", "conditions": { "combinator": "and", "conditions": [ { "leftValue": "={{ $json.platform }}", "rightValue": "instagram", "operator": { "type": "string", "operation": "equals" } } ] } },
+            { "outputKey": "tiktok", "conditions": { "combinator": "and", "conditions": [ { "leftValue": "={{ $json.platform }}", "rightValue": "tiktok", "operator": { "type": "string", "operation": "equals" } } ] } }
+          ]
+        },
+        "options": { "fallbackOutput": "none" }
+      },
+      "id": "switch-platform",
+      "name": "Route by Platform",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [860, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v21.0/{{ $env.FB_PAGE_ID }}/feed",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "message", "value": "={{ $json.hook }}\n\n{{ $json.caption }}" },
+            { "name": "link", "value": "={{ $json.media_url || '' }}" },
+            { "name": "access_token", "value": "={{ $env.FB_PAGE_TOKEN }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fb-post",
+      "name": "Post to Facebook Page",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1100, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v21.0/{{ $env.IG_USER_ID }}/media",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "image_url", "value": "={{ $json.media_url }}" },
+            { "name": "caption", "value": "={{ $json.hook }}\n\n{{ $json.caption }}" },
+            { "name": "access_token", "value": "={{ $env.IG_ACCESS_TOKEN }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ig-create-media",
+      "name": "IG Create Media Container",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1100, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v21.0/{{ $env.IG_USER_ID }}/media_publish",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "creation_id", "value": "={{ $json.id }}" },
+            { "name": "access_token", "value": "={{ $env.IG_ACCESS_TOKEN }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ig-publish",
+      "name": "IG Publish",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1320, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://open.tiktokapis.com/v2/post/publish/video/init/",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "tiktokOAuth2Api",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [ { "name": "Content-Type", "value": "application/json" } ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"post_info\": {\n    \"title\": \"{{ $json.hook }}\",\n    \"privacy_level\": \"PUBLIC_TO_EVERYONE\",\n    \"disable_duet\": false,\n    \"disable_comment\": false,\n    \"disable_stitch\": false\n  },\n  \"source_info\": {\n    \"source\": \"PULL_FROM_URL\",\n    \"video_url\": \"{{ $json.media_url }}\"\n  }\n}",
+        "options": {}
+      },
+      "id": "tiktok-post",
+      "name": "Post to TikTok",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1100, 600]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true, message: 'dispatched' } }}",
+        "options": {}
+      },
+      "id": "respond-final",
+      "name": "Respond OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1540, 400]
+    }
+  ],
+  "connections": {
+    "Webhook (from Backend)": { "main": [ [ { "node": "Is Test Ping?", "type": "main", "index": 0 } ] ] },
+    "Is Test Ping?": { "main": [ [ { "node": "Respond OK (test)", "type": "main", "index": 0 } ], [ { "node": "Fan-out by Platform", "type": "main", "index": 0 } ] ] },
+    "Fan-out by Platform": { "main": [ [ { "node": "Route by Platform", "type": "main", "index": 0 } ] ] },
+    "Route by Platform": {
+      "main": [
+        [ { "node": "Post to Facebook Page", "type": "main", "index": 0 } ],
+        [ { "node": "IG Create Media Container", "type": "main", "index": 0 } ],
+        [ { "node": "Post to TikTok", "type": "main", "index": 0 } ]
+      ]
+    },
+    "IG Create Media Container": { "main": [ [ { "node": "IG Publish", "type": "main", "index": 0 } ] ] },
+    "Post to Facebook Page": { "main": [ [ { "node": "Respond OK", "type": "main", "index": 0 } ] ] },
+    "IG Publish": { "main": [ [ { "node": "Respond OK", "type": "main", "index": 0 } ] ] },
+    "Post to TikTok": { "main": [ [ { "node": "Respond OK", "type": "main", "index": 0 } ] ] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "active": false,
+  "tags": [{ "name": "OEM Content Factory" }],
+  "pinData": {},
+  "versionId": "1"
+}
