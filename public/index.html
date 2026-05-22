@@ -1441,6 +1441,24 @@ function pageProfile() {
       <button class="btn outline">${I('refresh',14)} ${T('ดึงข้อมูลใหม่','Re-sync')}</button>
       <button class="btn outline iconOnly">${I('external',14)}</button>
     </div>
+    <div style="background:var(--blue-soft);border:1px solid #DBE5FF;border-radius:14px;padding:14px 16px;margin-bottom:16px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        ${I('info',14,'#2563EB')}
+        <span style="font-size:12.5px;font-weight:800;color:#1E40AF">${T('วิธีหาลิงก์ร้าน Shopee ของคุณ','How to get your Shopee shop link')}</span>
+      </div>
+      ${[
+        [T('เปิดหน้าร้านของคุณบน Shopee (เว็บหรือแอป)','Open your shop page on Shopee (web or app)'),''],
+        [T('กดที่คำว่า "Products" (ตัวเลขจำนวนสินค้า) บนหน้าโปรไฟล์ร้าน','Tap "Products" — the product count — on the shop profile'),''],
+        [T('URL บนแถบที่อยู่จะเปลี่ยนเป็นรูปแบบนี้','The address-bar URL changes to this format:'),'https://shopee.co.th/&lt;'+T('ชื่อร้าน','shop-name')+'&gt;#product_list'],
+        [T('คัดลอก URL นั้นมาวางในช่องด้านบน แล้วกด "ดึงข้อมูลใหม่"','Copy that URL into the box above, then hit "Re-sync"'),''],
+      ].map((s,i)=>`<div style="display:flex;gap:10px;margin-bottom:7px">
+        <span style="flex-shrink:0;width:20px;height:20px;border-radius:99px;background:#2563EB;color:#fff;font-size:11px;font-weight:800;display:grid;place-items:center">${i+1}</span>
+        <div style="font-size:12px;color:#1E3A8A;line-height:1.55">${s[0]}${s[1]?`<div class="mono" style="margin-top:4px;font-size:11px;color:#1E40AF;background:#fff;border:1px solid #DBE5FF;border-radius:6px;padding:3px 8px;display:inline-block">${s[1]}</div>`:''}</div>
+      </div>`).join('')}
+      <div style="font-size:11px;color:#1E40AF;margin-top:8px;padding-top:8px;border-top:1px dashed #DBE5FF">
+        ${T('ตัวอย่างลิงก์ที่ถูกต้อง','Example of a valid link')}: <span class="mono" style="color:var(--purple)">https://shopee.co.th/ajarnnuengkuruthep#product_list</span>
+      </div>
+    </div>
     <div class="card flat" style="padding:0;background:var(--cream2);margin-bottom:16px;display:flex">
       ${[['34',T('สินค้าทั้งหมด','Products')],['12',T('AI ใช้บ่อย','AI uses often')],['฿590',T('ราคาเฉลี่ย','Avg price')],['4.9',T('เรทติ้งร้าน','Shop rating')]].map((s,i)=>`<div style="flex:1;padding:14px 18px;${i>0?'border-left:1px solid var(--line)':''}"><div style="font-size:20px;font-weight:800;color:var(--purple);letter-spacing:-.02em">${s[0]}</div><div style="font-size:11.5px;color:var(--muted);font-weight:600">${s[1]}</div></div>`).join('')}
     </div>
