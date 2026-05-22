@@ -1,0 +1,17 @@
+# Render Blueprint — Shopee scraper cloud worker
+# Render → New → Blueprint → เลือก repo นี้ แล้ว Render จะอ่านไฟล์นี้อัตโนมัติ
+services:
+  - type: web
+    name: shopee-scraper-worker
+    runtime: docker
+    rootDir: scraper-worker
+    dockerfilePath: ./Dockerfile
+    plan: starter            # 512MB — ถ้า Chrome OOM ให้เปลี่ยนเป็น standard
+    region: singapore        # ใกล้ไทยที่สุด
+    healthCheckPath: /
+    autoDeploy: true
+    envVars:
+      - key: WORKER_KEY      # Render สุ่มค่าให้ — เอาค่านี้ไปใส่ SHOPEE_SCRAPER_KEY ใน PostPost
+        generateValue: true
+      - key: PROXY           # ใส่เอง: residential proxy เช่น http://user:pass@host:port
+        sync: false
