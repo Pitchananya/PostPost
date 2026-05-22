@@ -14,6 +14,7 @@ import analyticsRoutes from './routes/analytics.js';
 import workspaceRoutes from './routes/workspace.js';
 import publicRoutes from './routes/public.js';
 import khuruthephRoutes from './routes/khurutheph.js';
+import shopeeRoutes from './routes/shopee.js';
 
 dotenv.config();
 
@@ -64,6 +65,7 @@ export function createApp() {
   app.use('/api/analytics', analyticsRoutes);
   app.use('/api/workspace', workspaceRoutes);
   app.use('/api/khurutheph', khuruthephRoutes);
+  app.use('/api/shopee', shopeeRoutes);
 
   app.use((err, req, res, next) => {
     console.error('[ERROR]', err);

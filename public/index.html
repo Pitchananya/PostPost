@@ -488,6 +488,9 @@ const state = {
   aiDescs: [],
   aiDescLoading: false,
   brandDesc: '',
+  shopUrl: '',
+  shopScraping: false,
+  shopStats: null,
 };
 
 const T = (th, en) => state.lang === 'th' ? th : en;
@@ -1243,7 +1246,7 @@ const ARCHETYPES = [
     sub:['The Citizen','The Regular Guy/Gal','The Networker'], hybrid:{th:'+ Caregiver — การสนับสนุนที่ขับเคลื่อนด้วยชุมชนและความเข้าใจที่ใกล้ตัว',en:'+ Caregiver — community-driven support and relatable empathy'} },
 ];
 
-const PRODUCTS = [
+let PRODUCTS = [
   { id:'p1', name_th:'Marine Collagen from New Zealand 100g — ออร์แกนิคแท้', name_en:'Marine Collagen NZ 100g', short:'Marine Collagen NZ', price:550, sales:'1.4k', rating:4.9, badge:'ขายดี', hue:['#FFE4E6','#FECACA'], label:'COLLAGEN' },
   { id:'p2', name_th:'iCON FACE iSERUM เซรั่มผิวกระจก สยบริ้วรอย 30ml', name_en:'iCON Face iSerum 30ml', short:'iCON Face iSerum', price:690, sales:'2.1k', rating:4.8, badge:'แนะนำ', hue:['#FFEDD5','#FECDD3'], label:'SERUM' },
   { id:'p3', name_th:'BellaCare Collagen Tripeptide Super Premium', name_en:'BellaCare Collagen Tripeptide', short:'BellaCare', price:599, sales:'980', rating:4.7, hue:['#FFE4E6','#FED7AA'], label:'BELLA' },
@@ -1254,12 +1257,22 @@ const PRODUCTS = [
   { id:'p8', name_th:'Kumiko Collagen สเต็มเซลล์รกปลาแซลม่อน 15ซอง', name_en:'Kumiko Collagen · 15 sachets', short:'Kumiko', price:250, sales:'880', rating:4.6, hue:['#FFE4E6','#E0E7FF'], label:'KUMI' },
 ];
 
-const productImgHTML = (p, opts={}) => `<div class="productImg" style="background:linear-gradient(135deg,${p.hue[0]},${p.hue[1]})">
-  <div class="pBlob1"></div>
-  <div class="pBlob2"></div>
-  <div class="pLabel">${p.label}</div>
-  ${opts.badge && p.badge ? `<span style="position:absolute;top:6px;left:6px;background:var(--orange);color:#fff;padding:1px 7px;border-radius:99px;font-size:9px;font-weight:800;z-index:2">${p.badge}</span>` : ''}
-</div>`;
+const productImgHTML = (p, opts={}) => {
+  const badge = opts.badge && p.badge ? `<span style="position:absolute;top:6px;left:6px;background:var(--orange);color:#fff;padding:1px 7px;border-radius:99px;font-size:9px;font-weight:800;z-index:2">${p.badge}</span>` : '';
+  if (p.thumbnail) {
+    return `<div class="productImg" style="background:#fff;overflow:hidden">
+      <img src="${p.thumbnail}" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display='none'" />
+      ${badge}
+    </div>`;
+  }
+  const hue = p.hue || ['#FFE4E6','#FECACA'];
+  return `<div class="productImg" style="background:linear-gradient(135deg,${hue[0]},${hue[1]})">
+    <div class="pBlob1"></div>
+    <div class="pBlob2"></div>
+    <div class="pLabel">${p.label || (p.name_en||p.name_th||'·').slice(0,8)}</div>
+    ${badge}
+  </div>`;
+};
 
 // ====================================================================
 // PAGE: PROFILE
@@ -1435,10 +1448,10 @@ function pageProfile() {
           ${I('store',14,'#6B6473')}
           <span style="padding:2px 7px;border-radius:5px;background:#FFEDD5;color:#9A3412;font-size:10.5px;font-weight:800">Shopee</span>
         </div>
-        <input class="input" value="https://shopee.co.th/happyprice.sh#product_list" style="padding-left:120px;padding-right:96px;font-family:var(--mono);font-size:12px;border-color:var(--green)" />
+        <input class="input" id="ppShopUrl" value="${state.shopUrl || 'https://shopee.co.th/happyprice.sh#product_list'}" style="padding-left:120px;padding-right:96px;font-family:var(--mono);font-size:12px;border-color:var(--green)" />
         <div style="position:absolute;right:12px;top:11px;display:flex;align-items:center;gap:4px;color:var(--green);font-size:11px;font-weight:700">${I('check',12,'#16A34A')} ${T('ถูกต้อง','Valid')}</div>
       </div>
-      <button class="btn outline">${I('refresh',14)} ${T('ดึงข้อมูลใหม่','Re-sync')}</button>
+      <button class="btn ${state.shopScraping?'outline':'primary'}" data-shopeesync="1" ${state.shopScraping?'disabled':''}>${I('refresh',14)} ${state.shopScraping?T('กำลังดึง…','Syncing…'):T('ดึงข้อมูลใหม่','Re-sync')}</button>
       <button class="btn outline iconOnly">${I('external',14)}</button>
     </div>
     <div style="background:var(--blue-soft);border:1px solid #DBE5FF;border-radius:14px;padding:14px 16px;margin-bottom:16px">
@@ -1460,7 +1473,13 @@ function pageProfile() {
       </div>
     </div>
     <div class="card flat" style="padding:0;background:var(--cream2);margin-bottom:16px;display:flex">
-      ${[['34',T('สินค้าทั้งหมด','Products')],['12',T('AI ใช้บ่อย','AI uses often')],['฿590',T('ราคาเฉลี่ย','Avg price')],['4.9',T('เรทติ้งร้าน','Shop rating')]].map((s,i)=>`<div style="flex:1;padding:14px 18px;${i>0?'border-left:1px solid var(--line)':''}"><div style="font-size:20px;font-weight:800;color:var(--purple);letter-spacing:-.02em">${s[0]}</div><div style="font-size:11.5px;color:var(--muted);font-weight:600">${s[1]}</div></div>`).join('')}
+      ${(state.shopStats
+          ? [[String(state.shopStats.count), T('สินค้าทั้งหมด','Products')],
+             [String(state.shopStats.inStock), T('มีสต็อก','In stock')],
+             ['฿'+state.shopStats.avgPrice, T('ราคาเฉลี่ย','Avg price')],
+             [state.shopStats.rating || '—', T('เรทติ้งเฉลี่ย','Avg rating')]]
+          : [['34',T('สินค้าทั้งหมด','Products')],['12',T('AI ใช้บ่อย','AI uses often')],['฿590',T('ราคาเฉลี่ย','Avg price')],['4.9',T('เรทติ้งร้าน','Shop rating')]]
+        ).map((s,i)=>`<div style="flex:1;padding:14px 18px;${i>0?'border-left:1px solid var(--line)':''}"><div style="font-size:20px;font-weight:800;color:var(--purple);letter-spacing:-.02em">${s[0]}</div><div style="font-size:11.5px;color:var(--muted);font-weight:600">${s[1]}</div></div>`).join('')}
     </div>
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
       <h3 class="cardTitle">${T('เลือกสินค้าที่ให้ AI ใช้สร้างคอนเทนต์','Pick products AI may feature')}</h3>
@@ -2925,7 +2944,7 @@ render();
     } catch(e){ throw new Error('เชื่อมต่อเซิร์ฟเวอร์ไม่ได้'); }
     var data = null;
     try { data = await res.json(); } catch(e){}
-    if (!res.ok) throw new Error((data && (data.error || data.message)) || (res.status + ' ' + res.statusText));
+    if (!res.ok) throw new Error((data && (data.message || data.error)) || (res.status + ' ' + res.statusText));
     return data;
   }
 
@@ -3143,6 +3162,44 @@ render();
     if (e.target.closest('[data-changelogo]')) changeLogo();
   });
 
+  // Shopee scraper — Re-sync button runs the real scrape
+  async function shopeeSync(){
+    if (state.shopScraping) return;
+    var inp = document.getElementById('ppShopUrl');
+    var url = inp ? inp.value.trim() : '';
+    if (!url) { toast(state.lang==='th'?'วาง URL ร้าน Shopee ก่อน':'Paste a Shopee shop URL first','error'); return; }
+    state.shopUrl = url;
+    state.shopScraping = true;
+    render();
+    toast(state.lang==='th'?'กำลังดึงข้อมูลจาก Shopee… อาจใช้เวลาสักครู่':'Scraping Shopee… this may take a minute');
+    try {
+      var j = await api('/api/shopee/scrape', { method:'POST', body:{ url: url } });
+      var prods = j.products || [];
+      if (!prods.length) { toast(state.lang==='th'?'ไม่พบสินค้าในร้านนี้':'No products found','error'); return; }
+      PRODUCTS = prods.slice(0, 24).map(function(p, i){
+        return { id:'sp'+i, name_th:p.name, name_en:p.name, short:(p.name||'').slice(0,30),
+          price: Math.round(p.price||0), sales: String(p.sold||0), rating: p.rating||0,
+          thumbnail: p.thumbnail||'', label:'' };
+      });
+      if (PRODUCTS[0]) state.product = PRODUCTS[0].id;
+      var inStock = prods.filter(function(p){ return (p.stock||0) > 0; }).length;
+      var priced = prods.filter(function(p){ return p.price > 0; });
+      var avg = priced.length ? Math.round(priced.reduce(function(s,p){ return s+p.price; },0)/priced.length) : 0;
+      var rated = prods.filter(function(p){ return p.rating > 0; });
+      var avgR = rated.length ? (rated.reduce(function(s,p){ return s+p.rating; },0)/rated.length).toFixed(1) : '';
+      state.shopStats = { count: j.count || prods.length, inStock: inStock, avgPrice: avg.toLocaleString(), rating: avgR };
+      toast((state.lang==='th'?'ดึงข้อมูลสำเร็จ — ':'Synced — ') + (j.count||prods.length) + (state.lang==='th'?' สินค้า':' products'),'success');
+    } catch(e){
+      toast((state.lang==='th'?'ดึงข้อมูลไม่สำเร็จ: ':'Sync failed: ') + (e.message||''),'error');
+    } finally {
+      state.shopScraping = false;
+      render();
+    }
+  }
+  document.addEventListener('click', function(e){
+    if (e.target.closest('[data-shopeesync]')) shopeeSync();
+  });
+
   // AI brand-description writer — based on brand name + business type
   async function aiWriteDesc(){
     var bizSel = document.getElementById('ppBizType');
@@ -3186,7 +3243,7 @@ render();
   // no dead clicks — any button without a wired action gives feedback
   var HANDLED = '[data-go],[data-lang],[data-set],[data-set-step],[data-toggle],'
     + '[data-voice],[data-brand],[data-product],[data-archetype],[data-archeguide],[data-archeclose],'
-    + '[data-addbrand],[data-delbrand],[data-aiwrite],[data-usedesc],[data-usedesc-s],[data-changelogo]';
+    + '[data-addbrand],[data-delbrand],[data-aiwrite],[data-usedesc],[data-usedesc-s],[data-changelogo],[data-shopeesync]';
   document.addEventListener('click', function(e){
     var b = e.target.closest('button, a');
     if (!b) return;
