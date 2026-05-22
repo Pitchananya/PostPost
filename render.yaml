@@ -6,7 +6,7 @@ services:
     runtime: docker
     rootDir: scraper-worker
     dockerfilePath: ./Dockerfile
-    plan: starter            # 512MB — ถ้า Chrome OOM ให้เปลี่ยนเป็น standard
+    plan: free               # 512MB / 0.1 CPU — ถ้า Chrome OOM/ช้ามาก ค่อยอัปเป็น starter
     region: singapore        # ใกล้ไทยที่สุด
     healthCheckPath: /
     autoDeploy: true
