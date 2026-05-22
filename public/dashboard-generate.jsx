@@ -350,7 +350,12 @@ const GeneratePage = ({ tab = 'caption' }) => {
   const app = useApp();
   const [tabState, setTabState] = React.useState(tab);
   const [productId, setProductId] = React.useState('p1');
-  const [topic, setTopic] = React.useState('');
+  // Topic may be handed off from the Topic Bank page
+  const [topic, setTopic] = React.useState(() => {
+    const h = window.PP_HANDOFF;
+    if (h && h.topic) { window.PP_HANDOFF = null; return h.topic; }
+    return '';
+  });
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState('');
   const [result, setResult] = React.useState(null);

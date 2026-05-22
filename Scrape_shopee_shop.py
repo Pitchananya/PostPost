@@ -534,8 +534,37 @@ def fill_missing_products(driver, shopid, products, dom_items):
     return products
 
 
+def extract_description_text(prod):
+    """
+    รวมข้อความ description จาก response item/get
+    รองรับทั้งแบบข้อความล้วน (field 'description')
+    และแบบ rich/รูปภาพ (description_info.description_blocks)
+    """
+    plain = prod.get("description")
+    plain = plain.strip() if isinstance(plain, str) else ""
+
+    parts = []
+    info = prod.get("description_info")
+    if isinstance(info, dict):
+        for blk in (info.get("description_blocks") or []):
+            if not isinstance(blk, dict):
+                continue
+            t = blk.get("text")
+            if isinstance(t, dict):
+                t = t.get("text") or t.get("content")
+            if isinstance(t, str) and t.strip():
+                parts.append(t.strip())
+    rich = "\n".join(parts)
+
+    return rich or plain
+
+
 def fetch_description(driver, shopid, itemid):
-    """ดึงข้อความ description ของสินค้า 1 ชิ้น ผ่าน API item/get"""
+    """
+    ดึง description ของสินค้า 1 ชิ้นผ่าน API item/get
+    คืนค่า: str = ข้อความ (อาจเป็น '' ถ้าสินค้าไม่มีรายละเอียดจริง)
+            None = ดึงไม่สำเร็จ / โดน anti-bot บล็อก
+    """
     js = f"""
     return await fetch(
       'https://shopee.co.th/api/v4/item/get?itemid={itemid}&shopid={shopid}',
@@ -548,46 +577,95 @@ def fetch_description(driver, shopid, itemid):
     """
     try:
         raw = driver.execute_script(js)
-        if not raw or raw.startswith("ERROR:"):
-            return None
-        data = json.loads(raw)
-        if data.get("error"):
-            return None
-        d = data.get("data") or {}
-        prod = d.get("item") or d
-        return (prod.get("description") or "").strip()
     except Exception:
         return None
+    if not raw or raw.startswith("ERROR:"):
+        return None
+    try:
+        data = json.loads(raw)
+    except Exception:
+        return None
+    if data.get("error"):
+        return None
+    d = data.get("data") or {}
+    prod = d.get("item") or d
+    if not isinstance(prod, dict) or not prod:
+        return None
+    return extract_description_text(prod)
 
 
 def enrich_with_descriptions(driver, shopid, products):
-    """เติมฟิลด์ description ให้สินค้าทุกชิ้น (เรียก item/get รายชิ้น)"""
-    todo = [p for p in products if not p.get("description")]
-    print(f"\n[4] ดึงรายละเอียด (description) — ต้องดึง {len(todo)} จาก {len(products)} ชิ้น...")
+    """
+    เติมฟิลด์ description ให้สินค้าทุกชิ้น (เรียก item/get รายชิ้น)
+    มีระบบหน่วงเวลา + พักเมื่อโดน rate-limit + รอบเก็บตก
+    """
+    MAX_ROUNDS = 4
 
-    ok = 0
-    consecutive_fail = 0
-    for i, p in enumerate(todo, 1):
-        desc = fetch_description(driver, shopid, p["itemid"])
-        if desc is None:
-            consecutive_fail += 1
-            p["description"] = p.get("description") or ""
-        else:
-            consecutive_fail = 0
-            p["description"] = desc
-            if desc:
-                ok += 1
+    # นำ description ที่เคยดึงไว้แล้วจากไฟล์เดิมมาใช้ต่อ (กันดึงซ้ำเมื่อรันหลายรอบ)
+    if OUT_JSON.exists():
+        try:
+            prev = json.loads(OUT_JSON.read_text(encoding="utf-8"))
+            prev_desc = {p["itemid"]: p["description"]
+                         for p in prev if p.get("description")}
+            reused = 0
+            for p in products:
+                if not p.get("description") and p["itemid"] in prev_desc:
+                    p["description"] = prev_desc[p["itemid"]]
+                    reused += 1
+            if reused:
+                print(f"\n    (นำ description {reused} ชิ้นจากไฟล์เดิมมาใช้ต่อ)")
+        except Exception:
+            pass
 
-        if consecutive_fail == 12:
-            print("  ! ล้มเหลวติดต่อกันหลายชิ้น — อาจโดน anti-bot "
-                  "(ดึงต่อจนจบ แต่ description อาจไม่ครบ)")
+    done = {p["itemid"] for p in products if p.get("description")}
+    total = len(products)
+    print(f"\n[4] ดึงรายละเอียด (description) — ต้องดึง {total - len(done)} จาก {total} ชิ้น")
+    print("    (มีหน่วงเวลากัน anti-bot — ขั้นตอนนี้อาจใช้เวลาหลายนาที)")
 
-        if i % 20 == 0 or i == len(todo):
-            print(f"  {i:4d}/{len(todo)} | มี description แล้ว {ok} ชิ้น")
-        time.sleep(random.uniform(0.3, 0.8))
+    for rnd in range(1, MAX_ROUNDS + 1):
+        pending = [p for p in products if p["itemid"] not in done]
+        if not pending:
+            break
+        if rnd > 1:
+            print(f"\n  -- รอบเก็บตกที่ {rnd}: เหลือ {len(pending)} ชิ้น --")
+
+        consec = 0
+        lo, hi = 0.7 + rnd * 0.3, 1.6 + rnd * 0.6   # รอบหลังหน่วงนานขึ้น
+        for i, p in enumerate(pending, 1):
+            desc = fetch_description(driver, shopid, p["itemid"])
+            if desc is None:
+                consec += 1
+                if consec >= 6:
+                    cooldown = 45 + rnd * 25
+                    print(f"    ! โดน rate-limit — พัก {cooldown}s แล้วรีเฟรชหน้าร้าน...")
+                    try:
+                        driver.get(SHOP_URL)
+                    except Exception:
+                        pass
+                    time.sleep(cooldown)
+                    consec = 0
+            else:
+                consec = 0
+                p["description"] = desc
+                done.add(p["itemid"])
+
+            if i % 25 == 0 or i == len(pending):
+                got = len(done)
+                print(f"    {i:4d}/{len(pending)} | description รวม {got}/{total} ชิ้น")
+            time.sleep(random.uniform(lo, hi))
+
+        if [p for p in products if p["itemid"] not in done] and rnd < MAX_ROUNDS:
+            print("  พัก 60s ก่อนรอบเก็บตกถัดไป...")
+            try:
+                driver.get(SHOP_URL)
+            except Exception:
+                pass
+            time.sleep(60)
 
     have = sum(1 for p in products if p.get("description"))
-    print(f"  เสร็จ — มี description {have}/{len(products)} ชิ้น")
+    miss = total - len(done)
+    print(f"  เสร็จ — มี description {have}/{total} ชิ้น "
+          f"(ดึงไม่สำเร็จ {miss} ชิ้น)")
     return products
 
 

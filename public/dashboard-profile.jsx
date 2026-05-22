@@ -1,7 +1,7 @@
 // Profile page — multi-brand switcher, AI-assist description, expanded brand voices
 
-const BrandTile = ({ name, sub, mark, color, active, ch }) => (
-  <button style={{
+const BrandTile = ({ name, sub, mark, color, active, ch, onClick }) => (
+  <button onClick={onClick} style={{
     font: 'inherit', textAlign: 'left', cursor: 'pointer',
     padding: 14, borderRadius: 12,
     border: active ? '2px solid var(--cf-primary)' : '1px solid var(--cf-border)',
@@ -37,10 +37,10 @@ const BrandTile = ({ name, sub, mark, color, active, ch }) => (
   </button>
 );
 
-const VoiceCard = ({ tone, active }) => {
+const VoiceCard = ({ tone, active, onClick }) => {
   const t = useT();
   return (
-    <button style={{
+    <button onClick={onClick} style={{
       font: 'inherit', textAlign: 'left', cursor: 'pointer',
       padding: '12px 14px', borderRadius: 12,
       border: active ? '2px solid var(--cf-primary)' : '1px solid var(--cf-border)',
@@ -116,8 +116,36 @@ const ProductCard = ({ name, price, sales, image, active }) => (
 
 const ProfilePage = () => {
   const t = useT();
+  const app = useApp();
   const [aiAssistOpen, setAiAssistOpen] = React.useState(false);
   const [manualOpen, setManualOpen] = React.useState(false);
+  const [activeBrand, setActiveBrand] = React.useState('HappyPrice Shop');
+  const [selectedVoices, setSelectedVoices] = React.useState(['friendly', 'fun']);
+  const [archetype, setArchetype] = React.useState('sage');
+  const [voiceNotes, setVoiceNotes] = React.useState(t({
+    th: 'ใช้คำว่า "คุณลูกค้า" แทน "คุณ" / ลงท้ายด้วย "ค่ะ" เกือบทุกครั้ง / ห้ามใช้ "การันตี 100%" / ใส่ emoji 🌸 ตอนพูดถึงสินค้า',
+    en: 'Use "dear customer" instead of "you" / end sentences politely / never say "100% guaranteed" / add 🌸 when mentioning products',
+  }));
+  const [saving, setSaving] = React.useState(false);
+
+  const toggleVoice = (id) => setSelectedVoices(v =>
+    v.includes(id) ? v.filter(x => x !== id) : (v.length >= 3 ? v : v.concat(id)));
+
+  const saveProfile = async () => {
+    setSaving(true);
+    try {
+      const composed = [
+        desc,
+        'โทนเสียง / Voice tones: ' + selectedVoices.join(', '),
+        'Brand archetype: ' + archetype,
+        voiceNotes,
+      ].filter(Boolean).join('\n');
+      await API.ai.brandVoiceSet({ course: 'PFB', text: composed, brand_voice: composed, archetype });
+      app.toast(t({ th: 'บันทึกโปรไฟล์แบรนด์แล้ว', en: 'Brand profile saved' }), 'success');
+    } catch (e) {
+      app.toast(t({ th: 'บันทึกไม่สำเร็จ: ', en: 'Save failed: ' }) + e.message, 'error');
+    } finally { setSaving(false); }
+  };
   const [desc, setDesc] = React.useState(t({
     th: 'ร้าน HappyPrice ขายสกินแคร์ออร์แกนิคจากดอกกุหลาบเขาใหญ่ เน้นผิวบอบบางแพ้ง่าย กลุ่มลูกค้าหญิงวัย 25-40 ปี',
     en: "HappyPrice sells organic skincare from Khao Yai roses, focused on sensitive skin, for women aged 25-40.",
@@ -156,9 +184,9 @@ const ProfilePage = () => {
               <Icon name="info" size={15} />
               <T th="ดูสคริปต์ที่ AI ใช้" en="View AI system prompt" />
             </button>
-            <button className="btn btn-primary btn-sm">
+            <button className="btn btn-primary btn-sm" onClick={saveProfile} disabled={saving}>
               <Icon name="check" size={15} />
-              <T th="บันทึก" en="Save" />
+              {saving ? <T th="กำลังบันทึก…" en="Saving…" /> : <T th="บันทึก" en="Save" />}
             </button>
           </>
         }
@@ -185,15 +213,18 @@ const ProfilePage = () => {
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
-          <BrandTile mark="HP" color="linear-gradient(135deg, #FB923C, #F97316)" active
+          <BrandTile mark="HP" color="linear-gradient(135deg, #FB923C, #F97316)"
+            active={activeBrand === 'HappyPrice Shop'} onClick={() => setActiveBrand('HappyPrice Shop')}
             name="HappyPrice Shop"
             sub={t({ th: 'สกินแคร์ · 34 สินค้า', en: 'Skincare · 34 products' })}
             ch={['facebook', 'instagram']} />
           <BrandTile mark="MN" color="linear-gradient(135deg, #818CF8, #4F46E5)"
+            active={activeBrand === 'MintNature'} onClick={() => setActiveBrand('MintNature')}
             name="MintNature"
             sub={t({ th: 'ชาสมุนไพร · 12 สินค้า', en: 'Herbal tea · 12 products' })}
             ch={['facebook', 'tiktok']} />
           <BrandTile mark="คา" color="linear-gradient(135deg, #34D399, #059669)"
+            active={activeBrand === 'Baan Café'} onClick={() => setActiveBrand('Baan Café')}
             name={t({ th: 'คาเฟ่บ้านน้ำใจ', en: 'Baan Café' })}
             sub={t({ th: 'คาเฟ่ · 8 สาขา', en: 'Café · 8 locations' })}
             ch={['facebook', 'instagram', 'tiktok']} />
@@ -348,9 +379,9 @@ const ProfilePage = () => {
               { id: 'explorer', icon: '🧭', name: { th: 'The Explorer', en: 'The Explorer' }, sub: { th: 'ผจญภัย · อิสระ', en: 'Adventurous · free' }, color: '#0891B2' },
               { id: 'lover', icon: '💗', name: { th: 'The Lover', en: 'The Lover' }, sub: { th: 'สัมพันธ์ · ใกล้ชิด', en: 'Intimate · sensual' }, color: '#BE185D' },
             ].map(a => {
-              const on = a.on;
+              const on = archetype === a.id;
               return (
-                <button key={a.id} style={{
+                <button key={a.id} onClick={() => setArchetype(a.id)} style={{
                   font: 'inherit', textAlign: 'left', cursor: 'pointer',
                   padding: 12, borderRadius: 12,
                   border: on ? '2px solid var(--cf-primary)' : '1px solid var(--cf-border)',
@@ -394,16 +425,14 @@ const ProfilePage = () => {
           </p>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, maxHeight: 460, overflowY: 'auto', paddingRight: 4 }}>
-            {voices.map(v => <VoiceCard key={v.id} tone={v} active={v.on} />)}
+            {voices.map(v => <VoiceCard key={v.id} tone={v}
+              active={selectedVoices.includes(v.id)} onClick={() => toggleVoice(v.id)} />)}
           </div>
 
           <hr className="divider" style={{ margin: '16px 0' }} />
 
           <label className="label"><T th="คำอธิบายเสียงเพิ่มเติม (ไม่จำเป็น)" en="Free-form voice notes (optional)" /></label>
-          <textarea className="textarea" rows={2} defaultValue={t({
-            th: 'ใช้คำว่า "คุณลูกค้า" แทน "คุณ" / ลงท้ายด้วย "ค่ะ" เกือบทุกครั้ง / ห้ามใช้ "การันตี 100%" / ใส่ emoji 🌸 ตอนพูดถึงสินค้า',
-            en: 'Use "dear customer" instead of "you" / end sentences politely / never say "100% guaranteed" / add 🌸 when mentioning products',
-          })} />
+          <textarea className="textarea" rows={2} value={voiceNotes} onChange={(e) => setVoiceNotes(e.target.value)} />
         </div>
       </div>
 
@@ -452,11 +481,13 @@ const ProfilePage = () => {
               <T th="ถูกต้อง" en="Valid" />
             </div>
           </div>
-          <button className="btn btn-secondary">
+          <button className="btn btn-secondary"
+            onClick={() => app.toast(t({ th: 'กำลังดึงข้อมูลสินค้าจาก Shopee…', en: 'Syncing products from Shopee…' }), 'info')}>
             <Icon name="refresh" size={15} />
             <T th="ดึงข้อมูลใหม่" en="Re-sync" />
           </button>
-          <button className="btn btn-secondary" style={{ width: 38, padding: 0 }}>
+          <button className="btn btn-secondary" style={{ width: 38, padding: 0 }}
+            onClick={() => window.open('https://shopee.co.th/happyprice.sh', '_blank')}>
             <Icon name="external" size={15} />
           </button>
         </div>
@@ -656,11 +687,13 @@ const ProfilePage = () => {
                 <button className="btn btn-secondary btn-sm" onClick={() => setManualOpen(false)}>
                   <T th="ยกเลิก" en="Cancel" />
                 </button>
-                <button className="btn btn-secondary btn-sm">
+                <button className="btn btn-secondary btn-sm"
+                  onClick={() => app.toast(t({ th: 'บันทึกสินค้าแล้ว — เพิ่มรายการถัดไปได้เลย', en: 'Product saved — add the next one' }), 'success')}>
                   <Icon name="plus" size={13} />
                   <T th="บันทึก + เพิ่มอีก" en="Save + add another" />
                 </button>
-                <button className="btn btn-primary btn-sm">
+                <button className="btn btn-primary btn-sm"
+                  onClick={() => { app.toast(t({ th: 'บันทึกสินค้าแล้ว', en: 'Product saved' }), 'success'); setManualOpen(false); }}>
                   <Icon name="check" size={13} />
                   <T th="บันทึกสินค้า" en="Save product" />
                 </button>

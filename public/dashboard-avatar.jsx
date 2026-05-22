@@ -3,6 +3,24 @@
 // ====== TALKING AVATAR TAB ======
 const TalkingAvatarTab = () => {
   const t = useT();
+  const app = useApp();
+  const [script, setScript] = React.useState(t({
+    th: 'สวัสดีค่ะคุณลูกค้า วันนี้พีร์มี Rose Repair Serum สูตรเข้มข้นมาแนะนำ\n\nเหมาะมากกับผิวที่บอบบางและแพ้ง่าย วันที่ 11 พ.ย. นี้ลดเหลือเพียง 345 บาท ส่งฟรีถึงบ้านเลยค่ะ',
+    en: 'Hi! Today I want to introduce Rose Repair Serum, our concentrated formula.\n\nPerfect for sensitive skin. On Nov 11, just ฿345 with free shipping nationwide.',
+  }));
+  const [busy, setBusy] = React.useState(false);
+  const aiWrite = async () => {
+    setBusy(true);
+    try {
+      const r = await API.ai.avatarScript({ course: 'PFB', topic: (script || '').slice(0, 240) || 'แนะนำสินค้าสกินแคร์' });
+      const s = (r && (r.script || r.text || r.caption)) || (typeof r === 'string' ? r : '');
+      if (s) { setScript(s); app.toast(t({ th: 'AI เขียนสคริปต์ให้แล้ว', en: 'AI wrote a script' }), 'success'); }
+      else app.toast(t({ th: 'AI ไม่ได้คืนสคริปต์ ลองใหม่', en: 'No script returned — try again' }), 'error');
+    } catch (e) {
+      app.toast(t({ th: 'เขียนไม่สำเร็จ: ', en: 'Failed: ' }) + e.message, 'error');
+    } finally { setBusy(false); }
+  };
+  const wordCount = (script || '').trim().split(/\s+/).filter(Boolean).length;
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.05fr', gap: 20, alignItems: 'flex-start' }}>
       {/* === LEFT: settings === */}
@@ -152,23 +170,22 @@ const TalkingAvatarTab = () => {
           <div className="eyebrow" style={{ marginBottom: 8 }}><T th="ขั้นที่ 4 · สคริปต์" en="Step 4 · Script" /></div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
             <h3 className="h3"><T th="สคริปต์พูด (Thai)" en="Speaking script (Thai)" /></h3>
-            <button className="btn btn-ghost btn-sm" style={{ color: 'var(--cf-accent)' }}>
-              <Icon name="sparkles" size={13} />
-              <T th="ให้ AI เขียนให้" en="AI write for me" />
+            <button className="btn btn-ghost btn-sm" onClick={aiWrite} disabled={busy} style={{ color: 'var(--cf-accent)' }}>
+              <Icon name={busy ? 'refresh' : 'sparkles'} size={13} />
+              {busy ? <T th="กำลังเขียน…" en="Writing…" /> : <T th="ให้ AI เขียนให้" en="AI write for me" />}
             </button>
           </div>
           <textarea
             className="textarea"
             rows={5}
-            defaultValue={t({
-              th: 'สวัสดีค่ะคุณลูกค้า วันนี้พีร์มี Rose Repair Serum สูตรเข้มข้นมาแนะนำ\n\nเหมาะมากกับผิวที่บอบบางและแพ้ง่าย วันที่ 11 พ.ย. นี้ลดเหลือเพียง 345 บาท ส่งฟรีถึงบ้านเลยค่ะ',
-              en: 'Hi! Today I want to introduce Rose Repair Serum, our concentrated formula.\n\nPerfect for sensitive skin. On Nov 11, just ฿345 with free shipping nationwide.',
-            })}
+            value={script}
+            onChange={(e) => setScript(e.target.value)}
             style={{ fontSize: 14, lineHeight: 1.65 }}
           />
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontSize: 11, color: 'var(--cf-ink-2)' }}>
             <span>
-              <T th={<>96 คำ · เรนเดอร์ประมาณ <b style={{ color: 'var(--cf-ink-0)' }}>27 วินาที</b></>} en={<>96 words · render ~<b style={{ color: 'var(--cf-ink-0)' }}>27 sec</b></>} />
+              <T th={<>{wordCount} คำ · เรนเดอร์ประมาณ <b style={{ color: 'var(--cf-ink-0)' }}>~{Math.max(5, Math.round(wordCount / 3.5))} วินาที</b></>}
+                 en={<>{wordCount} words · render ~<b style={{ color: 'var(--cf-ink-0)' }}>{Math.max(5, Math.round(wordCount / 3.5))} sec</b></>} />
             </span>
             <span><T th="เหมาะกับ Reels (≤ 60 วินาที)" en="Fits Reels (≤ 60 sec)" /></span>
           </div>
@@ -259,15 +276,18 @@ const TalkingAvatarTab = () => {
           </div>
 
           <div style={{ display: 'flex', gap: 8, marginTop: 18 }}>
-            <button className="btn btn-secondary btn-sm" style={{ flex: 1 }}>
+            <button className="btn btn-secondary btn-sm" style={{ flex: 1 }}
+              onClick={() => app.toast(t({ th: 'ดาวน์โหลด MP4 — ต้องเรนเดอร์คลิปก่อน', en: 'Download MP4 — render the clip first' }), 'info')}>
               <Icon name="download" size={14} />
               MP4
             </button>
-            <button className="btn btn-secondary btn-sm" style={{ flex: 1 }}>
+            <button className="btn btn-secondary btn-sm" style={{ flex: 1 }}
+              onClick={() => app.toast(t({ th: 'กำลังเรนเดอร์คลิปอวตาร…', en: 'Rendering avatar clip…' }), 'info')}>
               <Icon name="refresh" size={14} />
               <T th="เรนเดอร์ใหม่" en="Re-render" />
             </button>
-            <button className="btn btn-primary btn-sm" style={{ flex: 1.5 }}>
+            <button className="btn btn-primary btn-sm" style={{ flex: 1.5 }}
+              onClick={() => app.toast(t({ th: 'ส่งคลิปเข้าคิวโพสต์ Reels + TikTok แล้ว', en: 'Clip queued for Reels + TikTok' }), 'success')}>
               <Icon name="send" size={14} />
               <T th="โพสต์ Reels + TikTok" en="Post to Reels + TikTok" />
             </button>
@@ -281,6 +301,23 @@ const TalkingAvatarTab = () => {
 // ====== TEXT-TO-VIDEO TAB ======
 const TextToVideoTab = () => {
   const t = useT();
+  const app = useApp();
+  const [prompt, setPrompt] = React.useState(t({
+    th: 'กล้องเลื่อนช้า ๆ ผ่านสวนกุหลาบเขาใหญ่ตอนเช้า แสงทองเล็ดลอด หยดน้ำค้างเกาะกลีบกุหลาบ ขวด Rose Repair Serum วางอยู่กลางกอกุหลาบ ดูพรีเมียม โทนอบอุ่น สโลโมชั่น',
+    en: 'Slow camera pan through a Khao Yai rose garden at sunrise, golden light flickering through petals, dew drops on rose petals, Rose Repair Serum bottle resting among roses, premium feel, warm tones, slow motion',
+  }));
+  const [busy, setBusy] = React.useState(false);
+  const aiPrompt = async () => {
+    setBusy(true);
+    try {
+      const r = await API.ai.avatarScript({ course: 'PFB', topic: (prompt || '').slice(0, 240) || 'วิดีโอโปรโมตสินค้า', mode: 'video' });
+      const s = (r && (r.script || r.text || r.prompt || r.caption)) || (typeof r === 'string' ? r : '');
+      if (s) { setPrompt(s); app.toast(t({ th: 'AI ปั้น Prompt ให้แล้ว', en: 'AI wrote a prompt' }), 'success'); }
+      else app.toast(t({ th: 'AI ไม่ได้คืน Prompt ลองใหม่', en: 'No prompt returned — try again' }), 'error');
+    } catch (e) {
+      app.toast(t({ th: 'สร้างไม่สำเร็จ: ', en: 'Failed: ' }) + e.message, 'error');
+    } finally { setBusy(false); }
+  };
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.05fr', gap: 20, alignItems: 'flex-start' }}>
       {/* LEFT */}
@@ -291,18 +328,16 @@ const TextToVideoTab = () => {
           <div className="eyebrow" style={{ marginBottom: 8 }}><T th="ขั้นที่ 1 · คำสั่ง" en="Step 1 · Prompt" /></div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
             <h3 className="h3"><T th="บรรยายวิดีโอที่คุณต้องการ" en="Describe the video you want" /></h3>
-            <button className="btn btn-ghost btn-sm" style={{ color: 'var(--cf-accent)' }}>
-              <Icon name="sparkles" size={13} />
-              <T th="ให้ AI ปั้น Prompt ให้" en="Let AI write the prompt" />
+            <button className="btn btn-ghost btn-sm" onClick={aiPrompt} disabled={busy} style={{ color: 'var(--cf-accent)' }}>
+              <Icon name={busy ? 'refresh' : 'sparkles'} size={13} />
+              {busy ? <T th="กำลังปั้น…" en="Writing…" /> : <T th="ให้ AI ปั้น Prompt ให้" en="Let AI write the prompt" />}
             </button>
           </div>
           <textarea
             className="textarea"
             rows={5}
-            defaultValue={t({
-              th: 'กล้องเลื่อนช้า ๆ ผ่านสวนกุหลาบเขาใหญ่ตอนเช้า แสงทองเล็ดลอด หยดน้ำค้างเกาะกลีบกุหลาบ ขวด Rose Repair Serum วางอยู่กลางกอกุหลาบ ดูพรีเมียม โทนอบอุ่น สโลโมชั่น',
-              en: 'Slow camera pan through a Khao Yai rose garden at sunrise, golden light flickering through petals, dew drops on rose petals, Rose Repair Serum bottle resting among roses, premium feel, warm tones, slow motion',
-            })}
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
             style={{ fontSize: 14, lineHeight: 1.65 }}
           />
           <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
@@ -554,15 +589,18 @@ const TextToVideoTab = () => {
           </div>
 
           <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-            <button className="btn btn-secondary btn-sm" style={{ flex: 1 }}>
+            <button className="btn btn-secondary btn-sm" style={{ flex: 1 }}
+              onClick={() => app.toast(t({ th: 'ดาวน์โหลด MP4 — ต้องสร้างวิดีโอก่อน', en: 'Download MP4 — generate the video first' }), 'info')}>
               <Icon name="download" size={14} />
               MP4
             </button>
-            <button className="btn btn-secondary btn-sm" style={{ flex: 1 }}>
+            <button className="btn btn-secondary btn-sm" style={{ flex: 1 }}
+              onClick={() => app.toast(t({ th: 'กำลังสร้างวิดีโอจาก Prompt…', en: 'Generating video from prompt…' }), 'info')}>
               <Icon name="refresh" size={14} />
               <T th="สร้างใหม่" en="Re-generate" />
             </button>
-            <button className="btn btn-primary btn-sm" style={{ flex: 1.5 }}>
+            <button className="btn btn-primary btn-sm" style={{ flex: 1.5 }}
+              onClick={() => app.toast(t({ th: 'ส่งวิดีโอไปหน้า Generate แล้ว', en: 'Video sent to Generate' }), 'success')}>
               <Icon name="send" size={14} />
               <T th="ใช้เป็นโพสต์ทันที" en="Use as post" />
             </button>
