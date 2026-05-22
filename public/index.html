@@ -1458,6 +1458,7 @@ function pageProfile() {
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
         ${I('info',14,'#2563EB')}
         <span style="font-size:12.5px;font-weight:800;color:#1E40AF">${T('วิธีหาลิงก์ร้าน Shopee ของคุณ','How to get your Shopee shop link')}</span>
+        <button data-shopguide="1" class="btn sm" style="margin-left:auto;height:26px;background:#2563EB;color:#fff;font-size:11px">${I('eye',12,'#fff')} ${T('ดูวิธีแบบละเอียด + รูป','Full guide + images')}</button>
       </div>
       ${[
         [T('เปิดหน้าร้านของคุณบน Shopee (เว็บหรือแอป)','Open your shop page on Shopee (web or app)'),''],
@@ -3042,6 +3043,79 @@ render();
     if (e.target.closest('[data-archeguide]')) archeGuideModal();
   });
 
+  // Detailed Shopee-link guide with illustrated steps
+  function shopGuideModal(){
+    var L = function(th,en){ return state.lang==='th'?th:en; };
+    var br = function(inner){
+      return '<div style="border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff;box-shadow:var(--shadow3)">'
+        + '<div style="background:#F3E8D8;padding:6px 9px;display:flex;align-items:center;gap:5px">'
+        + '<span style="width:7px;height:7px;border-radius:99px;background:#D8CCB7"></span><span style="width:7px;height:7px;border-radius:99px;background:#D8CCB7"></span><span style="width:7px;height:7px;border-radius:99px;background:#D8CCB7"></span>'
+        + '<div style="flex:1;background:#fff;border-radius:5px;font-size:9px;color:#6B6473;padding:3px 8px;font-family:var(--mono)">🔒 shopee.co.th</div></div>'
+        + inner + '</div>';
+    };
+    var steps = [
+      { th:'เปิดหน้าร้านของคุณบน Shopee', en:'Open your shop on Shopee',
+        dth:'เข้าเว็บ shopee.co.th หรือแอป แล้วเปิดหน้า "ร้านของฉัน" หรือหน้าโปรไฟล์ร้าน',
+        den:'Go to shopee.co.th (or the app) and open "My Shop" / your shop profile page',
+        ill: br('<div style="height:22px;background:linear-gradient(90deg,#EE4D2D,#FF6633)"></div>'
+          +'<div style="padding:12px;display:flex;gap:10px;align-items:center">'
+          +'<div style="width:40px;height:40px;border-radius:99px;background:linear-gradient(135deg,#4A2290,#160828)"></div>'
+          +'<div><div style="font-size:11px;font-weight:800;color:var(--purple)">'+L('ร้านของคุณ','Your Shop')+'</div>'
+          +'<div style="font-size:9px;color:#6B6473">Active · ⭐ 5.0</div></div></div>') },
+      { th:'กดที่คำว่า "Products"', en:'Tap the word "Products"',
+        dth:'บนหน้าโปรไฟล์ร้านจะมีตัวเลขจำนวนสินค้า — กดที่คำว่า Products ตรงนั้น',
+        den:'On the shop profile there is a product count — click the word "Products"',
+        ill: '<div style="padding:16px 14px;display:flex;flex-direction:column;align-items:center;gap:6px">'
+          +'<div style="border:2px solid var(--orange);border-radius:10px;padding:8px 16px;background:var(--orange-soft);box-shadow:0 0 0 5px rgba(255,122,26,.16)">'
+          +'<span style="font-size:13px;font-weight:800;color:var(--purple)">📦 Products: <span style="color:var(--orange3)">10</span></span></div>'
+          +'<div style="font-size:20px;line-height:1">👆</div>'
+          +'<div style="font-size:10px;font-weight:800;color:var(--orange3)">'+L('คลิกตรงนี้','click here')+'</div></div>' },
+      { th:'URL บนแถบที่อยู่จะเปลี่ยน', en:'The address-bar URL changes',
+        dth:'สังเกตช่อง URL ด้านบนเบราว์เซอร์ — จะมี #product_list ต่อท้ายชื่อร้าน',
+        den:'Watch the browser address bar — it now ends with #product_list',
+        ill: '<div style="padding:14px">'
+          +'<div style="background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-family:var(--mono);font-size:10px;display:flex;flex-wrap:wrap;align-items:center">'
+          +'<span style="color:#9C8BB8">https://shopee.co.th/</span><span style="color:var(--purple);font-weight:700">'+L('ชื่อร้าน','your-shop')+'</span>'
+          +'<span style="background:var(--orange);color:#fff;border-radius:4px;padding:1px 5px;font-weight:800;margin-left:1px">#product_list</span></div>'
+          +'<div style="font-size:10px;color:var(--orange3);font-weight:700;margin-top:7px">⬑ '+L('ต้องมี #product_list ต่อท้าย ถึงจะใช้ได้','must end with #product_list to work')+'</div></div>' },
+      { th:'คัดลอกมาวางใน PostPost แล้วกด "ดึงข้อมูลใหม่"', en:'Paste it into PostPost and hit "Re-sync"',
+        dth:'ลากคลุม URL ทั้งหมด → คลิกขวา Copy → กลับมาวางในช่องนี้ แล้วกดปุ่ม "ดึงข้อมูลใหม่"',
+        den:'Select the whole URL, copy it, paste into the field here, then click "Re-sync"',
+        ill: '<div style="padding:14px;display:flex;gap:8px;align-items:stretch">'
+          +'<div style="flex:1;border:1.5px solid var(--green);border-radius:8px;padding:8px 9px;font-family:var(--mono);font-size:9px;color:var(--purple);display:flex;align-items:center;gap:5px;background:#fff;overflow:hidden">'
+          +'<span style="background:#FFEDD5;color:#9A3412;border-radius:4px;padding:1px 5px;font-weight:800;font-size:8px;flex-shrink:0">Shopee</span>'
+          +'<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">shopee.co.th/yourshop#product_list</span></div>'
+          +'<div style="background:linear-gradient(135deg,var(--orange),#ff4b00);color:#fff;border-radius:8px;padding:8px 12px;font-size:10px;font-weight:800;display:flex;align-items:center;gap:4px;white-space:nowrap">⟳ '+L('ดึงข้อมูลใหม่','Re-sync')+'</div></div>' },
+    ];
+    var rows = steps.map(function(s,i){
+      return '<div style="display:grid;grid-template-columns:1fr 280px;gap:16px;align-items:center;border:1px solid var(--line);border-radius:16px;padding:16px">'
+        + '<div><div style="display:flex;align-items:center;gap:9px;margin-bottom:6px">'
+        +   '<span style="flex-shrink:0;width:26px;height:26px;border-radius:99px;background:#2563EB;color:#fff;font-size:13px;font-weight:800;display:grid;place-items:center">'+(i+1)+'</span>'
+        +   '<b style="font-size:14px;color:var(--purple)">'+L(s.th,s.en)+'</b></div>'
+        + '<div style="font-size:12.5px;color:var(--ink2);line-height:1.55;padding-left:35px">'+L(s.dth,s.den)+'</div></div>'
+        + '<div>'+s.ill+'</div></div>';
+    }).join('');
+    var ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(16,8,30,.6);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:28px;font-family:Prompt,sans-serif';
+    ov.innerHTML = '<div style="background:#fff;border-radius:24px;max-width:720px;width:100%;max-height:88vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 70px rgba(38,20,71,.4)">'
+      + '<div style="padding:20px 24px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px">'
+      + '<div style="width:40px;height:40px;border-radius:10px;background:#FFEDD5;color:#9A3412;display:grid;place-items:center;font-size:18px">🛍️</div>'
+      + '<div style="flex:1"><div style="font-size:18px;font-weight:800;color:var(--purple)">'+L('วิธีหาลิงก์ร้าน Shopee — ทีละขั้น','Get your Shopee link — step by step')+'</div>'
+      + '<div style="font-size:12px;color:var(--muted)">'+L('ทำตาม 4 ขั้นตอน แล้วนำลิงก์มาวางในช่อง','Follow these 4 steps, then paste the link')+'</div></div>'
+      + '<button class="btn outline sm" data-shopguideclose="1">'+L('ปิด','Close')+'</button></div>'
+      + '<div style="overflow-y:auto;padding:18px;display:flex;flex-direction:column;gap:12px">'+rows
+      + '<div style="background:var(--green-soft);border:1px solid #C8EBD2;border-radius:12px;padding:12px 14px;font-size:12px;color:#166534">'
+      + '✓ '+L('ตัวอย่างลิงก์ที่ถูกต้อง','Valid example')+': <span class="mono" style="font-weight:700">https://shopee.co.th/ajarnnuengkuruthep#product_list</span></div></div>'
+      + '<div style="padding:14px 24px;border-top:1px solid var(--line);display:flex;justify-content:flex-end">'
+      + '<button class="btn primary" data-shopguideclose="1">'+L('เข้าใจแล้ว','Got it')+'</button></div></div>';
+    ov.addEventListener('click', function(e){ if (e.target===ov || e.target.closest('[data-shopguideclose]')) ov.remove(); });
+    document.addEventListener('keydown', function esc(e){ if (e.key==='Escape'){ ov.remove(); document.removeEventListener('keydown', esc); } });
+    document.body.appendChild(ov);
+  }
+  document.addEventListener('click', function(e){
+    if (e.target.closest('[data-shopguide]')) shopGuideModal();
+  });
+
   // Add-brand modal — creates a real brand, persists to localStorage
   var BRAND_COLORS = [
     'linear-gradient(135deg,#FB923C,#F97316)','linear-gradient(135deg,#818CF8,#4F46E5)',
@@ -3243,7 +3317,8 @@ render();
   // no dead clicks — any button without a wired action gives feedback
   var HANDLED = '[data-go],[data-lang],[data-set],[data-set-step],[data-toggle],'
     + '[data-voice],[data-brand],[data-product],[data-archetype],[data-archeguide],[data-archeclose],'
-    + '[data-addbrand],[data-delbrand],[data-aiwrite],[data-usedesc],[data-usedesc-s],[data-changelogo],[data-shopeesync]';
+    + '[data-addbrand],[data-delbrand],[data-aiwrite],[data-usedesc],[data-usedesc-s],[data-changelogo],[data-shopeesync],'
+    + '[data-shopguide],[data-shopguideclose]';
   document.addEventListener('click', function(e){
     var b = e.target.closest('button, a');
     if (!b) return;

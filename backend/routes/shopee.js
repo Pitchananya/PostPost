@@ -12,10 +12,27 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SCRIPT = path.join(__dirname, '..', 'scripts', 'scrape_shopee.py');
 const ROOT = path.join(__dirname, '..', '..');
 
-router.post('/scrape', requireAuth, (req, res) => {
+router.post('/scrape', requireAuth, async (req, res) => {
   const { url } = req.body || {};
   if (!url) return res.status(400).json({ error: 'url required' });
 
+  // ── Cloud mode ── if a hosted scraper is configured, proxy to it.
+  // Set SHOPEE_SCRAPER_URL (and optional SHOPEE_SCRAPER_KEY) in env.
+  const cloudUrl = process.env.SHOPEE_SCRAPER_URL;
+  if (cloudUrl) {
+    try {
+      const headers = { 'Content-Type': 'application/json' };
+      if (process.env.SHOPEE_SCRAPER_KEY) headers['Authorization'] = 'Bearer ' + process.env.SHOPEE_SCRAPER_KEY;
+      const r = await fetch(cloudUrl, { method: 'POST', headers, body: JSON.stringify({ url }) });
+      const j = await r.json().catch(() => ({}));
+      return res.status(r.ok ? 200 : 502).json(j && (j.products || j.error) ? j
+        : { error: 'cloud', message: 'cloud scraper returned an unexpected response' });
+    } catch (e) {
+      return res.status(502).json({ error: 'cloud', message: 'เชื่อมต่อ cloud scraper ไม่ได้: ' + e.message });
+    }
+  }
+
+  // ── Local mode ── spawn the Python scraper on this machine.
   const pyCmd = process.env.PYTHON || 'python';
   let py;
   try {
