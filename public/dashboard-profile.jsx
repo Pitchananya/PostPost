@@ -115,79 +115,116 @@ const ProductCard = ({ name, price, sales, image, active }) => (
 );
 
 // ===== Brand Archetype guide (Jungian 12) =====
+// Source of truth: "12 Brand archetypes — PROMPT for Branding" reference sheet.
 const ARCHETYPE_GUIDE = [
-  { id: 'creator', icon: '🎨', color: '#F97316',
-    name: { th: 'The Creator — นักสร้างสรรค์', en: 'The Creator' },
-    essence: { th: 'อยากสร้างสิ่งใหม่ที่มีคุณค่าและคงอยู่', en: 'Driven to build something new and meaningful' },
-    voice: { th: 'จินตนาการสูง กล้าทดลอง พูดถึงแรงบันดาลใจและงานฝีมือ', en: 'Imaginative, experimental — speaks of inspiration and craft' },
-    goodFor: { th: 'แบรนด์ DIY, งานออกแบบ, ของแฮนด์เมด, เครื่องมือสร้างสรรค์', en: 'DIY, design, handmade, creative tools' },
-    brands: ['Apple', 'LEGO', 'Adobe'] },
-  { id: 'sage', icon: '📖', color: '#2563EB',
-    name: { th: 'The Sage — ปราชญ์', en: 'The Sage' },
-    essence: { th: 'แสวงหาความจริงและส่งต่อความรู้', en: 'Seeks truth and shares knowledge' },
-    voice: { th: 'น่าเชื่อถือ ให้ข้อมูลแน่น อ้างอิงหลักฐาน ไม่โอเวอร์', en: 'Credible, fact-based, evidence-led, never hype' },
-    goodFor: { th: 'สกินแคร์สายวิทยาศาสตร์, คอร์สเรียน, ที่ปรึกษา, สุขภาพ', en: 'Science-led skincare, courses, consulting, health' },
-    brands: ['Google', 'National Geographic', 'BBC'] },
-  { id: 'caregiver', icon: '🤍', color: '#EC4899',
-    name: { th: 'The Caregiver — ผู้ดูแล', en: 'The Caregiver' },
-    essence: { th: 'ดูแล ปกป้อง และใส่ใจผู้อื่น', en: 'Protects and cares for others' },
-    voice: { th: 'อบอุ่น เห็นอกเห็นใจ ให้ความมั่นใจ ใช้คำปลอบโยน', en: 'Warm, empathetic, reassuring' },
-    goodFor: { th: 'สินค้าแม่และเด็ก, สุขภาพ, ผิวบอบบาง, บริการดูแล', en: 'Mom & baby, health, sensitive skin, care services' },
-    brands: ['Dove', 'Johnson&Johnson', 'UNICEF'] },
-  { id: 'innocent', icon: '☀️', color: '#FBBF24',
-    name: { th: 'The Innocent — ผู้บริสุทธิ์', en: 'The Innocent' },
-    essence: { th: 'มองโลกในแง่ดี เรียบง่าย ซื่อตรง', en: 'Optimistic, simple, honest' },
-    voice: { th: 'สดใส จริงใจ ไม่ซับซ้อน ทำให้รู้สึกดี', en: 'Cheerful, sincere, uncomplicated' },
-    goodFor: { th: 'ออร์แกนิค, ของใช้ในบ้าน, อาหารคลีน, แบรนด์รักษ์โลก', en: 'Organic, household, clean food, eco brands' },
-    brands: ['Coca-Cola', 'Innocent Drinks'] },
-  { id: 'jester', icon: '🎭', color: '#F59E0B',
-    name: { th: 'The Jester — ตัวตลก', en: 'The Jester' },
-    essence: { th: 'ทำให้ชีวิตสนุกและทำให้คนยิ้ม', en: 'Brings fun and makes people smile' },
-    voice: { th: 'ขี้เล่น มีมุก กล้าแหวก ใช้ภาษาวัยรุ่น', en: 'Playful, witty, bold, casual' },
-    goodFor: { th: 'ขนม, เครื่องดื่ม, คอนเทนต์ไวรัล, แบรนด์ Gen Z', en: 'Snacks, drinks, viral content, Gen Z brands' },
-    brands: ['M&M’s', 'Old Spice', 'Doritos'] },
-  { id: 'magician', icon: '✨', color: '#8B5CF6',
-    name: { th: 'The Magician — นักมายากล', en: 'The Magician' },
-    essence: { th: 'เปลี่ยนแปลงและทำให้ความฝันเป็นจริง', en: 'Transforms and makes dreams real' },
-    voice: { th: 'สร้างแรงบันดาลใจ เล่าถึงผลลัพธ์ที่เหลือเชื่อ มีวิสัยทัศน์', en: 'Inspiring, visionary, talks of remarkable transformation' },
-    goodFor: { th: 'ความงาม before/after, เทคโนโลยี, คอร์สเปลี่ยนชีวิต', en: 'Beauty before/after, tech, life-changing courses' },
-    brands: ['Disney', 'Tesla', 'Dyson'] },
-  { id: 'ruler', icon: '👑', color: '#7C2D12',
-    name: { th: 'The Ruler — ผู้ปกครอง', en: 'The Ruler' },
-    essence: { th: 'สร้างความเป็นระเบียบ มั่นคง และพรีเมียม', en: 'Creates order, stability and prestige' },
-    voice: { th: 'มั่นใจ มีอำนาจ หรูหรา เน้นคุณภาพและสถานะ', en: 'Confident, authoritative, premium' },
-    goodFor: { th: 'สินค้าพรีเมียม, ลักชัวรี, บริการระดับสูง', en: 'Premium goods, luxury, high-end services' },
-    brands: ['Rolex', 'Mercedes-Benz'] },
   { id: 'hero', icon: '🛡️', color: '#DC2626',
     name: { th: 'The Hero — วีรบุรุษ', en: 'The Hero' },
-    essence: { th: 'กล้าหาญ พิสูจน์คุณค่าด้วยการลงมือทำ', en: 'Brave — proves worth through action' },
-    voice: { th: 'ฮึกเหิม ท้าทาย ปลุกพลัง เน้นผลลัพธ์', en: 'Bold, motivating, results-driven' },
-    goodFor: { th: 'กีฬา, ฟิตเนส, อาหารเสริม, แบรนด์ที่เน้นความสำเร็จ', en: 'Sports, fitness, supplements, achievement brands' },
-    brands: ['Nike', 'BMW', 'FedEx'] },
-  { id: 'regular', icon: '🙂', color: '#16A34A',
-    name: { th: 'The Regular Guy — คนธรรมดา', en: 'The Everyman' },
-    essence: { th: 'เข้าถึงง่าย เป็นกันเอง ไม่ถือตัว', en: 'Down-to-earth, relatable, belongs' },
-    voice: { th: 'เป็นมิตร จริงใจ เหมือนคุยกับเพื่อนบ้าน', en: 'Friendly, honest, like a good neighbor' },
-    goodFor: { th: 'ของใช้ทุกวัน, ร้านค้าชุมชน, แบรนด์ราคาเป็นมิตร', en: 'Everyday goods, local shops, value brands' },
-    brands: ['IKEA', 'Target'] },
+    tone: { th: 'สร้างแรงบันดาลใจ ปลุกใจ มั่นใจ', en: 'Inspiring, motivating, confident' },
+    emotion: { th: 'ความกล้าหาญ ความมุ่งมั่น', en: 'Courage, determination' },
+    persuasion: { th: 'จุดประกายผ่านการฝ่าฟันอุปสรรคและชัยชนะ', en: 'Inspiring through challenges and triumphs' },
+    cta: { th: 'รับคำท้า กล้าที่จะลงมือ', en: 'Take on a challenge, be brave' },
+    thai: { th: 'วีรบุรุษจากประวัติศาสตร์/ตำนานไทย', en: 'Heroic figures from Thai history or myth' },
+    persona: { th: 'พี่เลี้ยงผู้กล้า ผู้นำที่จุดไฟ', en: 'Courageous mentor, inspiring leader' },
+    brands: ['Nike', 'Adidas'] },
   { id: 'rebel', icon: '🔥', color: '#111827',
-    name: { th: 'The Rebel — ขบถ', en: 'The Rebel' },
-    essence: { th: 'ท้าทายกฎเดิม ๆ และเปลี่ยนเกม', en: 'Breaks the rules and changes the game' },
-    voice: { th: 'กล้า ตรงไปตรงมา แหวกแนว ไม่กลัวขัดใจใคร', en: 'Bold, blunt, unconventional' },
-    goodFor: { th: 'แบรนด์วัยรุ่น, สตรีทแฟชั่น, สินค้าทางเลือก', en: 'Youth brands, streetwear, disruptive products' },
-    brands: ['Harley-Davidson', 'Virgin'] },
-  { id: 'explorer', icon: '🧭', color: '#0891B2',
-    name: { th: 'The Explorer — นักสำรวจ', en: 'The Explorer' },
-    essence: { th: 'รักอิสระ ออกค้นหาประสบการณ์ใหม่', en: 'Loves freedom and new experiences' },
-    voice: { th: 'ผจญภัย อยากรู้อยากเห็น ชวนออกไปลอง', en: 'Adventurous, curious, invites discovery' },
-    goodFor: { th: 'ท่องเที่ยว, อุปกรณ์เอาต์ดอร์, สินค้าไลฟ์สไตล์', en: 'Travel, outdoor gear, lifestyle products' },
-    brands: ['Jeep', 'The North Face', 'Patagonia'] },
+    name: { th: 'The Outlaw — ขบถ', en: 'The Outlaw' },
+    tone: { th: 'ขบถ กล้า ท้าทาย', en: 'Rebellious, bold, daring' },
+    emotion: { th: 'การปลดปล่อย ความเป็นตัวของตัวเอง', en: 'Liberation, individuality' },
+    persuasion: { th: 'กระตุ้นความอยากเปลี่ยนแปลงและอิสรภาพ', en: 'Provoking desire for change and freedom' },
+    cta: { th: 'แหกกฎ ยืนยันความเป็นตัวเอง', en: 'Break the rules, assert independence' },
+    thai: { th: 'องค์ประกอบสายต้านกระแสของไทย', en: 'Subversive elements of Thai counterculture' },
+    persona: { th: 'ขบถผู้กล้า นักคิดนอกกรอบ', en: 'Daring rebel, unconventional thinker' },
+    brands: ['Harley-Davidson'] },
+  { id: 'magician', icon: '✨', color: '#8B5CF6',
+    name: { th: 'The Magician — นักมายากล', en: 'The Magician' },
+    tone: { th: 'ลึกลับ ชวนค้นหา เปี่ยมปัญญา', en: 'Mysterious, intriguing, wise' },
+    emotion: { th: 'ความอัศจรรย์ ความเป็นไปได้', en: 'Wonder, possibilities' },
+    persuasion: { th: 'เสนอทางออกและข้อค้นพบที่เปลี่ยนแปลงทุกอย่าง', en: 'Offering transformative solutions and insights' },
+    cta: { th: 'ค้นความลับ ปลดล็อกศักยภาพ', en: 'Discover secrets, unlock potential' },
+    thai: { th: 'ความเชื่อ/สิ่งศักดิ์สิทธิ์สายมูของไทย', en: 'Thai spiritual or mystical traditions' },
+    persona: { th: 'ผู้นำทางผู้รู้ลึก วิชวลผู้มีวิสัยทัศน์', en: 'Wise guide, enigmatic visionary' },
+    brands: ['Disney', 'Apple'] },
+  { id: 'jester', icon: '🎭', color: '#F59E0B',
+    name: { th: 'The Jester — ตัวตลก', en: 'The Jester' },
+    tone: { th: 'ตลก ขี้เล่น เสียดสี', en: 'Humorous, playful, satirical' },
+    emotion: { th: 'ความสุข ความสนุก', en: 'Joy, amusement' },
+    persuasion: { th: 'ใช้อารมณ์ขันและไหวพริบดึงดูดและโน้มน้าว', en: 'Using humor and wit to engage and persuade' },
+    cta: { th: 'สนุกไปกับมัน อยู่กับปัจจุบัน', en: 'Embrace humor, enjoy the moment' },
+    thai: { th: 'มุกตลก การเล่นคำแบบไทย', en: 'Thai wordplay, puns, or jokes' },
+    persona: { th: 'เพื่อนที่ทำให้สนุก นักวิจารณ์ติดตลก', en: 'Entertaining friend, witty commentator' },
+    brands: ['M&M’s', 'Deadpool'] },
   { id: 'lover', icon: '💗', color: '#BE185D',
     name: { th: 'The Lover — คนรัก', en: 'The Lover' },
-    essence: { th: 'สร้างความสัมพันธ์ ความใกล้ชิด และความงาม', en: 'Builds intimacy, connection and beauty' },
-    voice: { th: 'อ่อนโยน ชวนหลงใหล เน้นความรู้สึกและสัมผัส', en: 'Sensual, indulgent, emotive' },
-    goodFor: { th: 'ความงาม, น้ำหอม, ของขวัญ, แฟชั่น, ของหวาน', en: 'Beauty, fragrance, gifts, fashion, desserts' },
-    brands: ['Chanel', 'Godiva'] },
+    tone: { th: 'โรแมนติก เย้ายวน เปี่ยมอารมณ์', en: 'Romantic, sensual, passionate' },
+    emotion: { th: 'ความรัก ความปรารถนา', en: 'Love, desire' },
+    persuasion: { th: 'ตอบสนองความอยากเชื่อมโยงและถูกชื่นชม', en: 'Appealing to connection and appreciation' },
+    cta: { th: 'ดื่มด่ำกับความรัก แสดงความรู้สึก', en: 'Indulge in romance, express affection' },
+    thai: { th: 'เพลงรัก กวี ภาพโรแมนติกแบบไทย', en: 'Thai love songs, poetry, romantic imagery' },
+    persona: { th: 'ผู้ชื่นชมที่เปี่ยมใจ คู่ที่ทุ่มเท', en: 'Passionate admirer, devoted partner' },
+    brands: ['Chanel', 'Victoria’s Secret'] },
+  { id: 'caregiver', icon: '🤍', color: '#EC4899',
+    name: { th: 'The Caregiver — ผู้ดูแล', en: 'The Caregiver' },
+    tone: { th: 'โอบอุ้ม อ่อนโยน เห็นอกเห็นใจ', en: 'Nurturing, gentle, compassionate' },
+    emotion: { th: 'ความเมตตา ความปลอดภัย', en: 'Compassion, security' },
+    persuasion: { th: 'เน้นการดูแล สนับสนุน และความเข้าใจ', en: 'Emphasizing care, support, and understanding' },
+    cta: { th: 'มองหาที่พึ่ง ดูแลตัวเองก่อน', en: 'Seek support, prioritize self-care' },
+    thai: { th: 'ค่านิยมครอบครัวไทย บทบาทการดูแล', en: 'Thai family values, caregiving roles' },
+    persona: { th: 'ผู้สนับสนุนที่อบอุ่น ที่ปรึกษาที่ไว้ใจ', en: 'Nurturing supporter, trusted confidant' },
+    brands: ['Johnson & Johnson'] },
+  { id: 'innocent', icon: '☀️', color: '#FBBF24',
+    name: { th: 'The Innocent — ผู้บริสุทธิ์', en: 'The Innocent' },
+    tone: { th: 'บริสุทธิ์ มองโลกแง่ดี เรียบง่าย', en: 'Pure, optimistic, simple' },
+    emotion: { th: 'ความสุข ความไว้ใจ ความคิดถึง', en: 'Happiness, trust, nostalgia' },
+    persuasion: { th: 'เน้นความเรียบง่ายและความดีงาม', en: 'Emphasizing simplicity and goodness' },
+    cta: { th: 'โอบรับความเรียบง่าย ความเชื่อ และความหวัง', en: 'Embrace simplicity, trust, and hope' },
+    thai: { th: 'การละเล่นเด็กไทย ความสุขเล็ก ๆ', en: 'Thai childhood games, simple pleasures' },
+    persona: { th: 'เด็กผู้บริสุทธิ์ ผู้มองโลกใสซื่อ', en: 'Innocent child, pure-hearted optimist' },
+    brands: ['Dove'] },
+  { id: 'sage', icon: '📖', color: '#2563EB',
+    name: { th: 'The Sage — ปราชญ์', en: 'The Sage' },
+    tone: { th: 'เปี่ยมปัญญา รอบรู้ ใคร่ครวญ', en: 'Wise, knowledgeable, reflective' },
+    emotion: { th: 'ปัญญา การรู้แจ้ง ความจริง', en: 'Wisdom, enlightenment, truth' },
+    persuasion: { th: 'ส่งต่อความรู้และข้อค้นพบ', en: 'Sharing knowledge and insights' },
+    cta: { th: 'แสวงหาความรู้ ทบทวนปัญญา', en: 'Seek knowledge, reflect on wisdom' },
+    thai: { th: 'สุภาษิตไทย คำสอนทางพุทธ', en: 'Thai proverbs, Buddhist teachings' },
+    persona: { th: 'ครูผู้รู้ ผู้นำทางที่รอบรู้', en: 'Wise teacher, knowledgeable guide' },
+    brands: ['Google', 'TED'] },
+  { id: 'explorer', icon: '🧭', color: '#0891B2',
+    name: { th: 'The Explorer — นักสำรวจ', en: 'The Explorer' },
+    tone: { th: 'ชอบผจญภัย เป็นอิสระ ไม่กลัว', en: 'Adventurous, independent, fearless' },
+    emotion: { th: 'ความตื่นเต้น อิสรภาพ ความอยากรู้', en: 'Excitement, freedom, curiosity' },
+    persuasion: { th: 'กระตุ้นการออกสำรวจและค้นพบ', en: 'Encouraging exploration and discovery' },
+    cta: { th: 'ออกสำรวจขอบฟ้าใหม่ โอบรับอิสรภาพ', en: 'Explore new horizons, embrace freedom' },
+    thai: { th: 'จุดหมายท่องเที่ยวไทย การผจญภัยในท้องถิ่น', en: 'Thai travel destinations, local adventures' },
+    persona: { th: 'นักสำรวจผู้กล้า จิตวิญญาณอิสระ', en: 'Adventurous explorer, independent spirit' },
+    brands: ['The North Face', 'Patagonia'] },
+  { id: 'ruler', icon: '👑', color: '#7C2D12',
+    name: { th: 'The Ruler — ผู้ปกครอง', en: 'The Ruler' },
+    tone: { th: 'มีอำนาจ ประณีต น่าเชื่อถือ', en: 'Authoritative, refined, commanding' },
+    emotion: { th: 'อำนาจ ความเคารพ ความชื่นชม', en: 'Power, respect, admiration' },
+    persuasion: { th: 'แสดงภาวะผู้นำและความน่าเชื่อถือ', en: 'Demonstrating leadership and authority' },
+    cta: { th: 'กุมบังเหียน มุ่งสู่ความยิ่งใหญ่', en: 'Take charge, aspire to greatness' },
+    thai: { th: 'ราชวงศ์ไทย ผู้นำในประวัติศาสตร์', en: 'Thai royalty, historical leaders' },
+    persona: { th: 'ผู้นำที่มั่นใจ ผู้มีอำนาจที่ได้รับการเคารพ', en: 'Confident leader, respected authority' },
+    brands: ['Rolex', 'Mercedes-Benz'] },
+  { id: 'creator', icon: '🎨', color: '#F97316',
+    name: { th: 'The Creator — นักสร้างสรรค์', en: 'The Creator' },
+    tone: { th: 'สร้างนวัตกรรม แสดงออก เปี่ยมจินตนาการ', en: 'Innovative, expressive, imaginative' },
+    emotion: { th: 'แรงบันดาลใจ ความคิดสร้างสรรค์ การเห็นคุณค่า', en: 'Inspiration, creativity, appreciation' },
+    persuasion: { th: 'โชว์ความเป็นต้นฉบับและนวัตกรรม', en: 'Showcasing originality and innovation' },
+    cta: { th: 'สร้างสรรค์ แสดงตัวตน ชื่นชมศิลปะ', en: 'Create, express yourself, appreciate art' },
+    thai: { th: 'ศิลปะไทย ประเพณีงานสร้างสรรค์', en: 'Thai art forms, creative traditions' },
+    persona: { th: 'ศิลปินสร้างสรรค์ ผู้มีวิสัยทัศน์', en: 'Creative artist, expressive visionary' },
+    brands: ['Lego', 'Adobe'] },
+  { id: 'regular', icon: '🙂', color: '#16A34A',
+    name: { th: 'The Everyman — คนธรรมดา', en: 'The Everyman' },
+    tone: { th: 'เข้าถึงง่าย จริงใจ ติดดิน', en: 'Relatable, honest, down-to-earth' },
+    emotion: { th: 'ความเป็นพวกเดียวกัน ความสบายใจ ความเรียบง่าย', en: 'Belonging, comfort, simplicity' },
+    persuasion: { th: 'เชื่อมโยงกับประสบการณ์และค่านิยมร่วม', en: 'Relating to common experiences and values' },
+    cta: { th: 'เชื่อมโยงกับผู้อื่น ฉลองความธรรมดา', en: 'Connect with others, celebrate the ordinary' },
+    thai: { th: 'ชีวิตประจำวันของคนไทย ประสบการณ์ร่วม', en: 'Thai everyday life, common experiences' },
+    persona: { th: 'เพื่อนที่เข้าถึงง่าย คู่หูในทุกวัน', en: 'Relatable friend, everyday companion' },
+    brands: ['IKEA', 'Levi’s'] },
 ];
 
 const ArchetypeGuideModal = ({ open, onClose }) => {
@@ -251,16 +288,22 @@ const ArchetypeGuideModal = ({ open, onClose }) => {
               }}>{a.icon}</div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--cf-ink-0)' }}>{t(a.name)}</div>
-                <div style={{ fontSize: 13, color: 'var(--cf-ink-1)', marginTop: 3, lineHeight: 1.5 }}>{t(a.essence)}</div>
-                <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <div style={{ fontSize: 12, color: 'var(--cf-ink-2)', lineHeight: 1.5 }}>
-                    <b style={{ color: 'var(--cf-ink-1)' }}><T th="น้ำเสียง: " en="Voice: " /></b>{t(a.voice)}
-                  </div>
-                  <div style={{ fontSize: 12, color: 'var(--cf-ink-2)', lineHeight: 1.5 }}>
-                    <b style={{ color: 'var(--cf-ink-1)' }}><T th="เหมาะกับ: " en="Good for: " /></b>{t(a.goodFor)}
-                  </div>
+                <div style={{ fontSize: 13, color: 'var(--cf-ink-1)', marginTop: 3, lineHeight: 1.5, fontStyle: 'italic' }}>{t(a.tone)}</div>
+                <div style={{ marginTop: 8, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 16px' }}>
+                  {[
+                    { l: { th: 'อารมณ์ที่สื่อ', en: 'Emotional appeal' }, v: a.emotion },
+                    { l: { th: 'วิธีโน้มน้าว', en: 'Persuasion' }, v: a.persuasion },
+                    { l: { th: 'Call-to-action', en: 'Call-to-action' }, v: a.cta },
+                    { l: { th: 'เปอร์โซนา', en: 'Persona' }, v: a.persona },
+                    { l: { th: 'อ้างอิงวัฒนธรรมไทย', en: 'Thai cultural cue' }, v: a.thai },
+                  ].map((row, i) => (
+                    <div key={i} style={{ fontSize: 12, color: 'var(--cf-ink-2)', lineHeight: 1.5 }}>
+                      <b style={{ color: 'var(--cf-ink-1)' }}>{t(row.l)}: </b>{t(row.v)}
+                    </div>
+                  ))}
                 </div>
-                <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+                  <span style={{ fontSize: 11, color: 'var(--cf-ink-3)' }}><T th="แบรนด์ตัวอย่าง:" en="Example brands:" /></span>
                   {a.brands.map((b) => (
                     <span key={b} className="pill" style={{ height: 22, fontSize: 11 }}>{b}</span>
                   ))}
@@ -310,11 +353,150 @@ const BUSINESS_TYPES = [
   { th: 'อื่น ๆ', en: 'Other' },
 ];
 
+// ===== Add-brand modal =====
+const BRAND_COLORS = [
+  'linear-gradient(135deg, #FB923C, #F97316)',
+  'linear-gradient(135deg, #818CF8, #4F46E5)',
+  'linear-gradient(135deg, #34D399, #059669)',
+  'linear-gradient(135deg, #F472B6, #DB2777)',
+  'linear-gradient(135deg, #38BDF8, #0284C7)',
+  'linear-gradient(135deg, #FBBF24, #D97706)',
+];
+
+const BrandModal = ({ open, onClose, onAdd }) => {
+  const t = useT();
+  const [name, setName] = React.useState('');
+  const [type, setType] = React.useState('Beauty & Skincare');
+  const [arch, setArch] = React.useState('creator');
+
+  React.useEffect(() => {
+    if (open) { setName(''); setType('Beauty & Skincare'); setArch('creator'); }
+  }, [open]);
+  React.useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
+  if (!open) return null;
+
+  const submit = () => {
+    const nm = name.trim();
+    if (!nm) return;
+    const mark = nm.replace(/\s+/g, '').slice(0, 2).toUpperCase();
+    const color = BRAND_COLORS[Math.floor(Math.random() * BRAND_COLORS.length)];
+    onAdd({ id: 'b' + Date.now(), name: nm, mark, color, type, archetype: arch, ch: [] });
+  };
+
+  return (
+    <div onClick={onClose} style={{
+      position: 'fixed', inset: 0, zIndex: 200,
+      background: 'rgba(11,18,32,0.55)', backdropFilter: 'blur(3px)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 32,
+      fontFamily: 'var(--cf-font)',
+    }}>
+      <div onClick={(e) => e.stopPropagation()} style={{
+        background: 'var(--cf-surface)', borderRadius: 'var(--cf-r-lg)',
+        boxShadow: 'var(--cf-shadow-3)', width: '100%', maxWidth: 520,
+        maxHeight: '88vh', display: 'flex', flexDirection: 'column', overflow: 'hidden',
+      }}>
+        <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--cf-border)', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{
+            width: 40, height: 40, borderRadius: 10, flexShrink: 0,
+            background: 'var(--cf-primary-soft)', color: 'var(--cf-primary)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}><Icon name="plus" size={20} /></div>
+          <h2 className="h2" style={{ margin: 0, flex: 1 }}><T th="เพิ่มแบรนด์ใหม่" en="Add a new brand" /></h2>
+          <button className="btn btn-ghost btn-sm" onClick={onClose} style={{ width: 30, padding: 0 }}>
+            <Icon name="x" size={16} />
+          </button>
+        </div>
+
+        <div style={{ overflowY: 'auto', padding: 22, display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div>
+            <label className="label"><T th="ชื่อแบรนด์" en="Brand name" /> <span style={{ color: 'var(--cf-danger)' }}>*</span></label>
+            <input className="input" value={name} onChange={(e) => setName(e.target.value)} autoFocus
+              placeholder={t({ th: 'เช่น Rose Garden Beauty', en: 'e.g. Rose Garden Beauty' })} />
+          </div>
+          <div>
+            <label className="label"><T th="ประเภทธุรกิจ" en="Business type" /></label>
+            <div style={{ position: 'relative' }}>
+              <select className="input" value={type} onChange={(e) => setType(e.target.value)}
+                style={{ appearance: 'none', WebkitAppearance: 'none', MozAppearance: 'none', paddingRight: 34, cursor: 'pointer' }}>
+                {BUSINESS_TYPES.map((b) => <option key={b.en} value={b.en}>{t(b)}</option>)}
+              </select>
+              <Icon name="chev-down" size={14} style={{ position: 'absolute', right: 12, top: 14, color: 'var(--cf-ink-2)', pointerEvents: 'none' }} />
+            </div>
+          </div>
+          <div>
+            <label className="label"><T th="Brand Archetype" en="Brand archetype" /></label>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+              {ARCHETYPE_GUIDE.map((a) => {
+                const on = arch === a.id;
+                return (
+                  <button key={a.id} onClick={() => setArch(a.id)} style={{
+                    font: 'inherit', cursor: 'pointer', padding: '10px 4px', borderRadius: 10,
+                    border: on ? '2px solid var(--cf-primary)' : '1px solid var(--cf-border)',
+                    background: on ? 'var(--cf-primary-soft)' : 'var(--cf-surface)',
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                  }}>
+                    <span style={{ fontSize: 18 }}>{a.icon}</span>
+                    <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--cf-ink-1)', textAlign: 'center', lineHeight: 1.2 }}>
+                      {t(a.name).split('—')[0].replace('The ', '').trim()}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        <div style={{ padding: '14px 24px', borderTop: '1px solid var(--cf-border)', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          <button className="btn btn-secondary btn-sm" onClick={onClose}><T th="ยกเลิก" en="Cancel" /></button>
+          <button className="btn btn-primary btn-sm" onClick={submit} disabled={!name.trim()}>
+            <Icon name="check" size={14} />
+            <T th="เพิ่มแบรนด์" en="Add brand" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const MAX_BRANDS = 5;
+const DEFAULT_BRANDS = [
+  { id: 'happyprice', name: 'HappyPrice Shop', mark: 'HP', color: 'linear-gradient(135deg, #FB923C, #F97316)', type: 'Beauty & Skincare', sub: { th: 'สกินแคร์ · 34 สินค้า', en: 'Skincare · 34 products' }, ch: ['facebook', 'instagram'] },
+  { id: 'mintnature', name: 'MintNature', mark: 'MN', color: 'linear-gradient(135deg, #818CF8, #4F46E5)', type: 'Food & Beverage', sub: { th: 'ชาสมุนไพร · 12 สินค้า', en: 'Herbal tea · 12 products' }, ch: ['facebook', 'tiktok'] },
+  { id: 'baancafe', name: 'Baan Café', mark: 'คา', color: 'linear-gradient(135deg, #34D399, #059669)', type: 'Café & Restaurant', sub: { th: 'คาเฟ่ · 8 สาขา', en: 'Café · 8 locations' }, ch: ['facebook', 'instagram', 'tiktok'] },
+];
+
 const ProfilePage = () => {
   const t = useT();
   const app = useApp();
   const [guideOpen, setGuideOpen] = React.useState(false);
+  const [brandModalOpen, setBrandModalOpen] = React.useState(false);
   const [businessType, setBusinessType] = React.useState('Beauty & Skincare');
+  const [brands, setBrands] = React.useState(() => {
+    try { const s = localStorage.getItem('postpost_brands'); if (s) return JSON.parse(s); } catch (e) {}
+    return DEFAULT_BRANDS;
+  });
+  const saveBrands = (list) => {
+    setBrands(list);
+    try { localStorage.setItem('postpost_brands', JSON.stringify(list)); } catch (e) {}
+  };
+  const addBrand = (b) => {
+    saveBrands(brands.concat(b));
+    setActiveBrand(b.name);
+    setBrandModalOpen(false);
+    app.toast(t({ th: `เพิ่มแบรนด์ "${b.name}" แล้ว`, en: `Brand "${b.name}" added` }), 'success');
+  };
+  const openBrandModal = () => {
+    if (brands.length >= MAX_BRANDS) {
+      app.toast(t({ th: 'แผน Pro เพิ่มได้สูงสุด 5 แบรนด์', en: 'Pro plan allows up to 5 brands' }), 'error');
+      return;
+    }
+    setBrandModalOpen(true);
+  };
   const [aiAssistOpen, setAiAssistOpen] = React.useState(false);
   const [manualOpen, setManualOpen] = React.useState(false);
   const [activeBrand, setActiveBrand] = React.useState('HappyPrice Shop');
@@ -404,7 +586,7 @@ const ProfilePage = () => {
             <span className="pill pill-blue" style={{ height: 24, fontSize: 11 }}>
               <T th="แผน Pro · ได้สูงสุด 5 แบรนด์" en="Pro · up to 5 brands" />
             </span>
-            <button className="btn btn-secondary btn-sm">
+            <button className="btn btn-secondary btn-sm" onClick={openBrandModal}>
               <Icon name="plus" size={14} />
               <T th="เพิ่มแบรนด์ใหม่" en="Add brand" />
             </button>
@@ -412,38 +594,32 @@ const ProfilePage = () => {
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
-          <BrandTile mark="HP" color="linear-gradient(135deg, #FB923C, #F97316)"
-            active={activeBrand === 'HappyPrice Shop'} onClick={() => setActiveBrand('HappyPrice Shop')}
-            name="HappyPrice Shop"
-            sub={t({ th: 'สกินแคร์ · 34 สินค้า', en: 'Skincare · 34 products' })}
-            ch={['facebook', 'instagram']} />
-          <BrandTile mark="MN" color="linear-gradient(135deg, #818CF8, #4F46E5)"
-            active={activeBrand === 'MintNature'} onClick={() => setActiveBrand('MintNature')}
-            name="MintNature"
-            sub={t({ th: 'ชาสมุนไพร · 12 สินค้า', en: 'Herbal tea · 12 products' })}
-            ch={['facebook', 'tiktok']} />
-          <BrandTile mark="คา" color="linear-gradient(135deg, #34D399, #059669)"
-            active={activeBrand === 'Baan Café'} onClick={() => setActiveBrand('Baan Café')}
-            name={t({ th: 'คาเฟ่บ้านน้ำใจ', en: 'Baan Café' })}
-            sub={t({ th: 'คาเฟ่ · 8 สาขา', en: 'Café · 8 locations' })}
-            ch={['facebook', 'instagram', 'tiktok']} />
-          <button style={{
-            font: 'inherit', cursor: 'pointer',
-            padding: 14, borderRadius: 12,
-            border: '1.5px dashed var(--cf-border-2)',
-            background: 'transparent',
-            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-            color: 'var(--cf-ink-2)',
-            minHeight: 96,
-          }}>
-            <Icon name="plus" size={20} />
-            <span style={{ fontSize: 13, fontWeight: 500, marginTop: 6 }}>
-              <T th="เพิ่มแบรนด์" en="Add brand" />
-            </span>
-            <span style={{ fontSize: 11, color: 'var(--cf-ink-3)', marginTop: 2 }}>
-              <T th="ใช้ได้อีก 2 แบรนด์" en="2 slots left" />
-            </span>
-          </button>
+          {brands.map((b) => (
+            <BrandTile key={b.id} mark={b.mark} color={b.color}
+              active={activeBrand === b.name} onClick={() => setActiveBrand(b.name)}
+              name={b.name}
+              sub={b.sub ? t(b.sub) : t((BUSINESS_TYPES.find(x => x.en === b.type)) || { th: b.type, en: b.type })}
+              ch={b.ch || []} />
+          ))}
+          {brands.length < MAX_BRANDS && (
+            <button onClick={openBrandModal} style={{
+              font: 'inherit', cursor: 'pointer',
+              padding: 14, borderRadius: 12,
+              border: '1.5px dashed var(--cf-border-2)',
+              background: 'transparent',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              color: 'var(--cf-ink-2)',
+              minHeight: 96,
+            }}>
+              <Icon name="plus" size={20} />
+              <span style={{ fontSize: 13, fontWeight: 500, marginTop: 6 }}>
+                <T th="เพิ่มแบรนด์" en="Add brand" />
+              </span>
+              <span style={{ fontSize: 11, color: 'var(--cf-ink-3)', marginTop: 2 }}>
+                <T th={`ใช้ได้อีก ${MAX_BRANDS - brands.length} แบรนด์`} en={`${MAX_BRANDS - brands.length} slots left`} />
+              </span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -980,6 +1156,7 @@ const ProfilePage = () => {
       </div>
 
       <ArchetypeGuideModal open={guideOpen} onClose={() => setGuideOpen(false)} />
+      <BrandModal open={brandModalOpen} onClose={() => setBrandModalOpen(false)} onAdd={addBrand} />
     </DashShell>
   );
 };
