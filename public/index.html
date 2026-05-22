@@ -485,6 +485,9 @@ const state = {
   channels: { facebook: true, instagram: true, tiktok: false },
   aiAssistOpen: false,
   manualOpen: false,
+  aiDescs: [],
+  aiDescLoading: false,
+  brandDesc: '',
 };
 
 const T = (th, en) => state.lang === 'th' ? th : en;
@@ -1325,28 +1328,32 @@ function pageProfile() {
       </div>
       <div class="field">
         <label class="label">${T('ประเภทธุรกิจ','Business type')}</label>
-        <select class="select">${businessOptions()}</select>
+        <select class="select" id="ppBizType">${businessOptions()}</select>
       </div>
       <div class="field">
         <div style="display:flex;justify-content:space-between;align-items:baseline">
           <label class="label">${T('คำอธิบายแบรนด์','Brand description')}</label>
-          <button class="btn ghost sm" data-toggle="aiAssistOpen" style="color:var(--blue);height:26px;padding:0 8px">${I('sparkles',12,'#2563EB')} ${T('ให้ AI ช่วยเขียน','AI write for me')}</button>
+          <button class="btn ghost sm" data-aiwrite="1" style="color:var(--blue);height:26px;padding:0 8px">${I('sparkles',12,'#2563EB')} ${T('ให้ AI ช่วยเขียน','AI write for me')}</button>
         </div>
-        <textarea class="textarea" rows="4">${T('ร้าน HappyPrice ขายสกินแคร์ออร์แกนิคจากดอกกุหลาบเขาใหญ่ เน้นผิวบอบบางแพ้ง่าย กลุ่มลูกค้าหญิงวัย 25-40 ปี','HappyPrice sells organic skincare from Khao Yai roses, focused on sensitive skin, for women aged 25-40.')}</textarea>
+        <textarea class="textarea" rows="4" id="ppBrandDesc">${state.brandDesc || T('ร้าน HappyPrice ขายสกินแคร์ออร์แกนิคจากดอกกุหลาบเขาใหญ่ เน้นผิวบอบบางแพ้ง่าย กลุ่มลูกค้าหญิงวัย 25-40 ปี','HappyPrice sells organic skincare from Khao Yai roses, focused on sensitive skin, for women aged 25-40.')}</textarea>
         <div class="hint" style="display:flex;justify-content:space-between">
           <span>${T('AI ใช้ข้อความนี้ทุกครั้งที่สร้างคอนเทนต์','AI reads this on every generation')}</span>
-          <span>118 ${T('ตัวอักษร','chars')}</span>
         </div>
         ${aiOpen ? `<div style="margin-top:12px;padding:14px;border-radius:14px;background:var(--blue-soft);border:1px solid #DBE5FF">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
             ${I('sparkles',14,'#2563EB')}
-            <span style="font-size:12px;font-weight:700;color:#1E40AF">${T('AI เขียนให้ 3 แบบ — เลือกหรือผสมก็ได้','3 AI drafts — pick one or remix')}</span>
-            <button class="btn ghost sm" style="margin-left:auto;height:24px;padding:0 6px;color:var(--blue)">${I('refresh',11)} ${T('ใหม่','New')}</button>
+            <span style="font-size:12px;font-weight:700;color:#1E40AF">${state.aiDescLoading ? T('AI กำลังเขียน…','AI is writing…') : T('AI เขียนให้จากชื่อแบรนด์ + ประเภทธุรกิจ','AI drafts from your brand name + business type')}</span>
+            <button class="btn ghost sm" data-aiwrite="1" style="margin-left:auto;height:24px;padding:0 6px;color:var(--blue)">${I('refresh',11)} ${T('เขียนใหม่','Regenerate')}</button>
           </div>
-          ${aiSuggestions.map(s => `<button style="width:100%;text-align:left;padding:10px;border-radius:10px;background:#fff;border:1px solid #DBE5FF;font-size:12px;line-height:1.5;color:var(--ink);margin-bottom:8px;cursor:pointer">
-            <div style="margin-bottom:4px"><span class="pill blue" style="padding:1px 7px;font-size:10px">${T(s.tag_th,s.tag_en)}</span></div>
-            ${T(s.text_th,s.text_en)}
-          </button>`).join('')}
+          ${state.aiDescLoading
+            ? `<div style="padding:16px;text-align:center;font-size:12px;color:#1E40AF">${T('AI กำลังเขียนคำอธิบายแบรนด์ให้…','AI is writing your brand descriptions…')}</div>`
+            : (state.aiDescs && state.aiDescs.length
+              ? state.aiDescs.map((d,i) => `<button data-usedesc="${i}" style="width:100%;text-align:left;padding:10px;border-radius:10px;background:#fff;border:1px solid #DBE5FF;font-size:12px;line-height:1.5;color:var(--ink);margin-bottom:8px;cursor:pointer">
+                  <div style="margin-bottom:4px"><span class="pill blue" style="padding:1px 7px;font-size:10px">${T('แบบที่ ','Draft ')}${i+1}</span></div>${d}
+                </button>`).join('')
+              : aiSuggestions.map((s,i) => `<button data-usedesc-s="${i}" style="width:100%;text-align:left;padding:10px;border-radius:10px;background:#fff;border:1px solid #DBE5FF;font-size:12px;line-height:1.5;color:var(--ink);margin-bottom:8px;cursor:pointer">
+                  <div style="margin-bottom:4px"><span class="pill blue" style="padding:1px 7px;font-size:10px">${T(s.tag_th,s.tag_en)}</span></div>${T(s.text_th,s.text_en)}
+                </button>`).join('')) }
         </div>` : ''}
       </div>
       ${BRANDS.length > 1 ? `<hr class="divider" style="margin-top:18px">
@@ -3077,9 +3084,50 @@ render();
     toast(state.lang==='th'?('ลบแบรนด์ "'+removed.name+'" แล้ว'):('Brand "'+removed.name+'" deleted'),'success');
   });
 
+  // AI brand-description writer — based on brand name + business type
+  async function aiWriteDesc(){
+    var bizSel = document.getElementById('ppBizType');
+    var bizType = bizSel ? bizSel.value : '';
+    var curEl = document.getElementById('ppBrandDesc');
+    var current = state.brandDesc || (curEl ? curEl.value : '');
+    var ab = BRANDS.find(function(b){ return b.id === state.brand; }) || BRANDS[0];
+    state.aiAssistOpen = true;
+    state.aiDescLoading = true;
+    state.aiDescs = [];
+    render();
+    try {
+      var d = await api('/api/ai/brand-description', { method:'POST',
+        body: { businessType: bizType, brandName: ab ? ab.name : '', current: current } });
+      state.aiDescs = (d.descriptions || []).filter(function(x){ return typeof x === 'string' && x.trim(); });
+      if (!state.aiDescs.length) toast(state.lang==='th'?'AI ไม่ได้คืนคำอธิบาย ลองใหม่':'No descriptions returned','error');
+    } catch(e){
+      toast((state.lang==='th'?'เขียนไม่สำเร็จ: ':'Failed: ') + e.message, 'error');
+    } finally {
+      state.aiDescLoading = false;
+      render();
+    }
+  }
+  document.addEventListener('click', function(e){
+    if (e.target.closest('[data-aiwrite]')) { aiWriteDesc(); return; }
+    var useBtn = e.target.closest('[data-usedesc],[data-usedesc-s]');
+    if (useBtn) {
+      var ta = document.getElementById('ppBrandDesc');
+      var text;
+      if (useBtn.dataset.usedesc !== undefined) text = state.aiDescs[+useBtn.dataset.usedesc];
+      else { var bd = useBtn.querySelector('div'); text = useBtn.textContent.replace(bd ? bd.textContent : '', '').trim(); }
+      if (text) {
+        state.brandDesc = text;
+        state.aiAssistOpen = false;
+        render();
+        toast(state.lang==='th'?'ใส่คำอธิบายแล้ว':'Description applied','success');
+      }
+    }
+  });
+
   // no dead clicks — any button without a wired action gives feedback
   var HANDLED = '[data-go],[data-lang],[data-set],[data-set-step],[data-toggle],'
-    + '[data-voice],[data-brand],[data-product],[data-archetype],[data-archeguide],[data-archeclose],[data-addbrand],[data-delbrand]';
+    + '[data-voice],[data-brand],[data-product],[data-archetype],[data-archeguide],[data-archeclose],'
+    + '[data-addbrand],[data-delbrand],[data-aiwrite],[data-usedesc],[data-usedesc-s]';
   document.addEventListener('click', function(e){
     var b = e.target.closest('button, a');
     if (!b) return;
