@@ -284,10 +284,37 @@ const ArchetypeGuideModal = ({ open, onClose }) => {
   );
 };
 
+// Business types — diverse set for Thai SME / online sellers
+const BUSINESS_TYPES = [
+  { th: 'ความงาม & สกินแคร์', en: 'Beauty & Skincare' },
+  { th: 'อาหารเสริม & สุขภาพ', en: 'Supplements & Health' },
+  { th: 'แฟชั่น & เสื้อผ้า', en: 'Fashion & Apparel' },
+  { th: 'อาหาร & เครื่องดื่ม', en: 'Food & Beverage' },
+  { th: 'คาเฟ่ & ร้านอาหาร', en: 'Café & Restaurant' },
+  { th: 'เครื่องประดับ & แอคเซสซอรี่', en: 'Jewelry & Accessories' },
+  { th: 'ของแต่งบ้าน & ไลฟ์สไตล์', en: 'Home & Lifestyle' },
+  { th: 'แม่และเด็ก', en: 'Mom & Baby' },
+  { th: 'สัตว์เลี้ยง', en: 'Pet Products' },
+  { th: 'อิเล็กทรอนิกส์ & แกดเจ็ต', en: 'Electronics & Gadgets' },
+  { th: 'กีฬา & ฟิตเนส', en: 'Sports & Fitness' },
+  { th: 'ท่องเที่ยว & ที่พัก', en: 'Travel & Hospitality' },
+  { th: 'การศึกษา & คอร์สเรียน', en: 'Education & Courses' },
+  { th: 'บริการ & ที่ปรึกษา', en: 'Services & Consulting' },
+  { th: 'การเงิน & ลงทุน', en: 'Finance & Investment' },
+  { th: 'สายมู & ดูดวง', en: 'Spiritual & Fortune' },
+  { th: 'งานฝีมือ & DIY', en: 'Handmade & Crafts' },
+  { th: 'รถยนต์ & ยานยนต์', en: 'Automotive' },
+  { th: 'อสังหาริมทรัพย์', en: 'Real Estate' },
+  { th: 'เกม & บันเทิง', en: 'Gaming & Entertainment' },
+  { th: 'การเกษตร & ออร์แกนิค', en: 'Agriculture & Organic' },
+  { th: 'อื่น ๆ', en: 'Other' },
+];
+
 const ProfilePage = () => {
   const t = useT();
   const app = useApp();
   const [guideOpen, setGuideOpen] = React.useState(false);
+  const [businessType, setBusinessType] = React.useState('Beauty & Skincare');
   const [aiAssistOpen, setAiAssistOpen] = React.useState(false);
   const [manualOpen, setManualOpen] = React.useState(false);
   const [activeBrand, setActiveBrand] = React.useState('HappyPrice Shop');
@@ -307,6 +334,7 @@ const ProfilePage = () => {
     try {
       const composed = [
         desc,
+        'ประเภทธุรกิจ / Business: ' + businessType,
         'โทนเสียง / Voice tones: ' + selectedVoices.join(', '),
         'Brand archetype: ' + archetype,
         voiceNotes,
@@ -449,10 +477,19 @@ const ProfilePage = () => {
             </div>
             <div>
               <label className="label"><T th="ประเภทธุรกิจ" en="Business type" /></label>
-              <button className="input" style={{ textAlign: 'left', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span><T th="ความงาม & สกินแคร์" en="Beauty & Skincare" /></span>
-                <Icon name="chev-down" size={14} style={{ color: 'var(--cf-ink-2)' }} />
-              </button>
+              <div style={{ position: 'relative' }}>
+                <select
+                  className="input"
+                  value={businessType}
+                  onChange={(e) => setBusinessType(e.target.value)}
+                  style={{ appearance: 'none', WebkitAppearance: 'none', MozAppearance: 'none', paddingRight: 34, cursor: 'pointer' }}
+                >
+                  {BUSINESS_TYPES.map((b) => (
+                    <option key={b.en} value={b.en}>{t(b)}</option>
+                  ))}
+                </select>
+                <Icon name="chev-down" size={14} style={{ position: 'absolute', right: 12, top: 14, color: 'var(--cf-ink-2)', pointerEvents: 'none' }} />
+              </div>
             </div>
 
             <div>
