@@ -1048,7 +1048,14 @@ function normalizeBrand(b){
     sub_th: b.sub_th || b.type || (b.sub && b.sub.th) || 'แบรนด์',
     sub_en: b.sub_en || b.type || (b.sub && b.sub.en) || 'Brand',
     ch: Array.isArray(b.ch) ? b.ch : [],
+    logo: b.logo || '',
   };
+}
+// brand avatar — uploaded logo image, or the colored 2-letter mark
+function brandMark(b){
+  return b.logo
+    ? '<img src="'+b.logo+'" alt="" style="width:100%;height:100%;object-fit:cover;display:block">'
+    : b.mark;
 }
 BRANDS = BRANDS.map(normalizeBrand);
 try {
@@ -1291,7 +1298,7 @@ function pageProfile() {
     <div class="grid g4">
       ${BRANDS.map(b => `<button class="brandTile ${b.id===state.brand?'active':''}" data-brand="${b.id}">
         <div class="bInfo">
-          <div class="bMark" style="background:${b.color}">${b.mark}</div>
+          <div class="bMark" style="background:${b.color};overflow:hidden">${brandMark(b)}</div>
           <div>
             <b>${b.name || t({th:b.name_th,en:b.name_en})}</b>
             <div class="bSub">${t({th:b.sub_th,en:b.sub_en})}</div>
@@ -1315,12 +1322,12 @@ function pageProfile() {
     <!-- === Workspace info === -->
     <div class="card">
       <div style="display:flex;align-items:center;gap:14px;margin-bottom:18px">
-        <div style="width:60px;height:60px;border-radius:14px;background:${activeBrand.color};display:grid;place-items:center;color:#fff;font-weight:800;font-size:20px;box-shadow:var(--shadow3)">${activeBrand.mark}</div>
+        <div style="width:60px;height:60px;border-radius:14px;overflow:hidden;background:${activeBrand.color};display:grid;place-items:center;color:#fff;font-weight:800;font-size:20px;box-shadow:var(--shadow3)">${brandMark(activeBrand)}</div>
         <div style="flex:1">
           <h3 class="cardTitle" style="font-size:20px">${activeBrand.name}</h3>
           <p class="cardSub">${T('ID: '+activeBrand.id+' · ','ID: '+activeBrand.id+' · ')}${t({th:activeBrand.sub_th,en:activeBrand.sub_en})}</p>
         </div>
-        <button class="btn ghost sm">${I('edit',13)} ${T('เปลี่ยนโลโก้','Logo')}</button>
+        <button class="btn ghost sm" data-changelogo="1">${I('edit',13)} ${T('เปลี่ยนโลโก้','Logo')}</button>
       </div>
       <div class="field">
         <label class="label">${T('ชื่อแบรนด์','Brand name')}</label>
@@ -3084,6 +3091,40 @@ render();
     toast(state.lang==='th'?('ลบแบรนด์ "'+removed.name+'" แล้ว'):('Brand "'+removed.name+'" deleted'),'success');
   });
 
+  // Change brand logo — upload an image, resize, store on the brand
+  function changeLogo(){
+    var inp = document.createElement('input');
+    inp.type = 'file'; inp.accept = 'image/*';
+    inp.onchange = function(){
+      var file = inp.files && inp.files[0];
+      if (!file) return;
+      var reader = new FileReader();
+      reader.onload = function(){
+        var img = new Image();
+        img.onload = function(){
+          var size = 160;
+          var cv = document.createElement('canvas');
+          cv.width = size; cv.height = size;
+          var ctx = cv.getContext('2d');
+          var s = Math.min(img.width, img.height);
+          ctx.drawImage(img, (img.width-s)/2, (img.height-s)/2, s, s, 0, 0, size, size);
+          var ab = BRANDS.find(function(b){ return b.id === state.brand; }) || BRANDS[0];
+          ab.logo = cv.toDataURL('image/jpeg', 0.85);
+          saveBrands();
+          render();
+          toast(state.lang==='th'?'เปลี่ยนโลโก้แบรนด์แล้ว':'Brand logo updated','success');
+        };
+        img.onerror = function(){ toast(state.lang==='th'?'ไฟล์รูปไม่ถูกต้อง':'Invalid image file','error'); };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    };
+    inp.click();
+  }
+  document.addEventListener('click', function(e){
+    if (e.target.closest('[data-changelogo]')) changeLogo();
+  });
+
   // AI brand-description writer — based on brand name + business type
   async function aiWriteDesc(){
     var bizSel = document.getElementById('ppBizType');
@@ -3127,7 +3168,7 @@ render();
   // no dead clicks — any button without a wired action gives feedback
   var HANDLED = '[data-go],[data-lang],[data-set],[data-set-step],[data-toggle],'
     + '[data-voice],[data-brand],[data-product],[data-archetype],[data-archeguide],[data-archeclose],'
-    + '[data-addbrand],[data-delbrand],[data-aiwrite],[data-usedesc],[data-usedesc-s]';
+    + '[data-addbrand],[data-delbrand],[data-aiwrite],[data-usedesc],[data-usedesc-s],[data-changelogo]';
   document.addEventListener('click', function(e){
     var b = e.target.closest('button, a');
     if (!b) return;
