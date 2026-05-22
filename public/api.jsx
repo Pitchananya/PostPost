@@ -78,6 +78,7 @@ const API = {
     image: (body) => req('/api/ai/image', { method: 'POST', body }),
     brandVoiceGet: (course = 'PFB') => req(`/api/ai/brand-voice?course=${course}`),
     brandVoiceSet: (body) => req('/api/ai/brand-voice', { method: 'POST', body }),
+    brandDescription: (body) => req('/api/ai/brand-description', { method: 'POST', body }),
     avatarScript: (body) => req('/api/ai/avatar-script', { method: 'POST', body }),
     creditBalance: () => req('/api/ai/credit-balance'),
     imageModels: () => req('/api/ai/image-models'),

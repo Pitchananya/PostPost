@@ -526,6 +526,37 @@ router.post('/topics', async (req, res) => {
   }
 });
 
+// ✍️ POST /ai/brand-description — AI เขียน "คำอธิบายแบรนด์" อิงจากประเภทธุรกิจ
+// body: { businessType, brandName?, current? } → { descriptions: [3 strings] }
+router.post('/brand-description', async (req, res) => {
+  const { businessType = '', brandName = '', current = '' } = req.body || {};
+  const system = `คุณคือผู้เชี่ยวชาญด้าน branding และนักเขียน copywriting ภาษาไทย
+หน้าที่: เขียน "คำอธิบายแบรนด์" (brand description) ที่ AI จะใช้เป็นบริบทในการสร้างคอนเทนต์ให้แบรนด์
+กติกา:
+- เขียนให้ "อิงจากประเภทธุรกิจ" ที่ผู้ใช้เลือกเป็นหลัก
+- 2-4 ประโยค กระชับ เห็นภาพ ภาษาไทยธรรมชาติ
+- ควรครอบคลุม: ขายอะไร / จุดเด่น / กลุ่มลูกค้า / โทนของแบรนด์
+- ห้ามใส่ emoji, hashtag หรือเครื่องหมายคำพูด`;
+  const userMsg = `ประเภทธุรกิจ: ${businessType || '(ไม่ระบุ)'}
+ชื่อแบรนด์: ${brandName || '(ไม่ระบุ)'}
+${current ? 'คำอธิบายเดิมของผู้ใช้ (ใช้เป็นแนวทางได้): ' + current : ''}
+
+เขียนคำอธิบายแบรนด์ 3 แบบ ที่ต่างมุมกัน สำหรับธุรกิจประเภทนี้:
+- แบบ 1: ละเอียด ครบถ้วน
+- แบบ 2: สั้น กระชับ ตรงประเด็น
+- แบบ 3: สไตล์เล่าเรื่อง มีอารมณ์ร่วม
+ตอบเป็น JSON array ของสตริงเท่านั้น: ["...","...","..."]`;
+  try {
+    const text = await callOpenRouter([{ role: 'user', content: userMsg }], system, { max_tokens: 1500 });
+    const arr = (extractJsonArray(text) || []).filter(x => typeof x === 'string' && x.trim());
+    if (!arr.length) throw new Error('AI ไม่สามารถสร้างคำอธิบายได้');
+    res.json({ descriptions: arr });
+  } catch (e) {
+    console.error('[ai/brand-description]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 router.post('/caption', async (req, res) => {
   const { course = 'PFB', topic, hook, framework = 'F1', brandVoice } = req.body || {};
   if (!topic) return res.status(400).json({ error: 'topic required' });

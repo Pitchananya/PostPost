@@ -501,6 +501,7 @@ const ProfilePage = () => {
   const [manualOpen, setManualOpen] = React.useState(false);
   const [activeBrand, setActiveBrand] = React.useState('HappyPrice Shop');
   const [selectedVoices, setSelectedVoices] = React.useState(['friendly', 'fun']);
+  const [customVoice, setCustomVoice] = React.useState('');
   const [archetype, setArchetype] = React.useState('sage');
   const [voiceNotes, setVoiceNotes] = React.useState(t({
     th: 'ใช้คำว่า "คุณลูกค้า" แทน "คุณ" / ลงท้ายด้วย "ค่ะ" เกือบทุกครั้ง / ห้ามใช้ "การันตี 100%" / ใส่ emoji 🌸 ตอนพูดถึงสินค้า',
@@ -518,6 +519,7 @@ const ProfilePage = () => {
         desc,
         'ประเภทธุรกิจ / Business: ' + businessType,
         'โทนเสียง / Voice tones: ' + selectedVoices.join(', '),
+        customVoice.trim() ? 'สไตล์เสียงกำหนดเอง / Custom voice: ' + customVoice.trim() : '',
         'Brand archetype: ' + archetype,
         voiceNotes,
       ].filter(Boolean).join('\n');
@@ -548,11 +550,27 @@ const ProfilePage = () => {
     { id: 'custom', emoji: '✏️', label: { th: 'กำหนดเอง', en: 'Custom' }, alt: { th: 'Custom', en: 'กำหนดเอง' }, sample: { th: 'เขียนสไตล์ของคุณเอง', en: 'Write your own voice' } },
   ];
 
-  const aiSuggestions = [
-    { th: 'แบรนด์สกินแคร์ออร์แกนิคจากดอกกุหลาบเขาใหญ่ที่ผลิตเองทั้งหมด เน้นผิวบอบบางและแพ้ง่าย กลุ่มลูกค้าผู้หญิงวัยทำงาน 25-40 ปี ที่ให้ความสำคัญกับความปลอดภัยและส่วนผสมธรรมชาติมากกว่าราคา จุดเด่นคือสูตรอ่อนโยน ไม่มีน้ำหอม และสามารถใช้ได้ทั้งครอบครัว', en: "An organic skincare brand made from hand-picked Khao Yai roses. Targets sensitive, easily-irritated skin in women aged 25-40 who value safety and natural ingredients over price. Hero traits: gentle formula, fragrance-free, family-safe." },
-    { th: 'HappyPrice เป็นร้านที่ตั้งใจให้ทุกคนเข้าถึงสกินแคร์คุณภาพได้ในราคาเป็นมิตร เน้นความโปร่งใสของส่วนผสม รีวิวลูกค้าจริง 4.9 ดาวจาก 3,200 รีวิว สโลแกน "ผิวสวย ไม่ต้องแพง"', en: 'HappyPrice makes quality skincare accessible at fair prices. Transparent ingredients, 4.9 stars from 3,200 verified reviews. Tagline: "Glow without the price tag."' },
-    { th: 'แบรนด์ที่เกิดจากความเชื่อว่าผิวบอบบางสมควรได้รับการดูแลที่ดีกว่านี้ ใช้กุหลาบออร์แกนิกจากฟาร์มของเราเอง ทดสอบทุก batch โดยเภสัชกร เน้นกลุ่มผู้หญิงที่เคยลองสกินแคร์มาหลายแบรนด์แล้วยังหาตัวที่ใช่ไม่เจอ', en: 'Born from the belief that sensitive skin deserves better. Roses from our own organic farm, every batch tested by pharmacists. For women who\'ve tried it all and still haven\'t found "the one".' },
-  ];
+  // AI-generated brand descriptions — based on the selected business type
+  const [aiSugg, setAiSugg] = React.useState([]);
+  const [aiSuggLoading, setAiSuggLoading] = React.useState(false);
+  const businessTypeLabel = t((BUSINESS_TYPES.find(x => x.en === businessType)) || { th: businessType, en: businessType });
+
+  const genDescriptions = async () => {
+    setAiSuggLoading(true);
+    try {
+      const d = await API.ai.brandDescription({ businessType: businessTypeLabel, brandName: activeBrand, current: desc });
+      const arr = (d.descriptions || []).filter(Boolean);
+      if (arr.length) setAiSugg(arr);
+      else app.toast(t({ th: 'AI ไม่ได้คืนคำอธิบาย ลองใหม่', en: 'No descriptions returned' }), 'error');
+    } catch (e) {
+      app.toast(t({ th: 'เขียนไม่สำเร็จ: ', en: 'Failed: ' }) + e.message, 'error');
+    } finally { setAiSuggLoading(false); }
+  };
+  const openAiAssist = () => {
+    const next = !aiAssistOpen;
+    setAiAssistOpen(next);
+    if (next && aiSugg.length === 0 && !aiSuggLoading) genDescriptions();
+  };
 
   return (
     <DashShell active="profile" crumb="Profile">
@@ -673,10 +691,10 @@ const ProfilePage = () => {
                 <label className="label" style={{ marginBottom: 0 }}><T th="คำอธิบายแบรนด์" en="Brand description" /></label>
                 <button
                   className="btn btn-ghost btn-sm"
-                  onClick={() => setAiAssistOpen(o => !o)}
+                  onClick={openAiAssist}
                   style={{ height: 26, padding: '0 8px', color: 'var(--cf-accent)' }}
                 >
-                  <Icon name="sparkles" size={13} />
+                  <Icon name={aiSuggLoading ? 'refresh' : 'sparkles'} size={13} />
                   <T th="ให้ AI ช่วยเขียน" en="AI write for me" />
                 </button>
               </div>
@@ -695,30 +713,49 @@ const ProfilePage = () => {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
                     <Icon name="sparkles" size={14} style={{ color: 'var(--cf-accent)' }} />
                     <span style={{ fontSize: 12, fontWeight: 600, color: '#1E40AF' }}>
-                      <T th="AI เขียนให้ 3 แบบ — เลือกหรือผสมก็ได้" en="3 AI drafts — pick one or remix" />
+                      <T th={<>AI เขียนให้จากประเภทธุรกิจ "{businessTypeLabel}"</>}
+                         en={<>AI drafts based on "{businessTypeLabel}"</>} />
                     </span>
-                    <button className="btn btn-ghost btn-sm" style={{ marginLeft: 'auto', height: 24, padding: '0 6px', color: 'var(--cf-accent)' }}>
+                    <button className="btn btn-ghost btn-sm" onClick={genDescriptions} disabled={aiSuggLoading}
+                      style={{ marginLeft: 'auto', height: 24, padding: '0 6px', color: 'var(--cf-accent)' }}>
                       <Icon name="refresh" size={11} />
-                      <T th="ใหม่" en="New" />
+                      <T th="เขียนใหม่" en="Regenerate" />
                     </button>
                   </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {aiSuggestions.map((s, i) => (
-                      <button key={i} onClick={() => setDesc(t(s))} style={{
+                  {aiSuggLoading ? (
+                    <div style={{ padding: '18px 12px', textAlign: 'center', fontSize: 12, color: '#1E40AF' }}>
+                      <T th="AI กำลังเขียนคำอธิบายแบรนด์ให้…" en="AI is writing your brand descriptions…" />
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {aiSugg.map((s, i) => (
+                        <button key={i} onClick={() => setDesc(s)} style={{
+                          font: 'inherit', textAlign: 'left', cursor: 'pointer',
+                          padding: 12, borderRadius: 8,
+                          background: 'white', border: '1px solid #DBE5FF',
+                          fontSize: 12, lineHeight: 1.5, color: 'var(--cf-ink-1)',
+                        }}>
+                          <div style={{ display: 'flex', gap: 6, marginBottom: 4 }}>
+                            <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 999, background: 'var(--cf-accent-soft)', color: '#1E40AF', fontWeight: 600 }}>
+                              {i === 0 ? <T th="ละเอียด" en="Detailed" /> : i === 1 ? <T th="สั้นและตรง" en="Short & punchy" /> : <T th="เล่าเรื่อง" en="Storytelling" />}
+                            </span>
+                          </div>
+                          {s}
+                        </button>
+                      ))}
+                      {/* write-your-own option */}
+                      <button onClick={() => setAiAssistOpen(false)} style={{
                         font: 'inherit', textAlign: 'left', cursor: 'pointer',
                         padding: 12, borderRadius: 8,
-                        background: 'white', border: '1px solid #DBE5FF',
-                        fontSize: 12, lineHeight: 1.5, color: 'var(--cf-ink-1)',
+                        background: 'transparent', border: '1px dashed var(--cf-border-2)',
+                        fontSize: 12, color: 'var(--cf-ink-2)',
+                        display: 'flex', alignItems: 'center', gap: 8,
                       }}>
-                        <div style={{ display: 'flex', gap: 6, marginBottom: 4 }}>
-                          <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 999, background: 'var(--cf-accent-soft)', color: '#1E40AF', fontWeight: 600 }}>
-                            {i === 0 ? <T th="ละเอียด" en="Detailed" /> : i === 1 ? <T th="สั้นและตรง" en="Short & punchy" /> : <T th="เล่าเรื่อง" en="Storytelling" />}
-                          </span>
-                        </div>
-                        {t(s)}
+                        <Icon name="edit" size={13} style={{ color: 'var(--cf-ink-2)' }} />
+                        <T th="หรือเขียนเอง — พิมพ์ในช่องด้านบนได้เลย" en="Or write your own — type in the box above" />
                       </button>
-                    ))}
-                  </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -812,6 +849,26 @@ const ProfilePage = () => {
             {voices.map(v => <VoiceCard key={v.id} tone={v}
               active={selectedVoices.includes(v.id)} onClick={() => toggleVoice(v.id)} />)}
           </div>
+
+          {/* Write-your-own voice — shown when the Custom tone is picked */}
+          {selectedVoices.includes('custom') && (
+            <div style={{
+              marginTop: 12, padding: 14, borderRadius: 10,
+              background: 'var(--cf-primary-soft)', border: '1px solid #FED7AA',
+            }}>
+              <label className="label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Icon name="edit" size={13} style={{ color: 'var(--cf-primary)' }} />
+                <T th="เขียนสไตล์เสียงของคุณเอง" en="Write your own brand voice" />
+              </label>
+              <textarea className="textarea" rows={3} value={customVoice}
+                onChange={(e) => setCustomVoice(e.target.value)}
+                placeholder={t({
+                  th: 'อธิบายน้ำเสียงแบรนด์ในแบบของคุณ เช่น พูดจริงใจ ตรงไปตรงมา ไม่ขายของแรง ใช้คำว่า "เรา" ลงท้าย "นะ"…',
+                  en: 'Describe your brand voice in your own words — e.g. sincere, direct, no hard-selling, casual "we" tone…',
+                })} />
+              <div className="hint"><T th="AI จะใช้สไตล์นี้ร่วมกับโทนอื่นที่เลือกไว้" en="AI blends this with the other tones you picked" /></div>
+            </div>
+          )}
 
           <hr className="divider" style={{ margin: '16px 0' }} />
 
