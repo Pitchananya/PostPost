@@ -1036,7 +1036,25 @@ let BRANDS = [
   { id:'bc', name_th:'คาเฟ่บ้านน้ำใจ', name_en:'Baan Café', sub_th:'คาเฟ่ · 8 สาขา', sub_en:'Café · 8 locations', mark:'คา', color:'linear-gradient(135deg,#34D399,#059669)', ch:['facebook','instagram','tiktok'] },
 ];
 const MAX_BRANDS = 5;
-try { var _savedBrands = localStorage.getItem('postpost_brands'); if (_savedBrands) { var _pb = JSON.parse(_savedBrands); if (Array.isArray(_pb) && _pb.length) BRANDS = _pb; } } catch(e){}
+function normalizeBrand(b){
+  return {
+    id: b.id || ('b' + Math.random().toString(36).slice(2,7)),
+    name: b.name || b.name_th || b.name_en || 'แบรนด์',
+    mark: b.mark || String(b.name || b.name_th || 'B').replace(/\s+/g,'').slice(0,2).toUpperCase(),
+    color: b.color || 'linear-gradient(135deg,#FB923C,#F97316)',
+    sub_th: b.sub_th || b.type || (b.sub && b.sub.th) || 'แบรนด์',
+    sub_en: b.sub_en || b.type || (b.sub && b.sub.en) || 'Brand',
+    ch: Array.isArray(b.ch) ? b.ch : [],
+  };
+}
+BRANDS = BRANDS.map(normalizeBrand);
+try {
+  var _savedBrands = localStorage.getItem('postpost_brands');
+  if (_savedBrands) {
+    var _pb = JSON.parse(_savedBrands);
+    if (Array.isArray(_pb) && _pb.length) BRANDS = _pb.map(normalizeBrand);
+  }
+} catch(e){}
 
 // Business types — diverse set for Thai SME / online sellers
 const BUSINESS_TYPES = [
@@ -1294,16 +1312,16 @@ function pageProfile() {
     <!-- === Workspace info === -->
     <div class="card">
       <div style="display:flex;align-items:center;gap:14px;margin-bottom:18px">
-        <div style="width:60px;height:60px;border-radius:14px;background:linear-gradient(135deg,#FED7AA,#FDBA74);display:grid;place-items:center;color:#7C2D12;font-weight:800;font-size:20px;box-shadow:var(--shadow3)">HP</div>
+        <div style="width:60px;height:60px;border-radius:14px;background:${activeBrand.color};display:grid;place-items:center;color:#fff;font-weight:800;font-size:20px;box-shadow:var(--shadow3)">${activeBrand.mark}</div>
         <div style="flex:1">
-          <h3 class="cardTitle" style="font-size:20px">HappyPrice Shop</h3>
-          <p class="cardSub">${T('ID: happyprice-sh · สร้างเมื่อ มี.ค. 2026','ID: happyprice-sh · created Mar 2026')}</p>
+          <h3 class="cardTitle" style="font-size:20px">${activeBrand.name}</h3>
+          <p class="cardSub">${T('ID: '+activeBrand.id+' · ','ID: '+activeBrand.id+' · ')}${t({th:activeBrand.sub_th,en:activeBrand.sub_en})}</p>
         </div>
         <button class="btn ghost sm">${I('edit',13)} ${T('เปลี่ยนโลโก้','Logo')}</button>
       </div>
       <div class="field">
         <label class="label">${T('ชื่อแบรนด์','Brand name')}</label>
-        <input class="input" value="HappyPrice Shop" />
+        <input class="input" value="${activeBrand.name}" />
       </div>
       <div class="field">
         <label class="label">${T('ประเภทธุรกิจ','Business type')}</label>
@@ -1331,6 +1349,10 @@ function pageProfile() {
           </button>`).join('')}
         </div>` : ''}
       </div>
+      ${BRANDS.length > 1 ? `<hr class="divider" style="margin-top:18px">
+      <button class="btn ghost sm" data-delbrand="1" style="color:var(--red)">
+        ${I('x',13,'#DC2626')} ${T('ลบแบรนด์นี้','Delete this brand')}
+      </button>` : ''}
     </div>
 
     <!-- === Brand voice === -->
@@ -3040,9 +3062,24 @@ render();
     if (e.target.closest('[data-addbrand]')) addBrandModal();
   });
 
+  // Delete the active brand
+  document.addEventListener('click', function(e){
+    if (!e.target.closest('[data-delbrand]')) return;
+    if (BRANDS.length <= 1) { toast(state.lang==='th'?'ต้องมีอย่างน้อย 1 แบรนด์':'You need at least one brand','error'); return; }
+    var i = BRANDS.findIndex(function(b){ return b.id === state.brand; });
+    if (i < 0) i = 0;
+    var removed = BRANDS[i];
+    if (!confirm(state.lang==='th'?('ลบแบรนด์ "'+removed.name+'" ?'):('Delete brand "'+removed.name+'"?'))) return;
+    BRANDS.splice(i, 1);
+    saveBrands();
+    state.brand = BRANDS[0].id;
+    render();
+    toast(state.lang==='th'?('ลบแบรนด์ "'+removed.name+'" แล้ว'):('Brand "'+removed.name+'" deleted'),'success');
+  });
+
   // no dead clicks — any button without a wired action gives feedback
   var HANDLED = '[data-go],[data-lang],[data-set],[data-set-step],[data-toggle],'
-    + '[data-voice],[data-brand],[data-product],[data-archetype],[data-archeguide],[data-archeclose],[data-addbrand]';
+    + '[data-voice],[data-brand],[data-product],[data-archetype],[data-archeguide],[data-archeclose],[data-addbrand],[data-delbrand]';
   document.addEventListener('click', function(e){
     var b = e.target.closest('button, a');
     if (!b) return;
