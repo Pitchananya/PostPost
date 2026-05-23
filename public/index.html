@@ -2435,25 +2435,33 @@ function pageTextVideo() {
           <h3 class="cardTitle">${T('ตัวอย่างวิดีโอ','Video preview')}</h3>
           <span class="pill blue">${I('sparkles',11)} ${(models.filter(function(m){return m.id===state.ttvModel;})[0]||models[0]).name} · ${state.ttvAspect} · ${state.ttvDuration}</span>
         </div>
-        ${state.ttvVideo
+        ${(function(){
+          var picked = (models.filter(function(m){return m.id===state.ttvModel;})[0]||models[0]);
+          var providerName = picked.name;        // e.g. "Wan 2.2", "Veo 3 Fast"
+          return state.ttvVideo
           ? `<div style="aspect-ratio:${(state.ttvAspect||'9:16').replace(':','/')};border-radius:14px;overflow:hidden;background:#000;border:1px solid var(--line)"><video controls autoplay loop muted playsinline src="${state.ttvVideo}" style="width:100%;height:100%;object-fit:contain;display:block"></video></div>`
           : state.ttvGenLoading
             ? `<div style="aspect-ratio:${(state.ttvAspect||'9:16').replace(':','/')};border-radius:14px;background:linear-gradient(135deg,#1F2937,#4F46E5);display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;text-align:center;padding:24px;border:1px solid var(--line)">
               <div style="width:48px;height:48px;border-radius:99px;border:3px solid rgba(255,255,255,.25);border-top-color:#fff;animation:spin 1s linear infinite"></div>
-              <div style="margin-top:14px;font-size:14px;font-weight:700">${T('AI กำลังสร้างวิดีโอ…','AI is generating video…')}</div>
-              <div style="margin-top:4px;font-size:12px;opacity:.85">${T('Veo ใช้เวลาประมาณ 1-3 นาที','Veo takes ~1-3 minutes')}</div>
+              <div style="margin-top:14px;font-size:14px;font-weight:700">${T(providerName+' กำลังสร้างวิดีโอ…',providerName+' is generating…')}</div>
+              <div style="margin-top:4px;font-size:12px;opacity:.85">${T(providerName+' ใช้เวลาประมาณ ' + (picked.time_th||'1-2 นาที'),providerName+' takes ~' + (picked.time_en||'1-2 min'))}</div>
               ${state.ttvGenStatus?`<div style="margin-top:8px;font-size:11px;opacity:.7">${escText(state.ttvGenStatus)}</div>`:''}
+              <div style="margin-top:14px;display:flex;gap:6px;align-items:center;font-size:11px;color:rgba(255,255,255,.7)">
+                ${I('clock',11,'rgba(255,255,255,.7)')} ${T('ห้ามปิดหน้านี้ระหว่างรอ','Keep this tab open')}
+              </div>
               <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
             </div>`
             : `<div style="aspect-ratio:${(state.ttvAspect||'9:16').replace(':','/')};border-radius:14px;background:linear-gradient(135deg,#FFEDD5,#FED7AA 40%,#FB923C);display:flex;flex-direction:column;align-items:center;justify-content:center;color:#7C2D12;text-align:center;padding:24px;border:1px solid var(--line)">
               ${I('video',36,'#9A3412')}
               <div style="margin-top:10px;font-size:14px;font-weight:700">${T('วิดีโอจะแสดงที่นี่','Your video appears here')}</div>
-              <div style="margin-top:4px;font-size:12px;opacity:.85">${T('ใส่คำสั่ง แล้วกด "สร้างวิดีโอด้วย Veo"','Type a prompt and hit "Generate with Veo"')}</div>
-            </div>`}
+              <div style="margin-top:4px;font-size:12px;opacity:.85">${T('ใส่คำสั่ง แล้วกด "สร้างวิดีโอ"','Type a prompt and hit "Generate"')}</div>
+              <button class="btn ghost sm" data-pastevideourl="1" style="margin-top:14px;color:#9A3412;background:rgba(255,255,255,.6)">${I('link',12,'#9A3412')} ${T('หรือ paste URL วิดีโอเอง','Or paste a video URL')}</button>
+            </div>`;
+        })()}
         <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap">
-          ${state.ttvVideo?`<a class="btn outline" style="flex:1;min-width:90px;text-decoration:none;justify-content:center" href="${state.ttvVideo}" download="postpost-veo.mp4">${I('download',14)} MP4</a>`:`<button class="btn outline" style="flex:1;min-width:90px" disabled>${I('download',14)} MP4</button>`}
+          ${state.ttvVideo?`<a class="btn outline" style="flex:1;min-width:90px;text-decoration:none;justify-content:center" href="${state.ttvVideo}" download="postpost-video.mp4">${I('download',14)} MP4</a>`:`<button class="btn outline" style="flex:1;min-width:90px" disabled>${I('download',14)} MP4</button>`}
           ${state.ttvVideo?`<button class="btn outline" data-savevideodraft="1" style="flex:1;min-width:140px" ${state.ttvSavingDraft?'disabled':''}>${I('library',14)} ${state.ttvSavingDraft?T('กำลังบันทึก…','Saving…'):T('บันทึกดราฟ','Save draft')}</button>`:''}
-          <button class="btn primary" data-veogen="1" style="flex:2;min-width:170px" ${state.ttvGenLoading?'disabled':''}>${I('sparkles',14)} ${state.ttvGenLoading?T('AI กำลังสร้าง…','Generating…'):(state.ttvVideo?T('สร้างใหม่ด้วย Veo','Regenerate with Veo'):T('สร้างวิดีโอด้วย Veo','Generate with Veo'))}</button>
+          <button class="btn primary" data-veogen="1" style="flex:2;min-width:170px" ${state.ttvGenLoading?'disabled':''}>${I('sparkles',14)} ${state.ttvGenLoading?T('AI กำลังสร้าง…','Generating…'):(state.ttvVideo?T('สร้างใหม่','Regenerate'):T('สร้างวิดีโอ','Generate video'))}</button>
         </div>
       </div>
 
@@ -4712,6 +4720,21 @@ render();
   }
   document.addEventListener('click', function(e){
     if (e.target.closest('[data-veogen]')) { e.preventDefault(); genVeoVideo(); }
+    if (e.target.closest('[data-pastevideourl]')) {
+      e.preventDefault();
+      var u = (window.prompt(state.lang==='th'
+        ? 'วาง URL วิดีโอ (mp4/webm) — เช่น fal.ai dashboard → Result → คัดลอก video URL'
+        : 'Paste video URL (mp4/webm)')||'').trim();
+      if (!u) return;
+      if (!/^https?:\/\/.+\.(mp4|webm|mov)(\?.*)?$/i.test(u) && !/^data:video/.test(u)) {
+        toast(state.lang==='th'?'URL ต้องลงท้ายด้วย .mp4 / .webm / .mov':'URL must end with .mp4/.webm/.mov','error');
+        return;
+      }
+      state.ttvVideo = u;
+      state.ttvGenLoading = false; state.ttvGenStatus = '';
+      render();
+      toast(state.lang==='th'?'โหลดวิดีโอจาก URL แล้ว ✓':'Video loaded from URL ✓','success');
+    }
   });
 
   // Compress a base64 image to ~thumbnail size so it fits in localStorage
@@ -5251,7 +5274,7 @@ render();
     + '[data-filter],[data-filterclose],[data-sortby],[data-instocktoggle],'
     + '[data-gentopics],[data-topicgoal],'
     + '[data-saveproduct],[data-newimgclear],[data-newimg],[data-proddelete],[data-usetopic],[data-genall],[data-savedraft],[data-savevideodraft],[data-editdraft],[data-deletedraft],[data-schedule],[data-avatarscript],[data-veogen],[data-newavatar],'
-    + '[data-uploadavatar],[data-uploadref],[data-clearref],[data-pickrefproduct],[data-refclose],[data-refpick],[data-genvideoprompt],[data-delavatar],[data-addtoday],[data-pickdraft],[data-pickdraftclose],[data-pickdraftgo],[data-tts],[data-pickfbpage],[data-avatarvideo],'
+    + '[data-uploadavatar],[data-uploadref],[data-clearref],[data-pickrefproduct],[data-refclose],[data-refpick],[data-genvideoprompt],[data-delavatar],[data-addtoday],[data-pickdraft],[data-pickdraftclose],[data-pickdraftgo],[data-tts],[data-pickfbpage],[data-avatarvideo],[data-pastevideourl],'
     + '[data-previewaspect],[data-previewidx],[data-downloadpng]';
   document.addEventListener('click', function(e){
     var b = e.target.closest('button, a');
