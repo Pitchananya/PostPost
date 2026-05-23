@@ -28,13 +28,20 @@ function cloudHeaders() {
 }
 
 router.post('/scrape', requireAuth, async (req, res) => {
-  const { url } = req.body || {};
+  const { url, force_local } = req.body || {};
   if (!url) return res.status(400).json({ error: 'url required' });
 
-  // ── Cloud mode ── prefer the async pair (returns immediately under Vercel's 60s
-  // timeout). The frontend then polls /scrape-status?job_id=X for completion.
+  // ── Decide: cloud vs local ──
+  // 1) Vercel serverless (no Python) → always cloud (if configured)
+  // 2) Localhost dev → prefer local Python (fast, no Render cold-start)
+  // 3) `force_local` body flag → always local (testing override)
+  const isVercel = !!process.env.VERCEL;        // Vercel sets this automatically on serverless functions
   const base = cloudBase();
-  if (base) {
+  const useCloud = !force_local && base && isVercel;
+
+  if (useCloud) {
+    // ── Cloud mode ── prefer the async pair (returns immediately under Vercel's 60s
+    // timeout). The frontend then polls /scrape-status?job_id=X for completion.
     try {
       const r = await fetch(base + '/scrape-async', {
         method: 'POST',
