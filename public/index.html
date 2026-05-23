@@ -2425,8 +2425,19 @@ function pageAvatar() {
           <button class="btn primary sm" data-tts="1" ${state.ttsLoading?'disabled':''} style="flex:0 0 auto">
             ${state.ttsLoading?I('refresh',13):I('play',13)} ${state.ttsLoading?T('กำลังสังเคราะห์เสียง…','Synthesizing…'):T('ฟังเสียง (Azure TTS)','Listen (Azure TTS)')}
           </button>
-          ${state.ttsAudio?`<audio id="ppTtsAudio" controls autoplay style="height:36px;flex:1;min-width:200px"><source src="${state.ttsAudio}" type="audio/mp3"/></audio>
-          <a class="btn ghost sm" href="${state.ttsAudio}" download="postpost-tts.mp3" style="flex:0 0 auto;color:var(--blue)">${I('download',12)} MP3</a>`:''}
+          ${state.ttsAudio
+            ? (state.avatarVideoLoading
+                // While the canvas renderer is recording, the preview <audio> element fights
+                // with the render's internal audioEl (both play the same TTS clip, and the
+                // preview keeps restarting whenever render() fires for progress updates).
+                // Hide it and show a locked notice so the user knows audio is busy.
+                ? `<div style="height:36px;flex:1;min-width:200px;border-radius:12px;background:#FFF7ED;border:1px solid #FED7AA;display:flex;align-items:center;gap:8px;padding:0 12px;font-size:11.5px;color:#9A3412;font-weight:700">
+                     ${I('mic',13,'#9A3412')} ${T('กำลังบันทึกเสียงลงคลิป — preview ปิดชั่วคราว','Recording audio into the video — preview paused')}
+                   </div>
+                   <a class="btn ghost sm" href="${state.ttsAudio}" download="postpost-tts.mp3" style="flex:0 0 auto;color:var(--blue)">${I('download',12)} MP3</a>`
+                : `<audio id="ppTtsAudio" controls ${state.ttsAutoplayPending?'autoplay':''} style="height:36px;flex:1;min-width:200px"><source src="${state.ttsAudio}" type="audio/mp3"/></audio>
+                   <a class="btn ghost sm" href="${state.ttsAudio}" download="postpost-tts.mp3" style="flex:0 0 auto;color:var(--blue)">${I('download',12)} MP3</a>`)
+            : ''}
         </div>
       </div>
     </div>
@@ -2491,7 +2502,7 @@ function pageAvatar() {
                 + '<div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.55) 0%,rgba(0,0,0,.1) 25%,rgba(0,0,0,.1) 60%,rgba(0,0,0,.75) 100%);z-index:1"></div>';
             }
             if (state.avatarVideoLoading) {
-              // ── Rendering overlay ──────────────────────────────────
+              // ── Rendering overlay (with Abort button) ───────────────
               return '<div class="phone" style="background:'+grad+'">'
                 + bgLayer()
                 + '<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;text-align:center;padding:24px;z-index:3">'
@@ -2499,6 +2510,9 @@ function pageAvatar() {
                 +   '<div style="margin-top:18px;font-size:14px;font-weight:700">'+T('กำลังสร้างวิดีโอ…','Rendering…')+'</div>'
                 +   '<div style="margin-top:6px;font-size:24px;font-weight:900">'+(state.avatarVideoProgress||0)+'%</div>'
                 +   '<div style="margin-top:8px;font-size:11px;opacity:.8">'+T('ใช้เวลา ~1-3 นาที','~1-3 minutes')+'</div>'
+                +   '<button data-avatarabort="1" style="margin-top:18px;height:34px;padding:0 18px;border-radius:99px;border:1px solid rgba(255,255,255,.4);background:rgba(0,0,0,.45);color:#fff;font-size:11.5px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px;backdrop-filter:blur(6px)">'
+                +     I('x',12,'#fff')+' '+T('หยุดการสร้างคลิป','Stop rendering')
+                +   '</button>'
                 + '</div>'
                 + '<style>@keyframes spin{to{transform:rotate(360deg)}}</style>'
                 + '</div>';
@@ -3357,6 +3371,9 @@ function render() {
   // every `avatarBgInterval` seconds. Re-wired on every render so it stays in sync with
   // state changes (interval picker, candidate list, page leave).
   setupAvatarBgRotation();
+  // One-shot TTS autoplay — consumed by the very next render after audio is ready,
+  // so subsequent progress-update renders don't restart playback from 0:00.
+  if (state.ttsAutoplayPending) state.ttsAutoplayPending = false;
 }
 
 // Module-level so we can clear it across renders.
@@ -4390,6 +4407,9 @@ render();
       var j = await api('/api/ai/tts', { method:'POST', body:{ text: text, voice: voice } });
       if (!j || !j.audio_base64) throw new Error((j&&j.error) || 'no audio returned');
       state.ttsAudio = 'data:'+(j.mime||'audio/mp3')+';base64,'+j.audio_base64;
+      // Autoplay once on the very next render — subsequent re-renders (e.g. progress
+      // updates while the video is being recorded) must NOT restart playback.
+      state.ttsAutoplayPending = true;
       toast(state.lang==='th'?('เสียงพร้อม — ~'+(j.duration_estimate_sec||0)+' วินาที ✓'):('Audio ready ✓'),'success');
     } catch(e){
       var msg = (e&&e.message)||'';
@@ -4426,7 +4446,12 @@ render();
       toast(state.lang==='th'?'เลือก avatar ที่มีรูป (ไม่ใช่ตัวอักษร) หรืออัปโหลด/สร้างใหม่ด้วย AI':'Pick an avatar with an image','error');
       return;
     }
-    state.avatarVideoLoading = true; state.avatarVideoProgress = 0; render();
+    state.avatarVideoLoading = true; state.avatarVideoProgress = 0;
+    // Pause the preview <audio> before anyone hears two voices at once.
+    // (The next render will replace the audio element with the "locked" notice anyway,
+    // but pausing here avoids the brief overlap between this paint and the render() call.)
+    try { var _prevA = document.getElementById('ppTtsAudio'); if (_prevA) { _prevA.pause(); _prevA.currentTime = 0; } } catch(_){}
+    render();
 
     // ── Try fal.ai lip-sync first ──────────────────────────────────────────
     // Backend uploads image+audio to Supabase Storage → submits to fal.ai queue,
@@ -4727,38 +4752,62 @@ render();
       sceneVideos.forEach(function(v){ if (v) try { v.play(); } catch(_) {} });
       // 7) Start everything
       var rafId = null;
+      var aborted = false;
+      var stopTimer = null;
       function loop(now){
+        if (aborted) return;
         drawFrame(now);
         if (now < stopTs) {
           rafId = requestAnimationFrame(loop);
           if (state.avatarVideoLoading) render(); // update progress %
         }
       }
-      var stopPromise = new Promise(function(resolve){
+      var stopPromise = new Promise(function(resolve, reject){
         recorder.onstop = function(){
           if (rafId) cancelAnimationFrame(rafId);
+          try { audioEl.pause(); } catch(_){}
           try { audioCtx.close(); } catch(_){}
+          if (stopTimer) clearTimeout(stopTimer);
+          if (aborted) {
+            // User cancelled — discard chunks and bail out
+            reject(new Error('aborted'));
+            return;
+          }
           var blob = new Blob(chunks, { type: mime });
           var reader = new FileReader();
           reader.onload = function(){ resolve(reader.result); };
           reader.readAsDataURL(blob);
         };
       });
+      // Expose an abort handle — the rendering overlay's "หยุดการสร้างคลิป" button calls this.
+      // Cleared in the finally{} below so it can't leak across renders.
+      state.avatarAbortRender = function(){
+        aborted = true;
+        try { audioEl.pause(); audioEl.currentTime = 0; } catch(_){}
+        try { recorder.stop(); } catch(_){}            // triggers onstop → rejects stopPromise
+        if (stopTimer) clearTimeout(stopTimer);
+        if (rafId) cancelAnimationFrame(rafId);
+      };
       // Start audio + canvas drawing + recorder all at once
       audioEl.play();
       recorder.start(250);
       requestAnimationFrame(loop);
       // Stop after audio finishes (+ short tail)
-      setTimeout(function(){ try { recorder.stop(); } catch(_){} }, duration * 1000 + 500);
+      stopTimer = setTimeout(function(){ try { recorder.stop(); } catch(_){} }, duration * 1000 + 500);
       var dataUrl = await stopPromise;
       state.avatarVideo = dataUrl;
       // Best-effort: even though MIME is webm, the .mp4 extension on the download link
       // works with most players. For real MP4 the user can transcode offline if needed.
       toast(state.lang==='th'?'สร้างวิดีโอเสร็จ ✓ — กด MP4 เพื่อดาวน์โหลด':'Video ready ✓ — click MP4 to download','success');
     } catch(e){
-      console.error('[avatar-video]', e);
-      toast((state.lang==='th'?'สร้างวิดีโอไม่สำเร็จ: ':'Failed: ')+(e.message||''),'error');
+      if ((e && e.message) === 'aborted') {
+        toast(state.lang==='th'?'หยุดการสร้างคลิปแล้ว':'Render stopped','success');
+      } else {
+        console.error('[avatar-video]', e);
+        toast((state.lang==='th'?'สร้างวิดีโอไม่สำเร็จ: ':'Failed: ')+(e.message||''),'error');
+      }
     } finally {
+      state.avatarAbortRender = null;
       state.avatarVideoLoading = false; state.avatarVideoProgress = 0; render();
     }
   }
@@ -5096,6 +5145,19 @@ render();
     if (e.target.closest('[data-pickrefproduct]')) { e.preventDefault(); pickRefProductModal(); return; }
     if (e.target.closest('[data-genvideoprompt]')) { e.preventDefault(); genVideoPrompt(); return; }
     if (e.target.closest('[data-addtoday]'))     { e.preventDefault(); openDraftPickerForDay(state.calDay || 1); return; }
+    // Abort an in-progress canvas-fallback video render
+    if (e.target.closest('[data-avatarabort]')) {
+      e.preventDefault();
+      if (typeof state.avatarAbortRender === 'function') {
+        try { state.avatarAbortRender(); } catch(_){}
+      } else {
+        // Defensive: if the handle isn't set (e.g. abort clicked during fal.ai polling
+        // phase, which doesn't have a clean stop hook yet) — just flip the flag so the
+        // UI returns to the idle state and the fal poll loop will toast "timed out".
+        state.avatarVideoLoading = false; state.avatarVideoProgress = 0; render();
+      }
+      return;
+    }
   });
   // Enter-key submit for the Pexels bg search field — same as clicking "Go"
   document.addEventListener('keydown', function(e){
@@ -6050,7 +6112,7 @@ render();
     + '[data-filter],[data-filterclose],[data-sortby],[data-instocktoggle],'
     + '[data-gentopics],[data-topicgoal],'
     + '[data-saveproduct],[data-newimgclear],[data-newimg],[data-proddelete],[data-usetopic],[data-genall],[data-savedraft],[data-savevideodraft],[data-editdraft],[data-deletedraft],[data-schedule],[data-avatarscript],[data-veogen],[data-newavatar],'
-    + '[data-uploadavatar],[data-uploadref],[data-clearref],[data-pickrefproduct],[data-refclose],[data-refpick],[data-genvideoprompt],[data-delavatar],[data-addtoday],[data-pickdraft],[data-pickdraftclose],[data-pickdraftgo],[data-tts],[data-pickfbpage],[data-avatarvideo],[data-pastevideourl],[data-locallocaltoggle],[data-bgscene],[data-bgpick],[data-bgsearch],[data-bgsearchclear],[data-bginterval],[data-clipdur],'
+    + '[data-uploadavatar],[data-uploadref],[data-clearref],[data-pickrefproduct],[data-refclose],[data-refpick],[data-genvideoprompt],[data-delavatar],[data-addtoday],[data-pickdraft],[data-pickdraftclose],[data-pickdraftgo],[data-tts],[data-pickfbpage],[data-avatarvideo],[data-pastevideourl],[data-locallocaltoggle],[data-bgscene],[data-bgpick],[data-bgsearch],[data-bgsearchclear],[data-bginterval],[data-clipdur],[data-avatarabort],'
     + '[data-previewaspect],[data-previewidx],[data-downloadpng]';
   document.addEventListener('click', function(e){
     var b = e.target.closest('button, a');
