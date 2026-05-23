@@ -4676,11 +4676,27 @@ render();
     try {
       var lsModel = state.avatarLipsyncModel || 'fal-ai/infinitalk';
       var lsName = lsModel.split('/').pop();
+      // Build a context-aware prompt — fal-ai/infinitalk + omnihuman require it (422 otherwise).
+      // Pull the gender/persona from the picked TTS voice + the avatar's display name so the
+      // lip-sync animator picks the right facial expression / motion style for the speaker.
+      var pickedVoice = (state.avatarVoices||[]).filter(function(x){ return x.id===(state.avatarVoice||'premwadee'); })[0];
+      var voiceGender = pickedVoice ? (pickedVoice.g === 'ชาย' ? 'man' : 'woman') : 'woman';
+      var brandBiz = (BRANDS.filter(function(b){ return b.id===state.brand; })[0]||{}).bizType || '';
+      var sceneHint = /ดูดวง|สายมู|tarot/.test(brandBiz.toLowerCase())
+        ? 'mystical fortune-teller style, calm wise expression, soft candlelight'
+        : /สกินแคร์|ความงาม|beauty/.test(brandBiz.toLowerCase())
+        ? 'beauty influencer, glowing skin, friendly upbeat expression'
+        : /อาหาร|food|กาแฟ|coffee/.test(brandBiz.toLowerCase())
+        ? 'food creator, warm friendly expression'
+        : 'natural friendly expression';
+      var lsPrompt = 'A ' + voiceGender + ' talking naturally to camera, smooth realistic lip-sync, '
+        + 'slight head movement, ' + sceneHint + ', professional studio lighting, high quality';
       toast(state.lang==='th'?('ส่งงานไป fal.ai · '+lsName+'…'):('Submitting to fal.ai · '+lsName+'…'));
       var sub = await api('/api/ai/lipsync-submit', { method:'POST', body:{
         image_b64: picked.image,         // dataURL — backend extracts mime + base64
         audio_b64: state.ttsAudio,
         model: lsModel,                  // user-picked model from Step 1 sub-picker
+        prompt: lsPrompt,                // required by fal-ai/infinitalk + omnihuman since Nov 2024
       }});
       if (sub && sub.request_id) {
         state.avatarVideoProgress = 5; render();

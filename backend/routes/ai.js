@@ -2663,12 +2663,16 @@ async function uploadDataUrlToBucket(dataUrl, prefix, fallbackExt) {
 }
 
 router.post('/lipsync-submit', async (req, res) => {
-  const { image_b64, image_url: imageUrlIn, audio_b64, audio_url: audioUrlIn, model: modelIn } = req.body || {};
+  const { image_b64, image_url: imageUrlIn, audio_b64, audio_url: audioUrlIn, model: modelIn, prompt: promptIn } = req.body || {};
   const falKey = process.env.FAL_KEY;
   if (!falKey) return res.status(400).json({ error: 'FAL_KEY not set — ตั้ง env ที่ Vercel → Settings → Environment Variables' });
   if (!image_b64 && !imageUrlIn) return res.status(400).json({ error: 'image_b64 or image_url required' });
   if (!audio_b64 && !audioUrlIn) return res.status(400).json({ error: 'audio_b64 or audio_url required' });
   const model = String(modelIn || FAL_DEFAULT_MODEL);
+  // fal-ai/infinitalk now REQUIRES a `prompt` field (422 "Field required" otherwise — cost stays
+  // $0.00 because validation fails before execution, but the user still hits queue limits and
+  // wonders why nothing renders). Pick a generic talking-head prompt unless the caller overrode.
+  const prompt = String(promptIn || 'A person talking naturally to camera with friendly expression, smooth lip-sync, slight head movement, professional lighting');
 
   try {
     // 1) Make sure both inputs are public URLs (fal.ai pulls from URL — no file upload API)
@@ -2684,14 +2688,15 @@ router.post('/lipsync-submit', async (req, res) => {
     }
 
     // 2) Submit to fal.ai queue — input schema per model
+    // ⚠️ infinitalk + omnihuman both require `prompt` since Nov 2024. SadTalker doesn't (older API).
     const FAL_INPUT = {
       'fal-ai/sadtalker':                       { source_image_url: image_url, driven_audio_url: audio_url },
-      'fal-ai/bytedance/omnihuman/v1.5':        { image_url, audio_url, resolution: '720p' },
-      'fal-ai/bytedance/omnihuman':             { image_url, audio_url, resolution: '720p' },
+      'fal-ai/bytedance/omnihuman/v1.5':        { image_url, audio_url, prompt, resolution: '720p' },
+      'fal-ai/bytedance/omnihuman':             { image_url, audio_url, prompt, resolution: '720p' },
       'veed/fabric-1.0':                        { image_url, audio_url, resolution: '720p' },
-      'fal-ai/infinitalk':                      { image_url, audio_url },
+      'fal-ai/infinitalk':                      { image_url, audio_url, prompt },
     };
-    const inputBody = FAL_INPUT[model] || { image_url, audio_url };
+    const inputBody = FAL_INPUT[model] || { image_url, audio_url, prompt };
     const r = await fetch(`https://queue.fal.run/${model}`, {
       method: 'POST',
       headers: { 'Authorization': `Key ${falKey}`, 'Content-Type': 'application/json' },
