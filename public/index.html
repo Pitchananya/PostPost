@@ -501,6 +501,9 @@ const state = {
   avatarBgScene: 'auto',      // picked bg scene id (auto | studio | cafe | beach | mystical | beauty | off | upload)
   avatarBgUploadUrl: '',      // dataURL of user-uploaded bg video (used when avatarBgScene==='upload')
   avatarBgLoading: false,     // true while fetching a Pexels video for the picked scene
+  avatarBgCandidates: [],     // full Pexels result set (last fetch) — OEM-style thumbnail picker grid
+  avatarBgPickedUrl: '',      // when user clicks a specific thumbnail, that URL is locked (overrides "first result")
+  avatarBgSearch: '',         // custom free-text query (overrides scene preset when non-empty)
   previewAspect: '4:5',    // 1:1 | 4:5 | 9:16  — aspect for post preview + PNG download
   previewIndex: 0,         // current slide in carousel
 };
@@ -2187,7 +2190,10 @@ const AVATAR_BG_SCENES = [
 
 // Resolve the Pexels query for the current picked scene. 'auto' falls back to
 // bizType detection (preserves the original behavior), preset scenes use their q.
+// Free-text avatarBgSearch ALWAYS wins when set.
 function resolveAvatarBgQuery() {
+  var custom = (state.avatarBgSearch || '').trim();
+  if (custom) return custom;
   var sceneId = state.avatarBgScene || 'auto';
   if (sceneId === 'auto') {
     var ab = BRANDS.filter(function(b){ return b.id===state.brand; })[0] || BRANDS[0];
@@ -2203,48 +2209,63 @@ function resolveAvatarBgQuery() {
 }
 
 // Fetch a new Pexels video for the current picked scene and update state.
-// Called on scene change (and lazily on first render).
-function fetchAvatarBg() {
+// Called on scene change (and lazily on first render). Stores the full
+// candidate list (avatarBgCandidates) so the OEM-style thumbnail picker can
+// render a grid of options — and the user can lock a specific clip.
+function fetchAvatarBg(opts) {
+  opts = opts || {};
   if (!window.PP) return;
   var sceneId = state.avatarBgScene || 'auto';
   if (sceneId === 'off' || sceneId === 'upload') return;
+  var hasCustom = !!(state.avatarBgSearch || '').trim();
 
-  // ── Step 1: Local file first ──
-  // Either: (a) the picked scene has a bundled `local` mp4, or
-  //         (b) sceneId === 'auto' AND active brand matches mystical/tarot
-  var sc = AVATAR_BG_SCENES.filter(function(s){ return s.id===sceneId; })[0];
-  if (sc && sc.local) {
-    state.avatarPreviewBgUrl = sc.local;
-    state.avatarBgLoading = false;
-    return;
-  }
-  if (sceneId === 'auto') {
-    var ab = BRANDS.filter(function(b){ return b.id===state.brand; })[0] || BRANDS[0];
-    var biz = (ab && ab.bizType || '').toLowerCase();
-    if (/ดูดวง|สายมู|tarot/.test(biz)) {
-      // Use bundled mystical bg directly — no API call needed
-      state.avatarPreviewBgUrl = '/assets/avatar-bg/mystical-portrait.mp4';
+  // ── Step 1: Local bundled file (skip when user typed a custom search) ──
+  if (!hasCustom) {
+    var sc = AVATAR_BG_SCENES.filter(function(s){ return s.id===sceneId; })[0];
+    if (sc && sc.local) {
+      state.avatarPreviewBgUrl = sc.local;
+      state.avatarBgPickedUrl = '';
+      state.avatarBgCandidates = [{
+        url: sc.local, preview: '', user: 'PostPost', page: '',
+        isLocal: true, label_th: sc.th, label_en: sc.en,
+      }];
       state.avatarBgLoading = false;
       return;
     }
+    if (sceneId === 'auto') {
+      var ab = BRANDS.filter(function(b){ return b.id===state.brand; })[0] || BRANDS[0];
+      var biz = (ab && ab.bizType || '').toLowerCase();
+      if (/ดูดวง|สายมู|tarot/.test(biz)) {
+        state.avatarPreviewBgUrl = '/assets/avatar-bg/mystical-portrait.mp4';
+        state.avatarBgPickedUrl = '';
+        state.avatarBgCandidates = [{
+          url: '/assets/avatar-bg/mystical-portrait.mp4', preview: '',
+          user: 'PostPost', page: '', isLocal: true, label_th:'สายมู (built-in)', label_en:'Mystical (built-in)',
+        }];
+        state.avatarBgLoading = false;
+        return;
+      }
+    }
   }
 
-  // ── Step 2: Fall back to Pexels ──
+  // ── Step 2: Fall back to Pexels — fetch 8 so we can show a thumbnail grid ──
   state.avatarBgLoading = true;
   var query = resolveAvatarBgQuery();
-  window.PP.api('/api/ai/pexels-video-search?q=' + encodeURIComponent(query) + '&per_page=3&orientation=portrait')
+  window.PP.api('/api/ai/pexels-video-search?q=' + encodeURIComponent(query) + '&per_page=8&orientation=portrait')
     .then(function(r){
       var vids = (r && r.videos) || [];
+      state.avatarBgCandidates = vids;
       if (vids.length && vids[0].url) {
-        state.avatarPreviewBgUrl = vids[0].url;
+        // Only auto-set the preview URL if the user hasn't locked a specific pick
+        if (!opts.keepPicked) state.avatarBgPickedUrl = '';
+        state.avatarPreviewBgUrl = state.avatarBgPickedUrl || vids[0].url;
       } else {
-        // No Pexels result — use bundled mystical as last-resort universal bg
+        state.avatarBgCandidates = [];
         state.avatarPreviewBgUrl = '/assets/avatar-bg/mystical-portrait.mp4';
       }
     })
     .catch(function(){
-      // PEXELS_API_KEY missing or other failure — use bundled mystical video instead of gradient.
-      // Any video bg looks better than a static color gradient for the talking-avatar preview.
+      state.avatarBgCandidates = [];
       state.avatarPreviewBgUrl = '/assets/avatar-bg/mystical-portrait.mp4';
     })
     .then(function(){ state.avatarBgLoading = false; render(); });
@@ -2491,25 +2512,69 @@ function pageAvatar() {
               + '</div>';
           })()}
         </div>
-        <!-- BG scene picker — choose what plays behind the avatar in the preview -->
-        <div style="margin-top:14px;padding:10px 12px;border-radius:12px;background:var(--cream2);border:1px solid var(--line)">
+        <!-- BG scene picker — OEM-style: scene chips + free-text search + thumbnail grid -->
+        <div style="margin-top:14px;padding:12px;border-radius:12px;background:var(--cream2);border:1px solid var(--line)">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
             <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:800;color:var(--purple);letter-spacing:.04em;text-transform:uppercase">
               ${I('video',12,'#5B21B6')} ${T('ฉากพื้นหลังตอนพูด','Speaking background')}
+              <span style="padding:1px 6px;border-radius:99px;background:#EDE9FE;color:#5B21B6;font-size:9px;font-weight:800;letter-spacing:.03em">${T('ขับเคลื่อนโดย Pexels','Powered by Pexels')}</span>
             </div>
             ${state.avatarBgLoading?`<span style="font-size:10px;color:var(--muted);display:flex;align-items:center;gap:4px">${I('refresh',10)} ${T('กำลังโหลด…','Loading…')}</span>`:''}
           </div>
-          <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <!-- Scene chips -->
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
             ${AVATAR_BG_SCENES.map(function(s){
-              var on = (state.avatarBgScene||'auto') === s.id;
-              var disabled = (s.id === 'upload' && !state.avatarBgUploadUrl) ? false : false;
+              var on = (state.avatarBgScene||'auto') === s.id && !(state.avatarBgSearch||'').trim();
               return '<button class="pill '+(on?'orange':'')+'" data-bgscene="'+s.id+'" '
-                + 'style="height:30px;font-size:11px;cursor:pointer;padding:0 10px;display:inline-flex;align-items:center;gap:4px"'
-                + (disabled?' disabled':'')+'>'
+                + 'style="height:30px;font-size:11px;cursor:pointer;padding:0 10px;display:inline-flex;align-items:center;gap:4px">'
                 + I(s.icon,11,on?'#fff':'#9C8BB8')+' '+t({th:s.th,en:s.en})
                 + '</button>';
             }).join('')}
           </div>
+          <!-- Free-text Pexels search (OEM-style) -->
+          <div style="display:flex;gap:6px;margin-bottom:10px">
+            <div style="position:relative;flex:1">
+              <span style="position:absolute;top:50%;left:10px;transform:translateY(-50%);pointer-events:none;display:inline-flex">${I('search',12,'#9C8BB8')}</span>
+              <input class="input" id="ppAvatarBgSearch" placeholder="${T('ค้นหา Pexels เช่น: tarot cards, neon city, golden hour','Search Pexels e.g. tarot cards, neon city, golden hour')}" value="${escText(state.avatarBgSearch||'')}" style="height:32px;font-size:11.5px;padding-left:28px;padding-right:10px;width:100%"/>
+            </div>
+            <button class="btn outline" data-bgsearch="1" style="height:32px;font-size:11px;padding:0 12px">${I('refresh',12)} ${T('ค้นหา','Go')}</button>
+            ${(state.avatarBgSearch||'').trim() ? `<button class="btn ghost" data-bgsearchclear="1" style="height:32px;font-size:11px;padding:0 10px;color:var(--muted)">${I('x',12)} ${T('ล้าง','Clear')}</button>` : ''}
+          </div>
+          <!-- Thumbnail grid — OEM-style, click to lock a specific clip -->
+          ${(function(){
+            var cands = state.avatarBgCandidates || [];
+            if (!cands.length && state.avatarBgLoading) {
+              return '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">'
+                + Array(4).fill(0).map(function(){
+                    return '<div style="aspect-ratio:9/16;border-radius:8px;background:linear-gradient(135deg,#EDE9FE,#FAE8FF);animation:ppBgPulse 1.4s ease-in-out infinite"></div>';
+                  }).join('')
+                + '<style>@keyframes ppBgPulse{0%,100%{opacity:.55}50%{opacity:1}}</style>'
+                + '</div>';
+            }
+            if (!cands.length) {
+              return '<div style="font-size:11px;color:var(--muted);padding:10px;text-align:center;background:#fff;border-radius:8px;border:1px dashed var(--line)">'
+                + T('ไม่มี preview สำหรับฉากนี้ — ใช้ video bg อัตโนมัติ', 'No previews for this scene — using auto bg')
+                + '</div>';
+            }
+            return '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">'
+              + cands.slice(0, 8).map(function(v, i){
+                  var picked = state.avatarBgPickedUrl
+                    ? (v.url === state.avatarBgPickedUrl)
+                    : (i === 0 && !state.avatarBgPickedUrl);
+                  var thumb = v.preview || '';
+                  var thumbStyle = thumb
+                    ? 'background-image:url('+thumb+');background-size:cover;background-position:center'
+                    : 'background:linear-gradient(135deg,#1a0033,#4A0E2C)';
+                  return '<button data-bgpick="'+escText(v.url||'')+'" '
+                    + 'style="position:relative;aspect-ratio:9/16;border-radius:8px;border:'+(picked?'3px solid var(--orange)':'2px solid transparent')+';padding:0;cursor:pointer;overflow:hidden;'+thumbStyle+';transition:transform .15s">'
+                    + (picked ? '<span style="position:absolute;top:4px;right:4px;width:18px;height:18px;border-radius:99px;background:var(--orange);color:#fff;display:grid;place-items:center;font-size:10px;font-weight:800">✓</span>' : '')
+                    + (v.isLocal ? '<span style="position:absolute;bottom:4px;left:4px;font-size:8px;font-weight:800;color:#fff;background:rgba(0,0,0,.55);padding:1px 5px;border-radius:4px;letter-spacing:.04em">LOCAL</span>' : '')
+                    + (v.duration ? '<span style="position:absolute;bottom:4px;right:4px;font-size:8px;font-weight:800;color:#fff;background:rgba(0,0,0,.55);padding:1px 5px;border-radius:4px">'+Math.round(v.duration)+'s</span>' : '')
+                    + '</button>';
+                }).join('')
+              + '</div>'
+              + '<div style="font-size:9.5px;color:var(--muted);margin-top:6px;text-align:right">' + T('คลิปจาก Pexels (ใช้ฟรี เครดิตที่ pexels.com)','Clips from Pexels (free, credit pexels.com)') + '</div>';
+          })()}
           <input type="file" accept="video/*" id="ppAvatarBgUploadInput" style="display:none"/>
         </div>
         <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
@@ -3716,6 +3781,7 @@ render();
     if (t.id==='ppTopicCount') { state.topicCount = t.value; return; }
     if (t.id==='ppGenTopic') { state.selectedTopic = t.value; return; }
     if (t.id==='ppAvatarScript') { state.avatarScript = t.value; return; }
+    if (t.id==='ppAvatarBgSearch') { state.avatarBgSearch = t.value; return; }
     if (t.id==='ppTtvPrompt') { state.ttvPrompt = t.value; return; }
     var ab = liveBrand(); if (!ab) return;
     if (t.id==='ppBrandNameEdit') ab.name = t.value;
@@ -4828,6 +4894,8 @@ render();
     if (bgBtn) {
       e.preventDefault();
       var sceneId = bgBtn.getAttribute('data-bgscene');
+      // Picking a scene chip clears any free-text search override
+      state.avatarBgSearch = '';
       if (sceneId === 'upload') {
         // No upload yet → open file picker. Already uploaded → just switch to it.
         if (!state.avatarBgUploadUrl) {
@@ -4837,8 +4905,42 @@ render();
         state.avatarBgScene = 'upload'; render(); return;
       }
       state.avatarBgScene = sceneId;
-      if (sceneId === 'off') { render(); return; }
-      // Re-fetch a Pexels video matching the new scene (auto = bizType, otherwise the preset query)
+      // Reset locked pick when switching scene — fetch will repopulate candidates
+      state.avatarBgPickedUrl = '';
+      if (sceneId === 'off') { state.avatarBgCandidates = []; render(); return; }
+      // Re-fetch Pexels candidates matching the new scene (auto = bizType, otherwise the preset query)
+      fetchAvatarBg();
+      render();
+      return;
+    }
+    // OEM-style: click a specific Pexels thumbnail → lock that exact clip as bg
+    var bgPick = e.target.closest('[data-bgpick]');
+    if (bgPick) {
+      e.preventDefault();
+      var pickUrl = bgPick.getAttribute('data-bgpick');
+      if (pickUrl) {
+        state.avatarBgPickedUrl = pickUrl;
+        state.avatarPreviewBgUrl = pickUrl;
+        render();
+      }
+      return;
+    }
+    // Free-text Pexels search (OEM-style): run query against /pexels-video-search
+    if (e.target.closest('[data-bgsearch]')) {
+      e.preventDefault();
+      var qInp = document.getElementById('ppAvatarBgSearch');
+      var q = qInp ? qInp.value.trim() : '';
+      state.avatarBgSearch = q;
+      state.avatarBgPickedUrl = '';
+      if (!q) { fetchAvatarBg(); render(); return; }
+      fetchAvatarBg();
+      render();
+      return;
+    }
+    if (e.target.closest('[data-bgsearchclear]')) {
+      e.preventDefault();
+      state.avatarBgSearch = '';
+      state.avatarBgPickedUrl = '';
       fetchAvatarBg();
       render();
       return;
@@ -4851,6 +4953,16 @@ render();
     if (e.target.closest('[data-pickrefproduct]')) { e.preventDefault(); pickRefProductModal(); return; }
     if (e.target.closest('[data-genvideoprompt]')) { e.preventDefault(); genVideoPrompt(); return; }
     if (e.target.closest('[data-addtoday]'))     { e.preventDefault(); openDraftPickerForDay(state.calDay || 1); return; }
+  });
+  // Enter-key submit for the Pexels bg search field — same as clicking "Go"
+  document.addEventListener('keydown', function(e){
+    if (e.key === 'Enter' && e.target && e.target.id === 'ppAvatarBgSearch') {
+      e.preventDefault();
+      state.avatarBgSearch = e.target.value.trim();
+      state.avatarBgPickedUrl = '';
+      fetchAvatarBg();
+      render();
+    }
   });
   // File-input change → read base64, store
   document.addEventListener('change', function(e){
@@ -5699,7 +5811,25 @@ render();
       state.shopStats = { count: j.count || prods.length, inStock: inStock, avgPrice: avg.toLocaleString(), rating: avgR };
       // persist the scraped catalog onto the active brand so it survives reloads
       var _ab = BRANDS.filter(function(b){ return b.id===state.brand; })[0];
-      if (_ab) { _ab.products = PRODUCTS; _ab.shopStats = state.shopStats; _ab.shopUrl = url; saveBrands(); }
+      if (_ab) {
+        // ── Capture whatever's currently typed in the brand-edit form above ──
+        // The input/change handlers should keep _ab in sync, but if the user
+        // pasted/typed without blurring (or the handler missed it), pull the
+        // live DOM value so saveBrands() persists everything visible.
+        var _nameEl = document.getElementById('ppBrandNameEdit');
+        var _bizEl  = document.getElementById('ppBizType');
+        var _descEl = document.getElementById('ppBrandDesc');
+        if (_nameEl && _nameEl.value.trim()) _ab.name = _nameEl.value.trim();
+        if (_bizEl  && _bizEl.value)         _ab.bizType = _bizEl.value;
+        if (_descEl && _descEl.value.trim()) { _ab.desc = _descEl.value.trim(); state.brandDesc = _ab.desc; }
+        // Refresh the subtitle from bizType so the brand tile shows the right label after save
+        var _bt = BUSINESS_TYPES.filter(function(x){ return x.th===_ab.bizType || x.en===_ab.bizType; })[0];
+        if (_bt) { _ab.sub_th = _bt.th; _ab.sub_en = _bt.en; }
+        _ab.products = PRODUCTS;
+        _ab.shopStats = state.shopStats;
+        _ab.shopUrl = url;
+        saveBrands();
+      }
       toast((state.lang==='th'?'ดึงข้อมูลสำเร็จ — ':'Synced — ') + (j.count||prods.length) + (state.lang==='th'?' สินค้า':' products'),'success');
     } catch(e){
       toast((state.lang==='th'?'ดึงข้อมูลไม่สำเร็จ: ':'Sync failed: ') + (e.message||''),'error');
@@ -5777,7 +5907,7 @@ render();
     + '[data-filter],[data-filterclose],[data-sortby],[data-instocktoggle],'
     + '[data-gentopics],[data-topicgoal],'
     + '[data-saveproduct],[data-newimgclear],[data-newimg],[data-proddelete],[data-usetopic],[data-genall],[data-savedraft],[data-savevideodraft],[data-editdraft],[data-deletedraft],[data-schedule],[data-avatarscript],[data-veogen],[data-newavatar],'
-    + '[data-uploadavatar],[data-uploadref],[data-clearref],[data-pickrefproduct],[data-refclose],[data-refpick],[data-genvideoprompt],[data-delavatar],[data-addtoday],[data-pickdraft],[data-pickdraftclose],[data-pickdraftgo],[data-tts],[data-pickfbpage],[data-avatarvideo],[data-pastevideourl],[data-locallocaltoggle],[data-bgscene],'
+    + '[data-uploadavatar],[data-uploadref],[data-clearref],[data-pickrefproduct],[data-refclose],[data-refpick],[data-genvideoprompt],[data-delavatar],[data-addtoday],[data-pickdraft],[data-pickdraftclose],[data-pickdraftgo],[data-tts],[data-pickfbpage],[data-avatarvideo],[data-pastevideourl],[data-locallocaltoggle],[data-bgscene],[data-bgpick],[data-bgsearch],[data-bgsearchclear],'
     + '[data-previewaspect],[data-previewidx],[data-downloadpng]';
   document.addEventListener('click', function(e){
     var b = e.target.closest('button, a');
