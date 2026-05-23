@@ -456,7 +456,88 @@ a{color:inherit;text-decoration:none}
 /* Responsive */
 @media(max-width:1280px){.sidebar{width:240px;flex-basis:240px}.search{width:240px}.heroH1{font-size:46px}.title{font-size:32px}}
 @media(max-width:1024px){.g3,.g4,.g5,.g6{grid-template-columns:repeat(2,1fr)}.g12{grid-template-columns:1fr}.span3,.span4,.span5,.span6,.span7,.span8,.span9{grid-column:span 1}.heroH1{font-size:38px}.heroLogo{font-size:54px}.title{font-size:28px}.authShell{grid-template-columns:1fr}.authSide{display:none}.authForm{padding:36px 24px}}
-@media(max-width:820px){.app{flex-direction:column}.sidebar{position:relative;width:100%;height:auto;flex-basis:auto}.navScroll{max-height:300px}.main{padding:18px}.topbar{flex-wrap:wrap}.search{width:100%;order:5}.g2{grid-template-columns:1fr}.hero{padding:32px 24px}.heroH1{font-size:32px}.finalCta{flex-direction:column;padding:32px;text-align:center}}
+
+/* Mobile menu trigger (hamburger) — hidden on desktop, shown on mobile via media query below */
+.mobileMenuBtn{display:none;width:38px;height:38px;border-radius:10px;border:1px solid var(--line);background:var(--surface);align-items:center;justify-content:center;cursor:pointer;flex-shrink:0}
+.mobileMenuBtn:active{background:var(--cream2)}
+/* Backdrop overlay for the slide-out sidebar */
+.mobileBackdrop{display:none;position:fixed;inset:0;background:rgba(15,8,30,.55);z-index:99;backdrop-filter:blur(4px);animation:fade .2s ease}
+
+/* ── TABLET (≤820px) — what existed before, kept ── */
+@media(max-width:820px){.app{flex-direction:column}.navScroll{max-height:300px}.search{width:100%;order:5}.g2{grid-template-columns:1fr}.hero{padding:32px 24px}.heroH1{font-size:32px}.finalCta{flex-direction:column;padding:32px;text-align:center}}
+
+/* ── MOBILE (≤768px) — full handheld layout ── */
+@media(max-width:768px){
+  /* Sidebar becomes a slide-out drawer */
+  .app{flex-direction:row;min-height:100vh}
+  .sidebar{position:fixed;top:0;left:-100%;width:84vw;max-width:340px;height:100vh;z-index:100;transition:left .28s ease;box-shadow:0 0 60px rgba(0,0,0,.4);flex-basis:auto;overflow-y:auto}
+  .sidebar.open{left:0}
+  .mobileBackdrop.show{display:block}
+  .mobileMenuBtn{display:inline-flex}
+  /* Main area fills full width when sidebar is hidden */
+  .main{padding:14px;width:100%}
+  .mainInner{padding:0}
+  /* Topbar — compact, breadcrumb truncates */
+  .topbar{flex-wrap:wrap;gap:8px;padding:10px 0;margin-bottom:14px}
+  .topbar .search{display:none}                          /* full-width search hidden on phone — saves space */
+  .topbar .searchKbd{display:none}
+  .breadcrumb{font-size:13px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .crumb-current{font-weight:700}
+  .topRight{gap:6px}
+  /* Cards: less padding so content fits the narrower frame */
+  .card{padding:14px !important;border-radius:14px}
+  .cardTitle{font-size:16px}
+  .cardSub{font-size:12.5px}
+  .eyebrow{font-size:10px}
+  /* All grids collapse to single column (inline styles too) */
+  .grid,
+  div[style*="grid-template-columns"]:not(.calGrid):not(.authShell):not(.authSocial){
+    grid-template-columns:1fr !important;
+  }
+  /* But keep small icon grids (≤4 small buttons) tight — common chip rows */
+  .g4 > .pill, .g5 > .pill{min-width:0}
+  /* Phone-preview iframe-ish element shouldn't dominate */
+  .phone{max-width:280px;margin:0 auto}
+  /* Touch-friendly buttons */
+  .btn{min-height:40px;padding:0 14px}
+  .btn.sm{min-height:34px}
+  .pill{min-height:30px}
+  /* Tabs scroll horizontally if too many */
+  .tabs{overflow-x:auto;flex-wrap:nowrap;max-width:100%}
+  .tabs .tab{flex-shrink:0}
+  /* Tables become horizontally scrollable */
+  table{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  /* Headings smaller */
+  .title{font-size:22px}
+  h1,h2,h3{line-height:1.3}
+  /* Topbar credit/channel widgets — hide non-essential on tiny screens */
+  .chWidget{display:none}
+  /* Cloud sync pill — move to bottom-right but smaller */
+  /* Hero text */
+  .hero{padding:24px 16px}
+  .heroH1{font-size:26px;line-height:1.25}
+  /* Inputs full width */
+  input.input,select.select,textarea.textarea{font-size:16px} /* 16px stops iOS Safari from zooming on focus */
+  /* Toast bottom + center on mobile */
+  /* Storyboard slot cards are already stacked — no change */
+  /* Modal/dialog ovs (data-refclose etc.) — make them near-fullscreen */
+  /* Any inline style="position:sticky" right column (phone preview pane) — unstick on mobile */
+  div[style*="position:sticky"]{position:static !important}
+}
+
+/* ── PHONE (≤480px) — extra-compact ── */
+@media(max-width:480px){
+  .main{padding:10px}
+  .card{padding:12px !important;border-radius:12px}
+  .cardTitle{font-size:15px}
+  .btn{padding:0 12px;font-size:12.5px}
+  .btn.sm{font-size:11px}
+  .breadcrumb{font-size:12px}
+  .phone{max-width:240px}
+  .heroH1{font-size:22px}
+  /* Brand tile grid — 2 cols even on tiny phones (instead of 1) so they don't get huge */
+  .grid.g2,.brandTiles{grid-template-columns:repeat(2,1fr) !important}
+}
 </style>
 </head>
 <body>
@@ -518,6 +599,7 @@ const state = {
   storyboardSearch: {},       // { [slotIdx]: 'free-text query' } — per-slot custom search override
   previewAspect: '4:5',    // 1:1 | 4:5 | 9:16  — aspect for post preview + PNG download
   previewIndex: 0,         // current slide in carousel
+  sidebarOpen: false,      // mobile drawer state (≤768px) — toggled by the hamburger button
 };
 
 const T = (th, en) => state.lang === 'th' ? th : en;
@@ -530,6 +612,7 @@ const escText = (s) => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(
 const I = (name, size=16, color='currentColor') => {
   const paths = {
     home: '<path d="M3 11l9-8 9 8M5 9.5V21h14V9.5"/>',
+    menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
     user: '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-7 8-7s8 3 8 7"/>',
     users: '<circle cx="9" cy="8" r="4"/><path d="M3 21c0-3.5 2.7-6 6-6s6 2.5 6 6"/><circle cx="17" cy="9" r="3"/><path d="M15 21c0-2 1.5-4 4-4s3 1 3 3"/>',
     lightbulb: '<path d="M9 18h6M10 21h4M12 2a6 6 0 016 6c0 2.5-1 4-2.5 5.5C14 14.5 13.5 16 13.5 17.5h-3c0-1.5-.5-3-2-4C7 12 6 10.5 6 8a6 6 0 016-6z"/>',
@@ -686,7 +769,11 @@ function topbarHTML() {
     return map[state.page] || '';
   })();
   return `<div class="topbar">
-    <div class="topLeft">
+    <div class="topLeft" style="display:flex;align-items:center;gap:10px;min-width:0;flex:1">
+      <!-- Hamburger — only visible ≤768px via CSS — opens the sidebar drawer -->
+      <button class="mobileMenuBtn" data-mobilemenu="1" aria-label="${T('เมนู','Menu')}">
+        ${I('menu', 20, '#5B21B6')}
+      </button>
       <div class="breadcrumb">
         <span>Workspace</span>
         ${I('chev_right', 12)}
@@ -3438,7 +3525,13 @@ function render() {
   if (isPublic) {
     root.innerHTML = `<main class="main"><div class="page">${pageFn()}</div></main>`;
   } else {
-    root.innerHTML = `${sidebarHTML()}<main class="main"><div class="mainInner">${topbarHTML()}<div class="page">${pageFn()}</div></div></main>`;
+    // Mobile drawer: sidebar gets `.open` class when state.sidebarOpen is true;
+    // backdrop overlay shows + closes the drawer on tap.
+    var sideClass = state.sidebarOpen ? ' open' : '';
+    var backdropClass = state.sidebarOpen ? ' show' : '';
+    root.innerHTML = sidebarHTML().replace('class="sidebar"', 'class="sidebar' + sideClass + '"')
+      + '<div class="mobileBackdrop' + backdropClass + '" data-mobilebackdrop="1"></div>'
+      + '<main class="main"><div class="mainInner">' + topbarHTML() + '<div class="page">' + pageFn() + '</div></div></main>';
   }
   window.scrollTo({ top: _keepY, behavior: 'instant' });
   _ppLastPage = state.page;
@@ -3485,11 +3578,26 @@ function setupAvatarBgRotation() {
 // EVENT DELEGATION
 // ====================================================================
 document.addEventListener('click', (e) => {
+  // Mobile drawer — hamburger toggles open/close, backdrop closes
+  if (e.target.closest('[data-mobilemenu]')) {
+    e.preventDefault();
+    state.sidebarOpen = !state.sidebarOpen;
+    render();
+    return;
+  }
+  if (e.target.closest('[data-mobilebackdrop]')) {
+    e.preventDefault();
+    state.sidebarOpen = false;
+    render();
+    return;
+  }
   const goEl = e.target.closest('[data-go]');
   if (goEl) {
     e.preventDefault();
     state.page = goEl.dataset.go;
     if (goEl.dataset.setStep) state.onboardStep = +goEl.dataset.setStep;
+    // Close mobile drawer when navigating to a new page (so the user sees the content)
+    state.sidebarOpen = false;
     render();
     return;
   }
@@ -6868,7 +6976,7 @@ render();
     + '[data-filter],[data-filterclose],[data-sortby],[data-instocktoggle],'
     + '[data-gentopics],[data-topicgoal],'
     + '[data-saveproduct],[data-newimgclear],[data-newimg],[data-proddelete],[data-usetopic],[data-genall],[data-savedraft],[data-savevideodraft],[data-saveavatardraft],[data-editdraft],[data-deletedraft],[data-schedule],[data-avatarscript],[data-veogen],[data-newavatar],[data-rmbgavatar],'
-    + '[data-uploadavatar],[data-uploadref],[data-clearref],[data-pickrefproduct],[data-refclose],[data-refpick],[data-genvideoprompt],[data-delavatar],[data-addtoday],[data-pickdraft],[data-pickdraftclose],[data-pickdraftgo],[data-tts],[data-pickfbpage],[data-avatarvideo],[data-pastevideourl],[data-locallocaltoggle],[data-bgscene],[data-bgpick],[data-bgsearch],[data-bgsearchclear],[data-bginterval],[data-clipdur],[data-avatarabort],[data-genstoryboard],[data-slottoggle],[data-slotsearch],[data-slotpickurl],'
+    + '[data-uploadavatar],[data-uploadref],[data-clearref],[data-pickrefproduct],[data-refclose],[data-refpick],[data-genvideoprompt],[data-delavatar],[data-addtoday],[data-pickdraft],[data-pickdraftclose],[data-pickdraftgo],[data-tts],[data-pickfbpage],[data-avatarvideo],[data-pastevideourl],[data-locallocaltoggle],[data-bgscene],[data-bgpick],[data-bgsearch],[data-bgsearchclear],[data-bginterval],[data-clipdur],[data-avatarabort],[data-genstoryboard],[data-slottoggle],[data-slotsearch],[data-slotpickurl],[data-mobilemenu],[data-mobilebackdrop],'
     + '[data-previewaspect],[data-previewidx],[data-downloadpng]';
   document.addEventListener('click', function(e){
     var b = e.target.closest('button, a');
