@@ -2301,8 +2301,8 @@ function pageAvatar() {
         <h3 class="cardTitle" style="margin-bottom:14px">${T('เลือกระดับคุณภาพ','Pick quality level')}</h3>
         <div class="grid g2" style="gap:10px">
           ${[
-            {id:'free',th:'Audio-reactive',en:'Audio-reactive',sub_th:'ปากขยับตามเสียง · เร็ว · ฟรี',sub_en:'Mouth moves with audio · fast · free',time_th:'~30 วินาที',time_en:'~30 sec',icon:'mic'},
-            {id:'real',th:'Real lip-sync',en:'Real lip-sync',sub_th:'AI sync ปากตามคำจริง · 20-80 เครดิต',sub_en:'AI lip-syncs to actual words · 20-80 credits',time_th:'1-3 นาที',time_en:'1-3 min',icon:'sparkles'},
+            {id:'free',th:'Audio-reactive',en:'Audio-reactive',sub_th:'หายใจ + ขยับเล็กตามเสียง · ฟรี (หน้าไม่ขยับจริง)',sub_en:'Breathing + audio-driven motion · free (face stays still)',time_th:'~30 วินาที',time_en:'~30 sec',icon:'mic'},
+            {id:'real',th:'Real lip-sync',en:'Real lip-sync',sub_th:'หน้า+ปากขยับตามคำจริง · ใช้ fal.ai (แนะนำ)',sub_en:'Real face + mouth animation via fal.ai (recommended)',time_th:'1-3 นาที',time_en:'1-3 min',icon:'sparkles'},
           ].map(m=>{
             const on = m.id === state.avatarMode;
             return `<button class="toneTile ${on?'active':''}" data-set="avatarMode=${m.id}" style="flex-direction:column;align-items:flex-start;gap:8px;padding:14px">
@@ -2316,6 +2316,12 @@ function pageAvatar() {
             </button>`;
           }).join('')}
         </div>
+        ${state.avatarMode==='free'?`
+        <div style="margin-top:12px;padding:11px 13px;border-radius:10px;background:#FEF3C7;border:1px solid #FDE68A;display:flex;align-items:flex-start;gap:9px;font-size:11.5px;line-height:1.55;color:#92400E">
+          ${I('info',14,'#92400E')}
+          <div><b>${T('ในโหมดนี้หน้าจะไม่ขยับจริง','Face stays static in this mode')}</b> — ${T('แค่หายใจ + ขยับเล็กตามเสียง','just breathing + audio-driven motion')}<br>
+          ${T('อยากให้หน้าขยับตามคำพูดจริง? เปลี่ยนเป็น','Want real face animation? Switch to')} <b>${T('Real lip-sync','Real lip-sync')}</b> ${T('+ เลือกโมเดล','+ pick model')} <b>OmniHuman v1.5</b> ${T('(เคลื่อนไหวตัวด้วย)','(body motion too)')}</div>
+        </div>`:''}
         ${state.avatarMode==='real'?`
         <div style="margin-top:14px;padding-top:14px;border-top:1px dashed var(--line)">
           <div class="micro" style="font-weight:700;color:var(--purple);margin-bottom:8px">${T('โมเดล lip-sync','Lip-sync model')}</div>
@@ -4745,8 +4751,13 @@ render();
       }
     } catch (falErr) {
       var msg = (falErr && falErr.message) || '';
-      // FAL_KEY missing → silently fall back to canvas (no error toast — user might not need fal)
+      // FAL_KEY missing → surface it CLEARLY this time so the user knows why their
+      // face isn't animating (was silent before — they'd just see a static portrait
+      // and wonder "what happened to lipsync?")
       if (/FAL_KEY/i.test(msg)) {
+        toast(state.lang==='th'
+          ? '⚠ FAL_KEY ยังไม่ได้ตั้งบน Vercel — หน้าจะนิ่งใช้แบบ static (ขยับเล็กตามเสียง)'
+          : '⚠ FAL_KEY not set on Vercel — face will stay static (audio-reactive motion only)', 'error');
         console.log('[avatar-video] FAL_KEY not set — using client-side canvas fallback');
       } else {
         toast((state.lang==='th'?'fal.ai ใช้ไม่ได้ ใช้แบบ static แทน: ':'fal.ai unavailable, using static: ')+msg, 'error');
@@ -4896,6 +4907,21 @@ render();
       // by default — we get a silent render for the user while the recording
       // still captures the PCM data via MediaStreamAudioDestinationNode.
       srcNode.connect(dest);
+      // Audio analyser — drives the "audio-reactive" motion on static portraits.
+      // Tee the source through an AnalyserNode so drawFrame can read amplitude per RAF tick.
+      // (Lipsync mode has real face animation already; this only kicks in for static avatars.)
+      var analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 512;                                  // ~256 freq bins → cheap to read
+      var freqData = new Uint8Array(analyser.frequencyBinCount);
+      srcNode.connect(analyser);                               // analyser is a sink, doesn't double-route to speakers
+      function readAudioLevel(){
+        try {
+          analyser.getByteFrequencyData(freqData);
+          var sum = 0;
+          for (var ai = 0; ai < freqData.length; ai++) sum += freqData[ai];
+          return sum / (freqData.length * 255);                // 0..1
+        } catch (_) { return 0; }
+      }
       // DO NOT set audioEl.muted = true or volume = 0 here — Chrome propagates
       // those properties INTO the MediaElementSource output, so muting the element
       // ends up writing digital silence (-91 dB) into the recording. That was the
@@ -5006,34 +5032,61 @@ render();
         var bigR = Math.floor(W * 0.29);     // radius ≈ 313 px on 1080-wide canvas
         var bigX = W / 2;
         var bigY = Math.floor(H * 0.38);     // 38% from top — talking-head sweet spot
+
+        // ── Live motion for static avatars (Audio-reactive mode) ──
+        // Real lipsync mode bypasses these — its video frames already include
+        // mouth/head movement. For static portraits we synthesise:
+        //   - breathing: slow sin pulse (~3.5s period, ±1.2% scale)
+        //   - audio bob: amplitude-driven extra scale + downward bob (mouth-ish)
+        //   - blink: a brief vertical squish every ~3.8 sec (100 ms duration)
+        //   - sway: very subtle X drift via sin wave (period 7s, ±4 px)
+        // Result feels alive instead of a frozen photograph, but stays subtle
+        // enough not to look uncanny.
+        var motionScale = 1.0, motionDx = 0, motionDy = 0, blinkSquish = 1.0;
+        if (!avLipsyncVideo) {
+          var lvl = readAudioLevel();                                  // 0..1
+          var breathe = Math.sin(elapsed * (2 * Math.PI / 3.5)) * 0.012;
+          var sway    = Math.sin(elapsed * (2 * Math.PI / 7.0)) * 4;   // ±4 px
+          motionScale = 1 + breathe + lvl * 0.04;                      // up to +4% on loud syllables
+          motionDx = sway;
+          motionDy = lvl * 6;                                          // tiny mouth-ward bob
+          // Blink — squish vertically every 3.8s for 100 ms
+          var blinkPhase = elapsed % 3.8;
+          if (blinkPhase < 0.1) {
+            blinkSquish = 1 - 0.55 * Math.sin(blinkPhase / 0.1 * Math.PI);
+          }
+        }
+
         // Soft dark vignette behind the avatar for separation from the bg video
-        var halo = cx.createRadialGradient(bigX, bigY, bigR * 0.7, bigX, bigY, bigR * 1.45);
+        var halo = cx.createRadialGradient(bigX + motionDx, bigY + motionDy, bigR * 0.7, bigX + motionDx, bigY + motionDy, bigR * 1.45);
         halo.addColorStop(0, 'rgba(0,0,0,0)');
         halo.addColorStop(1, 'rgba(0,0,0,.45)');
         cx.fillStyle = halo;
-        cx.fillRect(bigX - bigR * 1.5, bigY - bigR * 1.5, bigR * 3, bigR * 3);
+        cx.fillRect(bigX + motionDx - bigR * 1.5, bigY + motionDy - bigR * 1.5, bigR * 3, bigR * 3);
         // Clip + draw the portrait inside the circle.
         // Prefer the live lipsync video (real mouth movement) over the static portrait.
         cx.save();
+        // Apply the live motion transforms BEFORE clipping so the whole circle
+        // (including its clip path) moves together — no visible seam at the edge.
+        cx.translate(bigX + motionDx, bigY + motionDy);
+        cx.scale(motionScale, motionScale * blinkSquish);
+        cx.translate(-bigX, -bigY);
         cx.beginPath(); cx.arc(bigX, bigY, bigR, 0, Math.PI * 2); cx.closePath(); cx.clip();
         if (avLipsyncVideo && avLipsyncVideo.readyState >= 2) {
           // The fal.ai output is usually landscape (e.g. 896×448 from OmniHuman) —
           // crop the center vertical slice so the face sits in the circle.
           var vvw = avLipsyncVideo.videoWidth || 896;
           var vvh = avLipsyncVideo.videoHeight || 448;
-          var vvr = vvw / vvh;          // > 1 for landscape
+          var vvr = vvw / vvh;
           var sdw, sdh, sdx, sdy;
           if (vvr >= 1) {
-            // Landscape: fit height, crop sides
             sdh = bigR * 2; sdw = sdh * vvr; sdx = bigX - sdw / 2; sdy = bigY - bigR;
           } else {
-            // Portrait: fit width, crop top/bottom
             sdw = bigR * 2; sdh = sdw / vvr; sdx = bigX - bigR;
             sdy = bigY - bigR - (sdh - bigR * 2) * 0.18;
           }
           cx.drawImage(avLipsyncVideo, sdx, sdy, sdw, sdh);
         } else if (avImg) {
-          // Static portrait fallback
           var iw = avImg.naturalWidth, ih = avImg.naturalHeight, ir = iw / ih, cr2 = 1;
           var idw, idh, idx2, idy;
           if (ir > cr2) {
@@ -5044,7 +5097,6 @@ render();
           }
           cx.drawImage(avImg, idx2, idy, idw, idh);
         } else {
-          // Initial-letter fallback (large)
           cx.fillStyle = bizGrad[2];
           cx.fillRect(bigX - bigR, bigY - bigR, bigR * 2, bigR * 2);
           cx.fillStyle = '#fff'; cx.font = '900 220px Prompt, sans-serif';
@@ -5052,11 +5104,17 @@ render();
           cx.fillText((picked && picked.initial_th) || (picked && picked.name_th || '?').charAt(0), bigX, bigY);
         }
         cx.restore();
-        // White ring + subtle outer glow ring
+        // White ring + subtle outer glow ring — also move with the motion so the
+        // ring tracks the avatar instead of staying fixed in space.
+        cx.save();
+        cx.translate(bigX + motionDx, bigY + motionDy);
+        cx.scale(motionScale, motionScale * blinkSquish);
+        cx.translate(-bigX, -bigY);
         cx.lineWidth = 10; cx.strokeStyle = 'rgba(255,255,255,.95)';
         cx.beginPath(); cx.arc(bigX, bigY, bigR, 0, Math.PI * 2); cx.stroke();
         cx.lineWidth = 4; cx.strokeStyle = 'rgba(255,255,255,.30)';
         cx.beginPath(); cx.arc(bigX, bigY, bigR + 16, 0, Math.PI * 2); cx.stroke();
+        cx.restore();
 
         // ─── Bottom: caption card (subtitles only, 2-3 lines visible) ───
         // Smaller than before so it doesn't block the avatar; auto-scrolls with the clip.
