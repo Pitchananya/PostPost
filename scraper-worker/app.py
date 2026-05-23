@@ -198,11 +198,18 @@ def scrape(shop_arg):
             pass
 
 
+def _auth_ok():
+    if not WORKER_KEY:
+        return True
+    return request.headers.get("Authorization", "") == "Bearer " + WORKER_KEY
+
+
 @app.post("/scrape")
 def scrape_route():
-    if WORKER_KEY:
-        if request.headers.get("Authorization", "") != "Bearer " + WORKER_KEY:
-            return jsonify({"error": "unauthorized", "message": "bad worker key"}), 401
+    """Synchronous mode (legacy). Will time out on Vercel Hobby (60s limit) for
+    cold-started workers — clients should prefer /scrape-async + /job/<id>."""
+    if not _auth_ok():
+        return jsonify({"error": "unauthorized", "message": "bad worker key"}), 401
     body = request.get_json(silent=True) or {}
     url = body.get("url")
     if not url:
@@ -214,9 +221,58 @@ def scrape_route():
         return jsonify({"error": "worker", "message": str(e)}), 500
 
 
+# ===== Async job pattern =====
+# /scrape-async — returns {job_id} immediately, runs scrape on a background thread
+# /job/<id>     — returns {status: pending|done|error, result?}
+# This is the right pattern for Vercel proxies: the serverless function returns
+# in <2s with the job_id (well under the 60s timeout), then the frontend polls
+# /job/<id> through Vercel as many times as needed.
+import threading
+import uuid
+_jobs = {}
+_jobs_lock = threading.Lock()
+
+
+def _run_job(job_id, url):
+    try:
+        result = scrape(url)
+        with _jobs_lock:
+            _jobs[job_id] = {"status": "done" if result.get("ok") else "error", "result": result}
+    except Exception as e:
+        with _jobs_lock:
+            _jobs[job_id] = {"status": "error", "result": {"error": "worker", "message": str(e)}}
+
+
+@app.post("/scrape-async")
+def scrape_async_route():
+    if not _auth_ok():
+        return jsonify({"error": "unauthorized", "message": "bad worker key"}), 401
+    body = request.get_json(silent=True) or {}
+    url = body.get("url")
+    if not url:
+        return jsonify({"error": "url", "message": "url required"}), 400
+    job_id = uuid.uuid4().hex
+    with _jobs_lock:
+        _jobs[job_id] = {"status": "pending"}
+    # daemon=True so the thread doesn't block worker shutdown on Render redeploy
+    threading.Thread(target=_run_job, args=(job_id, url), daemon=True).start()
+    return jsonify({"ok": True, "job_id": job_id, "status": "pending"}), 202
+
+
+@app.get("/job/<job_id>")
+def job_status_route(job_id):
+    if not _auth_ok():
+        return jsonify({"error": "unauthorized", "message": "bad worker key"}), 401
+    with _jobs_lock:
+        job = _jobs.get(job_id)
+    if not job:
+        return jsonify({"error": "not_found", "message": "job not found (expired or never existed)"}), 404
+    return jsonify(job), 200
+
+
 @app.get("/")
 def health():
-    return jsonify({"ok": True, "service": "shopee-scraper-worker", "proxy": bool(PROXY)})
+    return jsonify({"ok": True, "service": "shopee-scraper-worker", "proxy": bool(PROXY), "jobs": len(_jobs)})
 
 
 if __name__ == "__main__":

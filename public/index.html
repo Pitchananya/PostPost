@@ -4765,9 +4765,31 @@ render();
     state.shopUrl = url;
     state.shopScraping = true;
     render();
-    toast(state.lang==='th'?'กำลังดึงข้อมูลจาก Shopee… อาจใช้เวลาสักครู่':'Scraping Shopee… this may take a minute');
+    toast(state.lang==='th'?'กำลังดึงข้อมูลจาก Shopee… อาจใช้เวลา 1-3 นาที':'Scraping Shopee… 1-3 minutes');
     try {
-      var j = await api('/api/shopee/scrape', { method:'POST', body:{ url: url } });
+      // Async pattern: submit returns 202 + job_id, then poll until done.
+      // This avoids Vercel's 60s function timeout for slow cold-started workers.
+      var sub = await api('/api/shopee/scrape', { method:'POST', body:{ url: url } });
+      var j = sub;
+      // If backend used async path (cloud mode), poll for completion
+      if (sub && sub.job_id && sub.status === 'pending') {
+        var pollMax = 90;                              // 90 × 4s = 6 min hard cap
+        for (var k = 0; k < pollMax; k++) {
+          await new Promise(function(r){ setTimeout(r, 4000); });
+          try {
+            var st = await api('/api/shopee/scrape-status?job_id=' + encodeURIComponent(sub.job_id));
+            if (st && st.status === 'done') { j = st.result || {}; break; }
+            if (st && st.status === 'error') {
+              j = st.result || { error: 'cloud', message: 'scrape failed on worker' };
+              break;
+            }
+            // status='pending' or 'not_found' → keep polling (Render might be cold-starting)
+          } catch (pollErr) {
+            // transient network — keep polling
+          }
+        }
+        if (!j || (!j.products && !j.ok)) throw new Error('หมดเวลารอ Render worker (~6 นาที) — ลองใหม่อีกครั้ง');
+      }
       var prods = j.products || [];
       if (!prods.length) { toast(state.lang==='th'?'ไม่พบสินค้าในร้านนี้':'No products found','error'); return; }
       PRODUCTS = prods.slice(0, 24).map(function(p, i){
