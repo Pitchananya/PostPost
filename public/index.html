@@ -2366,6 +2366,8 @@ function pageAvatar() {
                 ${on?`<span style="position:absolute;top:6px;right:6px;width:20px;height:20px;border-radius:99px;background:var(--orange);color:#fff;display:grid;place-items:center;font-size:11px;font-weight:900;z-index:2">✓</span>`:''}
                 ${a.isCustom?`<span style="position:absolute;top:6px;left:6px;background:rgba(0,0,0,.55);color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:5px;z-index:2">${a.sub_th==='อัปโหลดเอง'||a.sub_en==='Uploaded'?T('UPLOAD','UPLOAD'):T('AI','AI')}</span>`:''}
                 ${a.isCustom?`<span data-delavatar="${a.id}" title="${T('ลบ','Delete')}" style="position:absolute;bottom:6px;right:6px;width:22px;height:22px;border-radius:99px;background:rgba(0,0,0,.55);color:#fff;display:grid;place-items:center;cursor:pointer;z-index:3;font-size:14px;line-height:1">×</span>`:''}
+                ${a.isCustom && a.image && !a.bgRemoved ? `<span data-rmbgavatar="${a.id}" title="${T('ลบพื้นหลังออก','Remove background')}" style="position:absolute;bottom:6px;left:6px;background:rgba(91,33,182,.85);color:#fff;font-size:9px;font-weight:800;padding:3px 7px;border-radius:6px;cursor:pointer;z-index:3;display:flex;align-items:center;gap:3px">${I('wand',10,'#fff')} ${state.avatarRmBgLoadingId===a.id?T('…',' …'):T('ลบ bg','RM-BG')}</span>`:''}
+                ${a.bgRemoved?`<span style="position:absolute;bottom:6px;left:6px;background:rgba(16,185,129,.85);color:#fff;font-size:9px;font-weight:800;padding:3px 7px;border-radius:6px;z-index:3">✓ NO-BG</span>`:''}
               </div>
               <b style="font-size:12px;color:var(--purple);margin-top:6px">${t({th:a.name_th,en:a.name_en})}</b>
               <div style="font-size:10px;color:var(--muted)">${t({th:a.sub_th,en:a.sub_en})}</div>
@@ -5204,16 +5206,72 @@ render();
     }
   }
 
+  // ── 🪄 Remove background from a custom avatar ─────────────────────────
+  // Sends the portrait to /api/ai/remove-bg (fal-ai/birefnet) and replaces the
+  // tile's `image` with a transparent-bg PNG. The canvas compositor then drops
+  // just the person onto the Pexels bg without a competing room/setting.
+  async function removeAvatarBg(avatarId){
+    var arr = (state.customAvatars||[]);
+    var av = arr.filter(function(a){ return a.id===avatarId; })[0];
+    if (!av || !av.image) { toast(state.lang==='th'?'ไม่พบรูปอวตาร':'Avatar image not found','error'); return; }
+    if (state.avatarRmBgLoadingId === avatarId) return;
+    state.avatarRmBgLoadingId = avatarId; render();
+    toast(state.lang==='th'?'🪄 กำลังลบพื้นหลังออก… (~10 วิ)':'🪄 Removing background… (~10s)');
+    try {
+      var r = await api('/api/ai/remove-bg', { method:'POST', body:{ image_b64: av.image } });
+      if (!r || !r.image_url) throw new Error((r&&r.error)||'no image returned');
+      // Fetch the result + convert to a compressed data URL so it survives reload
+      var blob = await fetch(r.image_url).then(function(rr){ return rr.blob(); });
+      var rawDataUrl = await new Promise(function(resolve, reject){
+        var rd = new FileReader();
+        rd.onload = function(){ resolve(rd.result); };
+        rd.onerror = function(){ reject(new Error('read fail')); };
+        rd.readAsDataURL(blob);
+      });
+      // Keep the PNG (alpha is critical) — compress only the dimensions
+      var compressed = await compressImageDataUrl(rawDataUrl, 600, 1.0).catch(function(){ return rawDataUrl; });
+      av.image = compressed;
+      av.bgRemoved = true;
+      saveCustomAvatars();
+      toast(state.lang==='th'?'ลบพื้นหลังเสร็จ ✓':'Background removed ✓','success');
+    } catch(e){
+      toast((state.lang==='th'?'ลบ bg ไม่สำเร็จ: ':'Remove-bg failed: ')+(e.message||''),'error');
+    } finally {
+      state.avatarRmBgLoadingId = null; render();
+    }
+  }
+
   async function createAvatarWithAI(){
     if (state.avatarGenLoading) return;
-    var name = (window.prompt(state.lang==='th'?'ชื่อผู้บรรยาย (เช่น คุณบีม)':'Presenter name (e.g. Beam)')||'').trim();
+    // Default name + description from brand context so the user can just hit Enter twice
+    var ab = BRANDS.filter(function(b){ return b.id===state.brand; })[0] || {};
+    var biz = (ab.bizType||'').toLowerCase();
+    var defaultDesc = /ดูดวง|สายมู|tarot/.test(biz)
+      ? 'หญิงไทยอายุ 35-40 ปี ผมยาวสีดำเข้ม ใส่ชุดสีน้ำตาลทองมีลายผ้าไทย แววตามั่นใจ ใจดี สุขุม ผู้เชี่ยวชาญด้านการดูดวงและไพ่ทาโรต์'
+      : /สกินแคร์|ความงาม|beauty/.test(biz)
+      ? 'หญิงไทยอายุ 28-32 ปี ผิวเรียบใส แต่งหน้าใสสะอาด ยิ้มอบอุ่น ผู้เชี่ยวชาญด้านสกินแคร์'
+      : /อาหาร|food|กาแฟ|coffee/.test(biz)
+      ? 'ชายไทยอายุ 25-30 ปี หน้าตาเป็นมิตร ยิ้มแย้ม สวมเสื้อเชิ้ตสบายๆ ผู้เชี่ยวชาญด้านอาหารและกาแฟ'
+      : /ฟิตเนส|fit|sport/.test(biz)
+      ? 'ชายไทยอายุ 28-34 ปี รูปร่างฟิต ผิวสีแทน ยิ้มมั่นใจ ผู้ฝึกสอนฟิตเนส'
+      : 'หญิงไทยอายุ 27-32 ปี หน้าตาเป็นมิตร ยิ้มอบอุ่น ลุคโปรเฟสชั่นแนล';
+    var name = (window.prompt(state.lang==='th'?'ชื่อผู้บรรยาย':'Presenter name', (ab.name||'') + ' Avatar')||'').trim();
     if (!name) return;
-    var desc = (window.prompt(state.lang==='th'?'บรรยายลักษณะ (เช่น "หญิงไทย 30 ปี ผู้เชี่ยวชาญสกินแคร์")':'Describe the look (e.g. "Thai woman, 30, skincare expert")')||'').trim();
-    if (!desc) return;
+    var desc = (window.prompt(state.lang==='th'?'บรรยายลักษณะ (เว้นว่างเพื่อใช้แนะนำของแบรนด์)':'Describe the look (blank = use brand suggestion)', defaultDesc)||'').trim();
+    if (!desc) desc = defaultDesc;
     state.avatarGenLoading = true; render();
     toast(state.lang==='th'?'AI กำลังสร้างรูปผู้บรรยาย… (~15 วิ)':'AI is generating presenter portrait…');
     try {
-      var imagePrompt = 'Vertical 3:4 portrait photo of '+desc+', friendly expression, frontal face looking at camera, professional studio lighting, clean neutral background, photorealistic, high detail';
+      // Stronger prompt: explicit head-and-shoulders framing + plain bg (so lipsync engines
+      // can detect the face cleanly + canvas compositor doesn't have to fight setting bleed).
+      // The keywords "headshot", "looking directly at camera", "plain studio background"
+      // force fal.ai-friendly subject isolation.
+      var imagePrompt = 'Professional studio headshot of ' + desc
+        + ', vertical 3:4 portrait framing showing head and upper shoulders,'
+        + ' looking directly at camera with friendly natural expression,'
+        + ' soft even professional lighting, plain neutral light gray studio background,'
+        + ' high resolution photograph, sharp focus on face, no props, no busy background,'
+        + ' suitable for talking-head video avatar';
       var r = await api('/api/ai/gen-image', { method:'POST', body:{ prompt:imagePrompt, provider:'gemini' } });
       if (!r || (!r.image_base64 && !r.image_url)) throw new Error((r&&r.error) || 'no image returned');
       var imgSrc = r.image_base64 ? ('data:image/png;base64,'+r.image_base64) : r.image_url;
@@ -5226,7 +5284,7 @@ render();
         image: imgSrc, isCustom: true,
       };
       await addCustomAvatar(avatar);
-      toast(state.lang==='th'?('สร้างผู้บรรยาย "'+name+'" แล้ว ✓ (เก็บไว้ใช้ครั้งหน้าแล้ว)'):('Created "'+name+'" ✓ (saved for next time)'),'success');
+      toast(state.lang==='th'?('สร้างผู้บรรยาย "'+name+'" แล้ว ✓ — แนะนำกดปุ่ม "ลบ bg" อีกที่ tile'):('Created "'+name+'" ✓ — tip: also hit RM-BG on the tile'),'success');
     } catch(e){
       toast((state.lang==='th'?'สร้างไม่สำเร็จ: ':'Failed: ')+(e.message||''),'error');
     } finally {
@@ -5235,6 +5293,8 @@ render();
   }
   document.addEventListener('click', function(e){
     if (e.target.closest('[data-newavatar]')) { e.preventDefault(); createAvatarWithAI(); }
+    var rmBgEl = e.target.closest('[data-rmbgavatar]');
+    if (rmBgEl) { e.preventDefault(); e.stopPropagation(); removeAvatarBg(rmBgEl.getAttribute('data-rmbgavatar')); return; }
   });
 
   // AI-generated Veo prompt from brand + topic + optional reference product
@@ -6583,7 +6643,7 @@ render();
     + '[data-chconnect],[data-chdisconnect],[data-chsave],[data-chclose],'
     + '[data-filter],[data-filterclose],[data-sortby],[data-instocktoggle],'
     + '[data-gentopics],[data-topicgoal],'
-    + '[data-saveproduct],[data-newimgclear],[data-newimg],[data-proddelete],[data-usetopic],[data-genall],[data-savedraft],[data-savevideodraft],[data-saveavatardraft],[data-editdraft],[data-deletedraft],[data-schedule],[data-avatarscript],[data-veogen],[data-newavatar],'
+    + '[data-saveproduct],[data-newimgclear],[data-newimg],[data-proddelete],[data-usetopic],[data-genall],[data-savedraft],[data-savevideodraft],[data-saveavatardraft],[data-editdraft],[data-deletedraft],[data-schedule],[data-avatarscript],[data-veogen],[data-newavatar],[data-rmbgavatar],'
     + '[data-uploadavatar],[data-uploadref],[data-clearref],[data-pickrefproduct],[data-refclose],[data-refpick],[data-genvideoprompt],[data-delavatar],[data-addtoday],[data-pickdraft],[data-pickdraftclose],[data-pickdraftgo],[data-tts],[data-pickfbpage],[data-avatarvideo],[data-pastevideourl],[data-locallocaltoggle],[data-bgscene],[data-bgpick],[data-bgsearch],[data-bgsearchclear],[data-bginterval],[data-clipdur],[data-avatarabort],[data-genstoryboard],[data-slottoggle],[data-slotsearch],[data-slotpickurl],'
     + '[data-previewaspect],[data-previewidx],[data-downloadpng]';
   document.addEventListener('click', function(e){

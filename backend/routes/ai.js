@@ -2662,6 +2662,47 @@ async function uploadDataUrlToBucket(dataUrl, prefix, fallbackExt) {
   return pub.publicUrl;
 }
 
+// 🪄 POST /ai/remove-bg — strip the background from a portrait so the canvas
+// compositor can drop just the person onto a Pexels bg cleanly.
+// body: { image_b64 } → { ok, image_url } (PNG with alpha, hosted on Supabase)
+// Uses fal-ai/birefnet which returns a high-quality alpha matte for human subjects.
+router.post('/remove-bg', async (req, res) => {
+  const { image_b64 } = req.body || {};
+  const falKey = process.env.FAL_KEY;
+  if (!falKey) return res.status(400).json({ error: 'FAL_KEY not set — ตั้ง env ที่ Vercel' });
+  if (!image_b64) return res.status(400).json({ error: 'image_b64 required' });
+
+  try {
+    // 1) Upload the input to Supabase Storage so fal.ai can pull it via URL
+    await ensureLipsyncBucket();
+    const image_url = await uploadDataUrlToBucket(image_b64, 'av-rmbg-in', 'png');
+    // 2) Call fal-ai/birefnet/v2 (sync — usually <10s for a portrait)
+    const r = await fetch('https://fal.run/fal-ai/birefnet/v2', {
+      method: 'POST',
+      headers: { 'Authorization': `Key ${falKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image_url, output_format: 'png' }),
+    });
+    const text = await r.text();
+    if (!r.ok) {
+      // Fall back to the older birefnet model if v2 isn't enabled on the user's account
+      const r2 = await fetch('https://fal.run/fal-ai/birefnet', {
+        method: 'POST',
+        headers: { 'Authorization': `Key ${falKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image_url }),
+      });
+      const text2 = await r2.text();
+      if (!r2.ok) return res.status(502).json({ error: 'remove_bg', detail: (text2 || text).slice(0, 400) });
+      const j2 = JSON.parse(text2);
+      return res.json({ ok: true, image_url: j2.image?.url || j2.url, src_url: image_url });
+    }
+    const j = JSON.parse(text);
+    res.json({ ok: true, image_url: j.image?.url || j.url, src_url: image_url });
+  } catch (e) {
+    console.error('[remove-bg]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 router.post('/lipsync-submit', async (req, res) => {
   const { image_b64, image_url: imageUrlIn, audio_b64, audio_url: audioUrlIn, model: modelIn, prompt: promptIn } = req.body || {};
   const falKey = process.env.FAL_KEY;
