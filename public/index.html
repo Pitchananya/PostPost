@@ -4775,7 +4775,7 @@ render();
     // title pill on top + caption rolling below. Falls back to themed gradient
     // if PEXELS_API_KEY isn't configured.
     var renderModeMsg = state.avatarLipsyncRawVideo
-      ? (state.lang==='th'?'🎬 ประกอบ lip-sync จาก fal.ai เข้ากับพื้นหลัง… ~30-60 วิ':'🎬 Compositing fal.ai lipsync with bg… ~30-60s')
+      ? (state.lang==='th'?'🎬 ประกอบ lip-sync จาก fal.ai เข้ากับพื้นหลัง… ~30-60 วิ (chroma-key bg)':'🎬 Compositing fal.ai lipsync with bg… ~30-60s (chroma-key bg)')
       : (state.lang==='th'?'🎬 กำลังเรนเดอร์ (รูปนิ่ง + bg)… ~30-60 วิ — กด Real lip-sync เพื่อให้หน้าขยับ':'🎬 Rendering (static + bg)… ~30-60s — switch to Real lip-sync for face animation');
     toast(renderModeMsg);
     try {
@@ -4908,7 +4908,7 @@ render();
             console.warn('[avatar-video] lipsync play() rejected:', e.message);
             // Don't bail — audioEl.play() later may still succeed.
           }
-        } else {
+        } else if (hasLipsync) {
           toast(state.lang==='th'
             ? '⚠ โหลดวิดีโอ lip-sync จาก fal.ai ไม่ได้ — ใช้รูปนิ่งแทน'
             : '⚠ Could not load fal.ai lipsync video — using static portrait', 'error');
@@ -4921,6 +4921,89 @@ render();
           im.onerror = function(){ resolve(null); };
           im.src = picked.image;
         });
+      }
+
+      // 4b) Chroma-key detection — sample 4 corner pixels of the avatar source.
+      //     Returns 'green' (>= 3 corners are bright green chroma)
+      //          OR 'black' (>= 3 corners are near-black — fal.ai's default)
+      //          OR 'none'  (regular photo bg — fall back to circle clip)
+      //     Following the production brief, GREEN (#00FF00) is the primary chroma
+      //     color. BLACK is supported automatically for fal.ai outputs so legacy
+      //     workflows still composite cleanly.
+      var chromaCanvas = document.createElement('canvas');
+      var chromaCx = chromaCanvas.getContext('2d', { willReadFrequently: true });
+      var chromaMode = 'none';
+      try {
+        var sampleSrc = avLipsyncVideo || avImg;
+        if (sampleSrc) {
+          var sw = sampleSrc.videoWidth || sampleSrc.naturalWidth || 256;
+          var sh = sampleSrc.videoHeight || sampleSrc.naturalHeight || 256;
+          chromaCanvas.width = Math.min(sw, 256);
+          chromaCanvas.height = Math.min(sh, 256);
+          chromaCx.drawImage(sampleSrc, 0, 0, chromaCanvas.width, chromaCanvas.height);
+          var samples = [
+            chromaCx.getImageData(2, 2, 1, 1).data,
+            chromaCx.getImageData(chromaCanvas.width-3, 2, 1, 1).data,
+            chromaCx.getImageData(2, chromaCanvas.height-3, 1, 1).data,
+            chromaCx.getImageData(chromaCanvas.width-3, chromaCanvas.height-3, 1, 1).data,
+          ];
+          var greenCount = 0, blackCount = 0;
+          for (var si = 0; si < samples.length; si++) {
+            var pr = samples[si][0], pg = samples[si][1], pb = samples[si][2];
+            if (pg > 110 && pg > pr * 1.3 && pg > pb * 1.3) greenCount++;
+            if (pr < 25 && pg < 25 && pb < 25) blackCount++;
+          }
+          if (greenCount >= 3) chromaMode = 'green';
+          else if (blackCount >= 3) chromaMode = 'black';
+          console.log('[avatar-video] Avatar bg detected: ' + chromaMode + ' (green='+greenCount+', black='+blackCount+')');
+        }
+      } catch (e) {
+        console.warn('[avatar-video] chroma detection failed:', e.message);
+      }
+      // Helper — chroma-key the current avatar frame at low-res (faster) and
+      // return the resulting alpha-aware canvas ready to drawImage to main.
+      // Re-uses chromaCanvas (offscreen) — DOES NOT allocate per frame.
+      var chromaWorkW = 480, chromaWorkH = 480;
+      function chromaKeyFrame(src) {
+        chromaCanvas.width = chromaWorkW;
+        chromaCanvas.height = chromaWorkH;
+        chromaCx.clearRect(0, 0, chromaWorkW, chromaWorkH);
+        // Cover-fit: square crop centered on the face (top portion of portrait)
+        var sw = src.videoWidth || src.naturalWidth || chromaWorkW;
+        var sh = src.videoHeight || src.naturalHeight || chromaWorkH;
+        var sr = sw / sh;
+        var dw, dh, dx, dy;
+        if (sr >= 1) {
+          dh = chromaWorkH; dw = dh * sr; dx = (chromaWorkW - dw) / 2; dy = 0;
+        } else {
+          dw = chromaWorkW; dh = dw / sr; dx = 0;
+          dy = -(dh - chromaWorkH) * 0.18;     // shift face up like the static crop
+        }
+        chromaCx.drawImage(src, dx, dy, dw, dh);
+        var imgData = chromaCx.getImageData(0, 0, chromaWorkW, chromaWorkH);
+        var d = imgData.data;
+        if (chromaMode === 'green') {
+          for (var i = 0; i < d.length; i += 4) {
+            var r = d[i], g = d[i+1], b = d[i+2];
+            // Drop pure green; soft alpha ramp on the edge so hair/skin survives
+            if (g > 80 && g > r * 1.15 && g > b * 1.15) {
+              var greenness = (g - Math.max(r, b));      // 0..255
+              if (greenness > 60)       d[i+3] = 0;       // pure green → transparent
+              else if (greenness > 20)  d[i+3] = Math.max(0, 255 - greenness * 4);
+              // Spill suppress: pull green channel down toward avg(r,b) so green
+              // halos around hair fade out
+              if (greenness > 10) d[i+1] = Math.round((r + b) / 2);
+            }
+          }
+        } else if (chromaMode === 'black') {
+          for (var i2 = 0; i2 < d.length; i2 += 4) {
+            var lum = 0.299 * d[i2] + 0.587 * d[i2+1] + 0.114 * d[i2+2];
+            if (lum < 22)      d[i2+3] = 0;
+            else if (lum < 50) d[i2+3] = Math.round((lum - 22) / 28 * 255);
+          }
+        }
+        chromaCx.putImageData(imgData, 0, 0);
+        return chromaCanvas;
       }
 
       // 5) Canvas + audio recording setup
@@ -5059,12 +5142,14 @@ render();
         cx.textAlign = 'right'; cx.textBaseline = 'middle';
         cx.fillText('LIVE', W - 100, 94);
 
-        // ─── Centered big avatar circle ─────────────────────────────────
-        // Sized at ~58% of the frame width, vertically positioned with the chin
-        // a bit above the 50% mark so the caption card has room below.
-        var bigR = Math.floor(W * 0.29);     // radius ≈ 313 px on 1080-wide canvas
+        // ─── Centered big avatar — chroma-key for fal.ai lipsync, circle for static ──
+        // fal.ai outputs (Infinitalk/OmniHuman) come on a near-black background. We
+        // chroma-key the black so the avatar truly INSIDE the Pexels bg instead of
+        // sitting on top of a visible black square. Static portraits stay in a circle
+        // clip (their backgrounds vary, circle hides the original setting).
+        var bigR = Math.floor(W * 0.30);     // radius ≈ 324 px on 1080-wide canvas
         var bigX = W / 2;
-        var bigY = Math.floor(H * 0.38);     // 38% from top — talking-head sweet spot
+        var bigY = Math.floor(H * 0.40);     // ~40% from top — talking-head sweet spot
 
         // ── Live motion for static avatars (Audio-reactive mode) ──
         // Real lipsync mode bypasses these — its video frames already include
@@ -5090,64 +5175,80 @@ render();
           }
         }
 
-        // Soft dark vignette behind the avatar for separation from the bg video
-        var halo = cx.createRadialGradient(bigX + motionDx, bigY + motionDy, bigR * 0.7, bigX + motionDx, bigY + motionDy, bigR * 1.45);
-        halo.addColorStop(0, 'rgba(0,0,0,0)');
-        halo.addColorStop(1, 'rgba(0,0,0,.45)');
-        cx.fillStyle = halo;
-        cx.fillRect(bigX + motionDx - bigR * 1.5, bigY + motionDy - bigR * 1.5, bigR * 3, bigR * 3);
-        // Clip + draw the portrait inside the circle.
-        // Prefer the live lipsync video (real mouth movement) over the static portrait.
-        cx.save();
-        // Apply the live motion transforms BEFORE clipping so the whole circle
-        // (including its clip path) moves together — no visible seam at the edge.
-        cx.translate(bigX + motionDx, bigY + motionDy);
-        cx.scale(motionScale, motionScale * blinkSquish);
-        cx.translate(-bigX, -bigY);
-        cx.beginPath(); cx.arc(bigX, bigY, bigR, 0, Math.PI * 2); cx.closePath(); cx.clip();
-        if (avLipsyncVideo && avLipsyncVideo.readyState >= 2) {
-          // The fal.ai output is usually landscape (e.g. 896×448 from OmniHuman) —
-          // crop the center vertical slice so the face sits in the circle.
-          var vvw = avLipsyncVideo.videoWidth || 896;
-          var vvh = avLipsyncVideo.videoHeight || 448;
-          var vvr = vvw / vvh;
-          var sdw, sdh, sdx, sdy;
-          if (vvr >= 1) {
-            sdh = bigR * 2; sdw = sdh * vvr; sdx = bigX - sdw / 2; sdy = bigY - bigR;
-          } else {
-            sdw = bigR * 2; sdh = sdw / vvr; sdx = bigX - bigR;
-            sdy = bigY - bigR - (sdh - bigR * 2) * 0.18;
-          }
-          cx.drawImage(avLipsyncVideo, sdx, sdy, sdw, sdh);
-        } else if (avImg) {
-          var iw = avImg.naturalWidth, ih = avImg.naturalHeight, ir = iw / ih, cr2 = 1;
-          var idw, idh, idx2, idy;
-          if (ir > cr2) {
-            idh = bigR * 2; idw = idh * ir; idx2 = bigX - idw / 2; idy = bigY - bigR;
-          } else {
-            idw = bigR * 2; idh = idw / ir; idx2 = bigX - bigR;
-            idy = bigY - bigR - (idh - bigR * 2) * 0.18;
-          }
-          cx.drawImage(avImg, idx2, idy, idw, idh);
+        var activeSrc = (avLipsyncVideo && avLipsyncVideo.readyState >= 2) ? avLipsyncVideo : avImg;
+        if (chromaMode !== 'none' && activeSrc) {
+          // ─── CHROMA-KEY PATH ────────────────────────────────────────────
+          // Per-frame chroma-key: replace the source's green/black bg with
+          // transparency, then drop the cutout onto the Pexels bg at large
+          // scale (~75% of canvas height). The avatar truly lives INSIDE the
+          // bg instead of sitting on a visible square. No circle clip.
+          var keyed = chromaKeyFrame(activeSrc);
+          // Target rect: ~750 px wide (about 70% of W), aligned so feet/shoulders
+          // sit just above the caption card. Square because chromaKeyFrame works
+          // at chromaWorkW × chromaWorkH (480×480 square).
+          var avW = 780, avH = 780;
+          var avX = (W - avW) / 2 + motionDx;
+          var avY = bigY - avH * 0.45 + motionDy;        // face roughly at bigY
+          cx.save();
+          cx.translate(avX + avW/2, avY + avH/2);
+          cx.scale(motionScale, motionScale * blinkSquish);
+          cx.translate(-(avX + avW/2), -(avY + avH/2));
+          cx.drawImage(keyed, avX, avY, avW, avH);
+          cx.restore();
         } else {
-          cx.fillStyle = bizGrad[2];
-          cx.fillRect(bigX - bigR, bigY - bigR, bigR * 2, bigR * 2);
-          cx.fillStyle = '#fff'; cx.font = '900 220px Prompt, sans-serif';
-          cx.textAlign = 'center'; cx.textBaseline = 'middle';
-          cx.fillText((picked && picked.initial_th) || (picked && picked.name_th || '?').charAt(0), bigX, bigY);
+          // ─── CIRCLE-CLIP PATH (original) — used for portraits with bg ──
+          // Soft dark vignette behind the avatar for separation from the bg video
+          var halo = cx.createRadialGradient(bigX + motionDx, bigY + motionDy, bigR * 0.7, bigX + motionDx, bigY + motionDy, bigR * 1.45);
+          halo.addColorStop(0, 'rgba(0,0,0,0)');
+          halo.addColorStop(1, 'rgba(0,0,0,.45)');
+          cx.fillStyle = halo;
+          cx.fillRect(bigX + motionDx - bigR * 1.5, bigY + motionDy - bigR * 1.5, bigR * 3, bigR * 3);
+          cx.save();
+          cx.translate(bigX + motionDx, bigY + motionDy);
+          cx.scale(motionScale, motionScale * blinkSquish);
+          cx.translate(-bigX, -bigY);
+          cx.beginPath(); cx.arc(bigX, bigY, bigR, 0, Math.PI * 2); cx.closePath(); cx.clip();
+          if (avLipsyncVideo && avLipsyncVideo.readyState >= 2) {
+            var vvw = avLipsyncVideo.videoWidth || 896;
+            var vvh = avLipsyncVideo.videoHeight || 448;
+            var vvr = vvw / vvh;
+            var sdw, sdh, sdx, sdy;
+            if (vvr >= 1) {
+              sdh = bigR * 2; sdw = sdh * vvr; sdx = bigX - sdw / 2; sdy = bigY - bigR;
+            } else {
+              sdw = bigR * 2; sdh = sdw / vvr; sdx = bigX - bigR;
+              sdy = bigY - bigR - (sdh - bigR * 2) * 0.18;
+            }
+            cx.drawImage(avLipsyncVideo, sdx, sdy, sdw, sdh);
+          } else if (avImg) {
+            var iw = avImg.naturalWidth, ih = avImg.naturalHeight, ir = iw / ih, cr2 = 1;
+            var idw, idh, idx2, idy;
+            if (ir > cr2) {
+              idh = bigR * 2; idw = idh * ir; idx2 = bigX - idw / 2; idy = bigY - bigR;
+            } else {
+              idw = bigR * 2; idh = idw / ir; idx2 = bigX - bigR;
+              idy = bigY - bigR - (idh - bigR * 2) * 0.18;
+            }
+            cx.drawImage(avImg, idx2, idy, idw, idh);
+          } else {
+            cx.fillStyle = bizGrad[2];
+            cx.fillRect(bigX - bigR, bigY - bigR, bigR * 2, bigR * 2);
+            cx.fillStyle = '#fff'; cx.font = '900 220px Prompt, sans-serif';
+            cx.textAlign = 'center'; cx.textBaseline = 'middle';
+            cx.fillText((picked && picked.initial_th) || (picked && picked.name_th || '?').charAt(0), bigX, bigY);
+          }
+          cx.restore();
+          // White ring + subtle outer glow ring — only in circle mode
+          cx.save();
+          cx.translate(bigX + motionDx, bigY + motionDy);
+          cx.scale(motionScale, motionScale * blinkSquish);
+          cx.translate(-bigX, -bigY);
+          cx.lineWidth = 10; cx.strokeStyle = 'rgba(255,255,255,.95)';
+          cx.beginPath(); cx.arc(bigX, bigY, bigR, 0, Math.PI * 2); cx.stroke();
+          cx.lineWidth = 4; cx.strokeStyle = 'rgba(255,255,255,.30)';
+          cx.beginPath(); cx.arc(bigX, bigY, bigR + 16, 0, Math.PI * 2); cx.stroke();
+          cx.restore();
         }
-        cx.restore();
-        // White ring + subtle outer glow ring — also move with the motion so the
-        // ring tracks the avatar instead of staying fixed in space.
-        cx.save();
-        cx.translate(bigX + motionDx, bigY + motionDy);
-        cx.scale(motionScale, motionScale * blinkSquish);
-        cx.translate(-bigX, -bigY);
-        cx.lineWidth = 10; cx.strokeStyle = 'rgba(255,255,255,.95)';
-        cx.beginPath(); cx.arc(bigX, bigY, bigR, 0, Math.PI * 2); cx.stroke();
-        cx.lineWidth = 4; cx.strokeStyle = 'rgba(255,255,255,.30)';
-        cx.beginPath(); cx.arc(bigX, bigY, bigR + 16, 0, Math.PI * 2); cx.stroke();
-        cx.restore();
 
         // ─── Bottom: caption card (subtitles only, 2-3 lines visible) ───
         // Smaller than before so it doesn't block the avatar; auto-scrolls with the clip.
@@ -5363,16 +5464,19 @@ render();
     state.avatarGenLoading = true; render();
     toast(state.lang==='th'?'AI กำลังสร้างรูปผู้บรรยาย… (~15 วิ)':'AI is generating presenter portrait…');
     try {
-      // Stronger prompt: explicit head-and-shoulders framing + plain bg (so lipsync engines
-      // can detect the face cleanly + canvas compositor doesn't have to fight setting bleed).
-      // The keywords "headshot", "looking directly at camera", "plain studio background"
-      // force fal.ai-friendly subject isolation.
+      // Generate on a SOLID GREEN CHROMA-KEY background (#00FF00) so the canvas
+      // compositor can drop the avatar directly onto a Pexels bg. Following the
+      // production brief — green is the industry standard for chroma-key
+      // workflows (max contrast with skin tones, AI models trained on green-screen
+      // footage isolate the subject better than other colors).
       var imagePrompt = 'Professional studio headshot of ' + desc
         + ', vertical 3:4 portrait framing showing head and upper shoulders,'
         + ' looking directly at camera with friendly natural expression,'
-        + ' soft even professional lighting, plain neutral light gray studio background,'
-        + ' high resolution photograph, sharp focus on face, no props, no busy background,'
-        + ' suitable for talking-head video avatar';
+        + ' soft even professional lighting on the subject,'
+        + ' SOLID PURE BRIGHT GREEN BACKGROUND (chroma key green, hex #00FF00, flat seamless saturated lime green),'
+        + ' no gradient, no shadows on the background, no fabric texture,'
+        + ' high resolution photograph, sharp focus on face, no props,'
+        + ' suitable for green screen chroma-key compositing into talking-head video';
       var r = await api('/api/ai/gen-image', { method:'POST', body:{ prompt:imagePrompt, provider:'gemini' } });
       if (!r || (!r.image_base64 && !r.image_url)) throw new Error((r&&r.error) || 'no image returned');
       var imgSrc = r.image_base64 ? ('data:image/png;base64,'+r.image_base64) : r.image_url;
