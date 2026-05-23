@@ -3291,7 +3291,10 @@ function pageCalendar() {
 function pageLibrary() {
   const draftCards = (state.drafts||[]).map(function(d){
     var dt = ''; try { dt = new Date(d.createdAt).toLocaleDateString(state.lang==='th'?'th-TH':'en-US',{day:'2-digit',month:'short'}); } catch(e){}
-    var isVideo = d.kind === 'video';
+    // Talking Avatar drafts (kind:'avatar') belong in the Videos bucket too — they
+    // ARE videos, just produced via a different pipeline than Veo.
+    var isAvatar = d.kind === 'avatar';
+    var isVideo = d.kind === 'video' || isAvatar;
     // Count images BEFORE deriving kind — legacy drafts may not have `imageCount` field
     var imgCount = isVideo ? 0
       : (typeof d.imageCount === 'number' ? d.imageCount
@@ -3299,17 +3302,24 @@ function pageLibrary() {
          : Array.isArray(d.images) ? d.images.filter(Boolean).length
          : 0);
     var kind = isVideo ? 'video' : (imgCount > 1 ? 'album' : imgCount === 1 ? 'image' : 'caption');
+    var videoTitleDefault = isAvatar ? 'Talking Avatar' : 'วิดีโอ Veo';
     return {
       kind: kind,
-      title_th: d.topic || (isVideo ? 'วิดีโอ Veo' : 'คอนเทนต์ดราฟ'),
-      title_en: d.topic || (isVideo ? 'Veo video' : 'Content draft'),
+      title_th: d.topic || (isVideo ? videoTitleDefault : 'คอนเทนต์ดราฟ'),
+      title_en: d.topic || (isVideo ? (isAvatar?'Talking Avatar':'Veo video') : 'Content draft'),
       date: dt,
       status: 'draft',
-      bg: isVideo ? 'linear-gradient(135deg,#1F2937,#4F46E5)' : 'linear-gradient(135deg,#FFE4E6,#FED7AA)',
-      label: isVideo ? (state.lang==='th'?'วิดีโอ':'VIDEO') : 'DRAFT',
+      // Distinguish Avatar drafts visually — purple-pink gradient vs Veo's blue-black
+      bg: isAvatar ? 'linear-gradient(135deg,#5B21B6,#EC4899)'
+                   : isVideo ? 'linear-gradient(135deg,#1F2937,#4F46E5)'
+                             : 'linear-gradient(135deg,#FFE4E6,#FED7AA)',
+      label: isAvatar ? (state.lang==='th'?'อวตาร':'AVATAR')
+                      : isVideo ? (state.lang==='th'?'วิดีโอ':'VIDEO')
+                                : 'DRAFT',
       isDraft: true,
       draftId: d.id,
-      image: d.thumb || (isVideo ? (d.referenceImage||'') : ''),
+      // Avatar thumbnail = the captured poster, else the avatar photo
+      image: d.thumb || (isAvatar ? (d.avatarThumb||'') : isVideo ? (d.referenceImage||'') : ''),
       imageCount: imgCount,
     };
   });
@@ -5284,7 +5294,16 @@ render();
         image: imgSrc, isCustom: true,
       };
       await addCustomAvatar(avatar);
-      toast(state.lang==='th'?('สร้างผู้บรรยาย "'+name+'" แล้ว ✓ — แนะนำกดปุ่ม "ลบ bg" อีกที่ tile'):('Created "'+name+'" ✓ — tip: also hit RM-BG on the tile'),'success');
+      // Stage 2 — auto-remove background so the presenter is immediately ready
+      // for compositing/lipsync without a second click. Skipping is fine if it
+      // fails (the gen prompt already targets a plain studio bg).
+      toast(state.lang==='th'?('สร้างผู้บรรยายเสร็จ — กำลังลบพื้นหลังให้อัตโนมัติ…'):('Presenter created — auto-removing background…'));
+      try {
+        await removeAvatarBg(avatar.id);
+      } catch (_) { /* RM-BG is a bonus, not required — leave the portrait as-is */ }
+      // saveCustomAvatars() runs inside both addCustomAvatar + removeAvatarBg —
+      // localStorage hook also fires schedCloudPush() so it lands on every device.
+      toast(state.lang==='th'?('บันทึก "'+name+'" ไว้ในคลังพรีเซนเตอร์แล้ว ✓ (ใช้ได้ทันที + ครั้งต่อไป)'):('"'+name+'" saved to presenter library ✓ (ready now + next session)'),'success');
     } catch(e){
       toast((state.lang==='th'?'สร้างไม่สำเร็จ: ':'Failed: ')+(e.message||''),'error');
     } finally {
