@@ -478,7 +478,7 @@ const state = {
   avatar: 'mintra',
   avatarMode: 'real',
   ttvStyle: 0,                                     // index into the styles[] array on the Text-to-Video page (0 = Creator/UGC)
-  ttvModel: 'veo-3.0-fast-generate-001',           // real Veo model id — sent to /api/ai/veo-generate
+  ttvModel: 'veo-2.0-generate-001',                // default to Veo 2 (has free tier — Veo 3.x are paid-only)
   ttvDuration: '8s',
   ttvAspect: '9:16',     // Veo supports 9:16 / 16:9 only
   calDay: 11,
@@ -2295,12 +2295,14 @@ function pageTextVideo() {
     { id:'anime',    th:'Anime/3D',   en:'Anime/3D',   sub_th:'การ์ตูน', sub_en:'Animated',            bg:'linear-gradient(135deg,#C7D2FE,#818CF8)' },
   ];
 
-  // The user's Gemini API key has all 6 Veo variants. We expose the most useful four.
+  // Gemini API key มี Veo ทั้ง 6 รุ่น ลำดับจาก "ฟรี/ถูก" → "พรีเมียม/แพง"
+  // Veo 2 = มี free tier เหลือ (paid $0.10/sec); Veo 3.x = paid-only (ต้องเปิด billing)
   const models = [
-    { id:'veo-3.0-fast-generate-001', name:'Veo 3 Fast',  sub_th:'เร็ว · ใช้บ่อย · 8 วินาที',         sub_en:'Fast · default · 8s',        time_th:'~1-2 นาที',  time_en:'~1-2 min' },
-    { id:'veo-3.0-generate-001',      name:'Veo 3 Pro',   sub_th:'คุณภาพสูง · ช้ากว่า',                 sub_en:'High quality · slower',      time_th:'~2-3 นาที',  time_en:'~2-3 min' },
-    { id:'veo-3.1-fast-generate-preview', name:'Veo 3.1 Fast (preview)', sub_th:'รุ่นใหม่ · ลื่นไหลกว่า', sub_en:'Newer · smoother motion', time_th:'~1-2 นาที', time_en:'~1-2 min' },
-    { id:'veo-3.1-generate-preview',  name:'Veo 3.1 Pro (preview)', sub_th:'ใหม่สุด · พรีเมียม', sub_en:'Newest · premium quality', time_th:'~3 นาที', time_en:'~3 min' },
+    { id:'veo-2.0-generate-001',          name:'Veo 2 (Free tier)',     sub_th:'ฟรี ~2-5 คลิป/วัน · คุณภาพมาตรฐาน',  sub_en:'Free ~2-5 clips/day · standard',  time_th:'~1-2 นาที',  time_en:'~1-2 min', badge:'FREE' },
+    { id:'veo-3.0-fast-generate-001',     name:'Veo 3 Fast',            sub_th:'จ่ายเงิน ~$0.80/คลิป · ลื่น คมชัด',   sub_en:'Paid ~$0.80/clip · sharp',         time_th:'~1-2 นาที',  time_en:'~1-2 min', badge:'PAID' },
+    { id:'veo-3.0-generate-001',          name:'Veo 3 Pro',             sub_th:'จ่ายเงิน ~$3.20/คลิป · คุณภาพสูงสุด',   sub_en:'Paid ~$3.20/clip · highest',       time_th:'~2-3 นาที',  time_en:'~2-3 min', badge:'PAID' },
+    { id:'veo-3.1-fast-generate-preview', name:'Veo 3.1 Fast (preview)', sub_th:'จ่ายเงิน · รุ่นใหม่ ลื่นไหลกว่า',     sub_en:'Paid · newer · smoother',          time_th:'~1-2 นาที',  time_en:'~1-2 min', badge:'PAID' },
+    { id:'veo-3.1-generate-preview',      name:'Veo 3.1 Pro (preview)',  sub_th:'จ่ายเงิน · ใหม่สุด พรีเมียม',          sub_en:'Paid · newest premium',            time_th:'~3 นาที',    time_en:'~3 min',   badge:'PAID' },
   ];
 
   return `${head('CREATE',T('สร้างวิดีโอจากข้อความ','Text to Video'),
@@ -2391,10 +2393,14 @@ function pageTextVideo() {
         <div style="display:flex;flex-direction:column;gap:8px">
           ${models.map(m=>{
             const on = m.id === state.ttvModel;
+            const badgeColor = m.badge === 'FREE' ? {bg:'#DCFCE7', fg:'#166534'} : {bg:'#FEF3C7', fg:'#92400E'};
             return `<button class="toneTile ${on?'active':''}" data-set="ttvModel=${m.id}" style="padding:12px 14px;align-items:center">
               <div class="toneEmoji" style="background:${on?'#fff':'var(--cream2)'};color:${on?'var(--orange)':'var(--muted)'}">${I('video',14)}</div>
               <div class="tInfo">
-                <div class="tName">${m.name}</div>
+                <div class="tName" style="display:flex;align-items:center;gap:6px">
+                  ${m.name}
+                  ${m.badge?`<span style="background:${badgeColor.bg};color:${badgeColor.fg};font-size:9px;font-weight:800;padding:2px 6px;border-radius:99px;letter-spacing:.04em">${m.badge}</span>`:''}
+                </div>
                 <div style="font-size:11px;color:var(--muted)">${t({th:m.sub_th,en:m.sub_en})}</div>
               </div>
               <div style="font-size:11px;color:var(--muted);text-align:right">${T('เรนเดอร์','Render')} ${t({th:m.time_th,en:m.time_en})}</div>
@@ -4299,7 +4305,27 @@ render();
       }
       if (!ok) toast(state.lang==='th'?'หมดเวลารอ (~7 นาที) — ลองใหม่':'Timed out — try again','error');
     } catch(e){
-      toast((state.lang==='th'?'สร้างวิดีโอไม่สำเร็จ: ':'Failed: ')+(e.message||''),'error');
+      var em = e.message || '';
+      // Quota / billing — Veo 3.x requires paid plan; offer to retry with the free-tier Veo 2
+      if (/quota|exceeded|billing|rate.?limit|RESOURCE_EXHAUSTED|429/i.test(em)) {
+        var pickedModel = state.ttvModel || '';
+        if (pickedModel.indexOf('veo-2') !== 0) {
+          var msg = state.lang==='th'
+            ? 'โควต้า '+pickedModel.replace('-generate-001','').replace('-generate-preview','')+' หมด — Veo 3.x ต้องเปิด billing ที่ Google AI / เปลี่ยนเป็น Veo 2 (free) แทนไหม?'
+            : pickedModel+' quota hit — switch to Veo 2 (free tier)?';
+          if (window.confirm(msg)) {
+            state.ttvModel = 'veo-2.0-generate-001';
+            render();
+            toast(state.lang==='th'?'เปลี่ยนเป็น Veo 2 แล้ว — กดสร้างอีกครั้ง':'Switched to Veo 2 — hit generate again','success');
+          } else {
+            toast(state.lang==='th'?'เปิด billing ที่ https://aistudio.google.com/apikey':'Enable billing at aistudio.google.com/apikey','error');
+          }
+        } else {
+          toast(state.lang==='th'?'Veo 2 free tier หมดวันนี้แล้ว — เปิด billing หรือลองพรุ่งนี้':'Veo 2 free tier exhausted today — enable billing or wait','error');
+        }
+      } else {
+        toast((state.lang==='th'?'สร้างวิดีโอไม่สำเร็จ: ':'Failed: ')+em,'error');
+      }
     } finally {
       state.ttvGenLoading = false;
       state.ttvGenStatus = '';

@@ -4,9 +4,147 @@ import { resizeForPlatform } from './public.js';
 import { db } from '../db.js';
 
 const router = Router();
-router.use(requireAuth);
 
 const FB_API = 'https://graph.facebook.com/v21.0';
+
+// ============================================================
+// Public OAuth flow (NO requireAuth — Facebook hits these directly with the user's browser).
+// Pattern: frontend opens /api/facebook/oauth/start in a popup → user consents on facebook.com
+// → Facebook redirects to /api/facebook/oauth/callback → we exchange code for tokens + list pages
+// → HTML page postMessage's the result to opener + closes itself.
+// The opener (authenticated frontend) then saves the picked page into the brand's channelInfo.
+// ============================================================
+const FB_OAUTH_SCOPES = [
+  'pages_show_list',
+  'pages_manage_posts',
+  'pages_read_engagement',
+  'instagram_basic',
+  'instagram_content_publish',
+  'business_management',
+].join(',');
+
+function fbRedirectUri(req) {
+  // Use the configured PUBLIC_URL when set (production), otherwise derive from the request
+  const base = process.env.PUBLIC_URL
+    || `${req.headers['x-forwarded-proto'] || req.protocol}://${req.headers.host}`;
+  return base.replace(/\/$/, '') + '/api/facebook/oauth/callback';
+}
+
+router.get('/oauth/start', async (req, res) => {
+  const appId = process.env.FB_APP_ID;
+  if (!appId) return res.status(500).send('FB_APP_ID not configured');
+  const brand = String(req.query.brand || '').slice(0, 32);
+  const nonce = Math.random().toString(36).slice(2, 14);
+  const state = brand ? `${nonce}.${encodeURIComponent(brand)}` : nonce;
+  const params = new URLSearchParams({
+    client_id: appId,
+    redirect_uri: fbRedirectUri(req),
+    state,
+    scope: FB_OAUTH_SCOPES,
+    response_type: 'code',
+    display: 'popup',
+  });
+  res.redirect(`https://www.facebook.com/v21.0/dialog/oauth?${params.toString()}`);
+});
+
+router.get('/oauth/callback', async (req, res) => {
+  const { code, error: oauthErr, error_description, state } = req.query;
+  if (oauthErr) {
+    return res.send(popupErrorHtml(error_description || oauthErr));
+  }
+  if (!code) return res.send(popupErrorHtml('Missing code'));
+  const appId = process.env.FB_APP_ID;
+  const appSecret = process.env.FB_APP_SECRET;
+  if (!appId || !appSecret) return res.send(popupErrorHtml('FB_APP_ID / FB_APP_SECRET not configured on the server'));
+  const brand = state && state.includes('.') ? decodeURIComponent(state.split('.').slice(1).join('.')) : '';
+  try {
+    // 1) code → short-lived user token
+    const tokParams = new URLSearchParams({
+      client_id: appId,
+      client_secret: appSecret,
+      redirect_uri: fbRedirectUri(req),
+      code: String(code),
+    });
+    const tokRes = await fetch(`${FB_API}/oauth/access_token?${tokParams.toString()}`);
+    const tokData = await tokRes.json();
+    if (!tokRes.ok || tokData.error) {
+      return res.send(popupErrorHtml(`FB code exchange: ${tokData.error?.message || tokRes.status}`));
+    }
+    // 2) short-lived → long-lived user token (~60 days)
+    const longParams = new URLSearchParams({
+      grant_type: 'fb_exchange_token',
+      client_id: appId,
+      client_secret: appSecret,
+      fb_exchange_token: tokData.access_token,
+    });
+    const longRes = await fetch(`${FB_API}/oauth/access_token?${longParams.toString()}`);
+    const longData = await longRes.json();
+    const userToken = longData.access_token || tokData.access_token;
+    // 3) list pages — include IG business account field so the frontend can show IG too
+    const pagesParams = new URLSearchParams({
+      fields: 'id,name,access_token,category,fan_count,instagram_business_account{id,username}',
+      access_token: userToken,
+      limit: '50',
+    });
+    const pagesRes = await fetch(`${FB_API}/me/accounts?${pagesParams.toString()}`);
+    const pagesData = await pagesRes.json();
+    const pages = Array.isArray(pagesData.data) ? pagesData.data : [];
+    res.send(popupSuccessHtml({
+      brand,
+      userToken,                       // long-lived user token (~60 days)
+      pages,                           // [{ id, name, access_token, instagram_business_account?, ... }]
+    }));
+  } catch (e) {
+    res.send(popupErrorHtml(e.message));
+  }
+});
+
+function popupSuccessHtml(payload) {
+  // Render a tiny page that bounces the data back to the opener via postMessage.
+  // We narrow the postMessage target to the current origin to prevent leakage to other sites.
+  return `<!DOCTYPE html><html lang="th"><head><meta charset="utf-8"/>
+<title>เชื่อมต่อ Facebook สำเร็จ</title>
+<style>body{font-family:system-ui,-apple-system,Segoe UI,Prompt,sans-serif;padding:40px;text-align:center;background:#FFF8F0;color:#1E1B3A}
+h1{font-size:22px;margin:6px 0 4px;color:#6B21A8}.ok{font-size:60px}.muted{color:#7C7393;font-size:13px}</style>
+</head><body>
+<div class="ok">✅</div>
+<h1>เชื่อมต่อ Facebook สำเร็จ</h1>
+<p class="muted">กำลังบันทึก… หน้าต่างนี้จะปิดอัตโนมัติ</p>
+<script>
+  var payload = ${JSON.stringify(payload).replace(/</g, '\\u003c')};
+  try {
+    if (window.opener) {
+      window.opener.postMessage({ type: 'pp-fb-oauth', payload: payload }, location.origin);
+    }
+  } catch (e) {}
+  setTimeout(function(){ try { window.close(); } catch(_){} }, 600);
+</script>
+</body></html>`;
+}
+function popupErrorHtml(msg) {
+  return `<!DOCTYPE html><html lang="th"><head><meta charset="utf-8"/>
+<title>เชื่อมต่อไม่สำเร็จ</title>
+<style>body{font-family:system-ui,-apple-system,Segoe UI,Prompt,sans-serif;padding:40px;text-align:center;background:#FEF2F2;color:#7F1D1D}
+h1{font-size:20px;margin:6px 0 4px}.err{font-size:60px}.msg{background:#fff;border:1px solid #FCA5A5;padding:14px;border-radius:10px;margin:20px auto;max-width:520px;text-align:left;font-family:monospace;font-size:12px;word-break:break-word}</style>
+</head><body>
+<div class="err">⚠️</div>
+<h1>เชื่อมต่อ Facebook ไม่สำเร็จ</h1>
+<div class="msg">${String(msg).replace(/</g, '&lt;')}</div>
+<p><a href="#" onclick="window.close();return false">ปิดหน้าต่างนี้</a></p>
+<script>
+  try {
+    if (window.opener) {
+      window.opener.postMessage({ type: 'pp-fb-oauth-error', message: ${JSON.stringify(String(msg))} }, location.origin);
+    }
+  } catch (e) {}
+</script>
+</body></html>`;
+}
+
+// ============================================================
+// Authenticated endpoints below
+// ============================================================
+router.use(requireAuth);
 
 // อ่านจาก DB ก่อน → fallback ไป env vars (ทำให้เปลี่ยน token โดยไม่ต้อง redeploy)
 // รับ course เพื่อหา credentials ของแต่ละหลักสูตร (PFB / PHE / GURU)

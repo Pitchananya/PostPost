@@ -38,14 +38,22 @@ async function saveTokenResponse(data, course = null) {
 
 // ============== OAUTH FLOW ==============
 
-// GET /api/tiktok/oauth/start?course=PFB|PHE|GURU — redirect user ไป TikTok เพื่อขอ permission
+// GET /api/tiktok/oauth/start?course=PFB|PHE|GURU&state_suffix=POPUP&brand=<id>
+// — redirect user ไป TikTok เพื่อขอ permission
+// state_suffix=POPUP + brand=<id> ทำให้ callback postMessage กลับไปยัง opener แทนแสดง success page
 router.get('/oauth/start', async (req, res) => {
   const { clientKey, redirectUri } = await getCreds();
   if (!clientKey) return res.status(500).send('TIKTOK_CLIENT_KEY ยังไม่ตั้งค่าใน env');
   const course = (req.query.course || '').toUpperCase();
-  // state เก็บ random + course (TikTok ส่ง state คืนใน callback ให้เรา recover course)
+  const popupMode = req.query.state_suffix === 'POPUP';
+  const brand = String(req.query.brand || '').slice(0, 32);
+  // state เก็บ random + course + popup marker + brand id (TikTok ส่ง state คืนใน callback)
   const nonce = Math.random().toString(36).slice(2, 14);
-  const state = course ? `${nonce}.${course}` : nonce;
+  const parts = [nonce];
+  if (course) parts.push(course);
+  if (popupMode) parts.push('POPUP');
+  if (brand) parts.push('BRAND:' + encodeURIComponent(brand));
+  const state = parts.join('.');
   // scope จาก env (เผื่อ Sandbox ไม่มีบาง scope) — default = ขั้นต่ำที่ Sandbox มักจะมี
   // override ด้วย ?scope=... ใน query ก็ได้
   const scope = req.query.scope || process.env.TIKTOK_SCOPES || 'user.info.basic,video.upload';
@@ -65,9 +73,11 @@ router.get('/oauth/callback', async (req, res) => {
   if (oauthError) return res.status(400).send(`TikTok OAuth error: ${oauthError}`);
   if (!code) return res.status(400).send('Missing code');
 
-  // recover course จาก state (format: "<nonce>.<COURSE>" หรือแค่ nonce)
-  const course = (state && state.includes('.')) ? state.split('.').pop().toUpperCase() : null;
-  const validCourse = ['PFB', 'PHE', 'GURU'].includes(course) ? course : null;
+  // recover course จาก state (format: "<nonce>[.COURSE][.POPUP][.BRAND:<id>]")
+  // — search all parts because POPUP/BRAND extensions may also live in the state suffix
+  const stateParts = (state || '').split('.');
+  const courseHit = stateParts.find(p => ['PFB', 'PHE', 'GURU'].includes(p.toUpperCase()));
+  const validCourse = courseHit ? courseHit.toUpperCase() : null;
 
   const { clientKey, clientSecret, redirectUri } = await getCreds();
   if (!clientKey || !clientSecret) return res.status(500).send('TikTok credentials missing');
@@ -90,6 +100,28 @@ router.get('/oauth/callback', async (req, res) => {
     // 💾 auto-save token ลง DB ทันที (ตาม course ที่ใส่ตอน start)
     const expiresAt = await saveTokenResponse(data, validCourse);
     const courseLabel = validCourse || 'default';
+
+    // popup mode — if state contains ".POPUP" suffix, render a thin page that
+    // postMessage's the result back to opener + closes itself (PostPost UI flow).
+    const isPopup = state && state.includes('.POPUP');
+    const brand = state && state.includes('.BRAND:') ? decodeURIComponent(state.split('.BRAND:')[1].split('.')[0]) : '';
+    if (isPopup) {
+      const payload = { brand, open_id: data.open_id || '', expires_at: expiresAt, course: courseLabel };
+      return res.send(`<!DOCTYPE html><html lang="th"><head><meta charset="utf-8"/>
+<title>เชื่อมต่อ TikTok สำเร็จ</title>
+<style>body{font-family:system-ui,Prompt,sans-serif;padding:40px;text-align:center;background:#FFF8F0;color:#1E1B3A}
+h1{font-size:22px;margin:6px 0 4px;color:#6B21A8}.ok{font-size:60px}.muted{color:#7C7393;font-size:13px}</style>
+</head><body>
+<div class="ok">✅</div>
+<h1>เชื่อมต่อ TikTok สำเร็จ</h1>
+<p class="muted">กำลังบันทึก… หน้าต่างนี้จะปิดอัตโนมัติ</p>
+<script>
+  var payload = ${JSON.stringify(payload).replace(/</g, '\\u003c')};
+  try { if (window.opener) window.opener.postMessage({ type:'pp-tt-oauth', payload: payload }, location.origin); } catch(_){}
+  setTimeout(function(){ try { window.close(); } catch(_){} }, 600);
+</script>
+</body></html>`);
+    }
 
     // แสดงหน้า success — บอกว่า save เรียบร้อย ไม่ต้อง copy/paste แล้ว
     res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"/><title>TikTok Connected</title>

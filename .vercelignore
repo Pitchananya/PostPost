@@ -1,0 +1,37 @@
+# Files Vercel must NOT bundle (independent from .gitignore — covers things git tracks
+# but that we still don't want in the function bundle, e.g. the Python scraper folder)
+
+# Local secrets — set these in Vercel Dashboard → Settings → Environment Variables instead
+.env
+.env.*
+
+# Local-only scraping infrastructure (the Render worker is separate)
+.chrome-profile-shopee/
+scraper-worker/
+backend/scripts/scrape_shopee.py
+backend/scripts/__pycache__/
+__pycache__/
+*.pyc
+
+# Build artifacts / caches
+node_modules/
+.next/
+.cache/
+dist/
+build/
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+.claude/
+
+# Test data
+*.log
+coverage/
+
+# Big design assets
+design/
+design.zip
+*.zip

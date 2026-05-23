@@ -14,6 +14,14 @@ Progress goes to STDERR. The FINAL line of STDOUT is a single JSON object:
 import json, sys, time, random, re
 from pathlib import Path
 
+# Windows stdout defaults to cp1252 — force UTF-8 so Thai product names
+# survive the JSON the backend reads off stdout.
+for _s in (sys.stdout, sys.stderr):
+    try:
+        _s.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
 def log(*a):
     print(*a, file=sys.stderr, flush=True)
 
@@ -77,6 +85,7 @@ def normalize(p, shopid):
         "stock": p.get("stock") or 0,
         "thumbnail": images[0] if images else "",
         "images": images,
+        "description": "",
         "url": f"https://shopee.co.th/product/{shopid}/{iid}",
     }
 
@@ -170,6 +179,27 @@ def main():
         if not products:
             emit({"error": "empty", "message": "No products returned — the shop may be empty or Shopee blocked the request."})
             return
+
+        # second pass — fetch the real product description for each item
+        # (capped so a huge shop doesn't run forever)
+        DESC_LIMIT = 80
+        for prod in products[:DESC_LIMIT]:
+            try:
+                raw = driver.execute_script(f"""
+                  return await fetch('https://shopee.co.th/api/v4/item/get?itemid={prod['itemid']}&shopid={sid}',
+                    {{method:'GET',headers:{{'x-api-source':'pc','x-requested-with':'XMLHttpRequest'}},credentials:'include'}})
+                    .then(r=>r.json()).then(d=>JSON.stringify(d)).catch(e=>'ERROR:'+e);
+                """)
+                if raw and not raw.startswith("ERROR:"):
+                    d = (json.loads(raw).get("data") or {})
+                    desc = (d.get("description") or "").strip()
+                    if desc:
+                        prod["description"] = desc[:3000]
+            except Exception:
+                pass
+            time.sleep(random.uniform(0.25, 0.5))
+        log(f"[scrape] descriptions fetched for {min(len(products), DESC_LIMIT)} items")
+
         emit({"ok": True, "shop": SHOP, "shopid": sid, "count": len(products), "products": products})
     finally:
         try: driver.quit()

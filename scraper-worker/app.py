@@ -48,6 +48,7 @@ def normalize(p, shopid, shop):
         "stock": p.get("stock") or 0,
         "thumbnail": images[0] if images else "",
         "images": images,
+        "description": "",
         "url": f"https://shopee.co.th/product/{shopid}/{iid}",
     }
 
@@ -138,6 +139,25 @@ def scrape(shop_arg):
 
         if not products:
             return {"error": "empty", "message": "No products returned (shop empty or Shopee blocked the request)."}
+
+        # second pass — fetch the real product description for each item (capped)
+        DESC_LIMIT = 80
+        for prod in products[:DESC_LIMIT]:
+            try:
+                raw = driver.execute_script(f"""
+                  return await fetch('https://shopee.co.th/api/v4/item/get?itemid={prod['itemid']}&shopid={sid}',
+                    {{method:'GET',headers:{{'x-api-source':'pc','x-requested-with':'XMLHttpRequest'}},credentials:'include'}})
+                    .then(r=>r.json()).then(d=>JSON.stringify(d)).catch(e=>'ERROR:'+e);
+                """)
+                if raw and not raw.startswith("ERROR:"):
+                    d = (json.loads(raw).get("data") or {})
+                    desc = (d.get("description") or "").strip()
+                    if desc:
+                        prod["description"] = desc[:3000]
+            except Exception:
+                pass
+            time.sleep(random.uniform(0.25, 0.5))
+
         return {"ok": True, "shop": shop, "shopid": sid, "count": len(products), "products": products}
     finally:
         try:
