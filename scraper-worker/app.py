@@ -22,7 +22,14 @@ from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 WORKER_KEY = os.environ.get("WORKER_KEY", "")
-PROXY = os.environ.get("PROXY", "")
+_raw_proxy = (os.environ.get("PROXY", "") or "").strip()
+# Ignore the render.yaml placeholder "http://username:password@host:port" — Chrome would
+# try to resolve the literal 'host' and fail. Treat anything that still contains the
+# placeholder tokens as unset.
+if not _raw_proxy or "username:password" in _raw_proxy or "host:port" in _raw_proxy:
+    PROXY = ""
+else:
+    PROXY = _raw_proxy
 
 
 def normalize(p, shopid, shop):
