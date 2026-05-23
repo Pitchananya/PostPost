@@ -2201,12 +2201,14 @@ function pageAvatar() {
         <div class="eyebrow" style="margin-bottom:8px">${T('ขั้นที่ 3 · เสียง','Step 3 · Voice')}</div>
         <h3 class="cardTitle" style="margin-bottom:12px">${T('เสียงพากย์ (TTS ภาษาไทย)','Voice (Thai TTS)')}</h3>
         ${(function(){
+          // Azure Speech Thai region (southeastasia) มีเพียง 3 voice จริง — Premwadee, Achara, Niwat
+          // ตัวเลือกอื่นเป็นการใช้ Niwat/Premwadee เป็นฐาน + เปลี่ยน style/persona เท่านั้น
           var voices = [
-            {id:'premwadee', name:'Premwadee', g:'หญิง', tone:'อบอุ่น', desc:'สกินแคร์ · ความงาม', az:'th-TH-PremwadeeNeural'},
-            {id:'achara',    name:'Achara',    g:'หญิง', tone:'เป็นมิตร', desc:'lifestyle · แม่และเด็ก', az:'th-TH-AcharaNeural'},
-            {id:'niwat',     name:'Niwat',     g:'ชาย',  tone:'มืออาชีพ', desc:'ธุรกิจ · การเงิน', az:'th-TH-NiwatNeural'},
-            {id:'tony',      name:'Tony',      g:'ชาย',  tone:'เป็นกันเอง', desc:'casual · บันเทิง', az:'th-TH-TonyNeural'},
-            {id:'guru',      name:'อาจารย์เทพ', g:'ชาย',  tone:'ขรึม น่าเชื่อถือ', desc:'สายมู · ดูดวง', az:'th-TH-NiwatNeural'},
+            {id:'premwadee', name:'Premwadee', g:'หญิง', tone:'อบอุ่น',         desc:'สกินแคร์ · ความงาม',    az:'th-TH-PremwadeeNeural'},
+            {id:'achara',    name:'Achara',    g:'หญิง', tone:'เป็นมิตร',         desc:'lifestyle · แม่และเด็ก', az:'th-TH-AcharaNeural'},
+            {id:'niwat',     name:'Niwat',     g:'ชาย',  tone:'มืออาชีพ',         desc:'ธุรกิจ · การเงิน',       az:'th-TH-NiwatNeural'},
+            {id:'guru',      name:'อาจารย์เทพ', g:'ชาย',  tone:'ขรึม น่าเชื่อถือ',  desc:'สายมู · ดูดวง',          az:'th-TH-NiwatNeural'},
+            {id:'casual',    name:'พี่ตี้',     g:'ชาย',  tone:'เป็นกันเอง',       desc:'casual · บันเทิง',       az:'th-TH-NiwatNeural'},
           ];
           state.avatarVoices = voices;
           var sel = state.avatarVoice || 'premwadee';

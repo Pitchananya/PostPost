@@ -3221,6 +3221,15 @@ function normalizeThaiForTts(text) {
   return s;
 }
 
+// Azure Speech Thai region (southeastasia) supports only 3 Neural voices.
+// Map any unknown / non-existent voice to a safe default so a stale frontend
+// value (e.g. legacy 'TonyNeural') doesn't 400 the user.
+const AZURE_TH_VOICES = new Set([
+  'th-TH-PremwadeeNeural',
+  'th-TH-NiwatNeural',
+  'th-TH-AcharaNeural',
+]);
+
 router.post('/tts', async (req, res) => {
   const { text, course = 'PFB', voice, rate, pitch = '+0%', format } = req.body || {};
   if (!text || typeof text !== 'string') return res.status(400).json({ error: 'text required (string)' });
@@ -3230,7 +3239,14 @@ router.post('/tts', async (req, res) => {
   const region = process.env.AZURE_SPEECH_REGION || 'southeastasia';
   if (!key) return res.status(400).json({ error: 'AZURE_SPEECH_KEY not set — ตั้ง env ก่อน (ดู .env.example)' });
 
-  const selectedVoice = voice || AZURE_TTS_VOICES[course] || AZURE_TTS_VOICES.PFB;
+  let selectedVoice = voice || AZURE_TTS_VOICES[course] || AZURE_TTS_VOICES.PFB;
+  // Safety: if frontend sent an unknown voice (typo, removed name, etc.) fall back
+  // to Niwat (male) for ชาย-mapped names or Premwadee (female) otherwise.
+  if (!AZURE_TH_VOICES.has(selectedVoice)) {
+    const fallback = /tony|niwat|guru|male/i.test(String(selectedVoice)) ? 'th-TH-NiwatNeural' : 'th-TH-PremwadeeNeural';
+    console.warn(`[ai/tts] unknown voice '${selectedVoice}' → falling back to ${fallback}`);
+    selectedVoice = fallback;
+  }
   const prosodyRate = rate || AZURE_TTS_RATE[course] || 'medium';
   const outputFormat = format || 'audio-24khz-48kbitrate-mono-mp3';
 
