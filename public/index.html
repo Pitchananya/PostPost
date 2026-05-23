@@ -2706,7 +2706,7 @@ function pageAvatar() {
               : (state.avatarVideo ? T('สร้างวิดีโอใหม่','Re-render') : T('สร้างวิดีโอ MP4','Create MP4'))}
           </button>
           ${state.avatarVideo
-            ? `<a class="btn outline" style="flex:1;min-width:100px;text-decoration:none;justify-content:center" href="${state.avatarVideo}" download="postpost-avatar.mp4">${I('download',14)} MP4</a>`
+            ? `<a class="btn outline" style="flex:1;min-width:100px;text-decoration:none;justify-content:center" href="${state.avatarVideo}" download="postpost-avatar.${state.avatarVideoExt||'mp4'}">${I('download',14)} ${(state.avatarVideoExt||'mp4').toUpperCase()}</a>`
             : `<button class="btn outline" style="flex:1;min-width:100px" disabled>${I('download',14)} MP4</button>`}
           <button class="btn outline" style="flex:1;min-width:140px">${I('send',14)} ${T('โพสต์','Post')}</button>
         </div>
@@ -4848,9 +4848,18 @@ render();
         canvasStream.getVideoTracks()[0],
         dest.stream.getAudioTracks()[0],
       ]);
-      var mime = 'video/webm;codecs=vp9,opus';
+      // Prefer native MP4 (H.264 + AAC) — Chrome 94+ and Safari 16+ support this in
+      // MediaRecorder, which means the user gets a real .mp4 ready for Reels/TikTok
+      // upload without any client-side transcoding. Fall back to WebM/VP9 otherwise.
+      var mime = 'video/mp4;codecs=avc1.42E01F,mp4a.40.2';
+      if (!MediaRecorder.isTypeSupported(mime)) mime = 'video/mp4;codecs=h264,aac';
+      if (!MediaRecorder.isTypeSupported(mime)) mime = 'video/mp4';
+      if (!MediaRecorder.isTypeSupported(mime)) mime = 'video/webm;codecs=vp9,opus';
       if (!MediaRecorder.isTypeSupported(mime)) mime = 'video/webm;codecs=vp8,opus';
       if (!MediaRecorder.isTypeSupported(mime)) mime = 'video/webm';
+      // Track the file extension separately so the download link uses the right one
+      // (some platforms reject webm; mp4 is universally accepted).
+      state.avatarVideoExt = (mime.indexOf('mp4') === 0 || mime.indexOf('video/mp4') === 0) ? 'mp4' : 'webm';
       var recorder = new MediaRecorder(combinedStream, { mimeType: mime, videoBitsPerSecond: 5_500_000 });
       var chunks = [];
       recorder.ondataavailable = function(e){ if (e.data && e.data.size) chunks.push(e.data); };
@@ -5031,9 +5040,27 @@ render();
             return;
           }
           var blob = new Blob(chunks, { type: mime });
-          var reader = new FileReader();
-          reader.onload = function(){ resolve(reader.result); };
-          reader.readAsDataURL(blob);
+          // ─────────────────────────────────────────────────────────────────────
+          // Use a Blob URL instead of a base64 data URL.
+          //
+          // Why: `mime` is "video/webm;codecs=vp9,opus" — the comma inside the
+          // codecs= parameter confuses the browser's data-URL parser. When the
+          // resulting `data:video/webm;codecs=vp9,opus;base64,...` URL is used
+          // as an <a download> href, Chrome treats the FIRST comma as the
+          // data separator → it saves the literal text after the comma
+          // ("opus;base64,GkXf...") instead of the decoded binary. That gave
+          // the user an 875 KB file that ffprobe couldn't parse (the file was
+          // just base64 ASCII).
+          //
+          // Blob URLs sidestep the issue entirely — the browser holds the
+          // binary directly and the <a> tag downloads it verbatim. Also far
+          // cheaper memory-wise for a multi-MB video.
+          // ─────────────────────────────────────────────────────────────────────
+          // Revoke any previous Blob URL we may have leaked
+          if (state.avatarVideo && typeof state.avatarVideo === 'string' && state.avatarVideo.indexOf('blob:') === 0) {
+            try { URL.revokeObjectURL(state.avatarVideo); } catch(_){}
+          }
+          resolve(URL.createObjectURL(blob));
         };
       });
       // Expose an abort handle — the rendering overlay's "หยุดการสร้างคลิป" button calls this.
@@ -5051,11 +5078,10 @@ render();
       requestAnimationFrame(loop);
       // Stop after audio finishes (+ short tail)
       stopTimer = setTimeout(function(){ try { recorder.stop(); } catch(_){} }, duration * 1000 + 500);
-      var dataUrl = await stopPromise;
-      state.avatarVideo = dataUrl;
-      // Best-effort: even though MIME is webm, the .mp4 extension on the download link
-      // works with most players. For real MP4 the user can transcode offline if needed.
-      toast(state.lang==='th'?'สร้างวิดีโอเสร็จ ✓ — กด MP4 เพื่อดาวน์โหลด':'Video ready ✓ — click MP4 to download','success');
+      var blobUrl = await stopPromise;     // Blob URL — binary held in browser memory, not a base64 string
+      state.avatarVideo = blobUrl;
+      var extUp = (state.avatarVideoExt||'mp4').toUpperCase();
+      toast(state.lang==='th'?('สร้างวิดีโอเสร็จ ✓ — กด '+extUp+' เพื่อดาวน์โหลด'):('Video ready ✓ — click '+extUp+' to download'),'success');
     } catch(e){
       if ((e && e.message) === 'aborted') {
         toast(state.lang==='th'?'หยุดการสร้างคลิปแล้ว':'Render stopped','success');
