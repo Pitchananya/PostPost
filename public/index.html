@@ -504,9 +504,15 @@ const state = {
   avatarBgCandidates: [],     // full Pexels result set (last fetch) — OEM-style thumbnail picker grid
   avatarBgPickedUrl: '',      // when user clicks a specific thumbnail, that URL is locked (overrides "first result")
   avatarBgSearch: '',         // custom free-text query (overrides scene preset when non-empty)
-  avatarBgInterval: 0,        // bg rotation interval in seconds (0 = no rotation, just loop one clip)
+  avatarBgInterval: 5,        // bg rotation interval in seconds (0 = no rotation; default 5s = 6 slots for 30s clip)
   avatarBgRotateIdx: 0,       // current index in avatarBgCandidates used by the preview rotation timer
-  avatarClipDuration: 0,      // total output clip length in seconds (0 = match TTS audio duration)
+  avatarClipDuration: 30,     // total output clip length in seconds (0 = match TTS audio duration; default 30s for Reels)
+  // ── Storyboard — one bg per time slot, each slot semantically matched to its script chunk ──
+  avatarStoryboard: [],       // [{ idx, start_at_sec, duration_sec, script_chunk_th, bg_query_en, bg_url, preview }]
+  storyboardLoading: false,   // true while /api/ai/avatar-scenes is splitting the script
+  storyboardOpenSlot: -1,     // which slot's Pexels picker is expanded (-1 = none)
+  storyboardSlotCands: {},    // { [slotIdx]: [pexels videos] } — cached candidate sets per slot
+  storyboardSearch: {},       // { [slotIdx]: 'free-text query' } — per-slot custom search override
   previewAspect: '4:5',    // 1:1 | 4:5 | 9:16  — aspect for post preview + PNG download
   previewIndex: 0,         // current slide in carousel
 };
@@ -2409,9 +2415,75 @@ function pageAvatar() {
         </div>
       </div>
 
-      <!-- Step 4: Script -->
+      <!-- Step 4 (NEW): Length & Pacing — set duration BEFORE the script so AI can size it correctly -->
       <div class="card">
-        <div class="eyebrow" style="margin-bottom:8px">${T('ขั้นที่ 4 · สคริปต์','Step 4 · Script')}</div>
+        <div class="eyebrow" style="margin-bottom:8px">${T('ขั้นที่ 4 · ความยาว & จังหวะ','Step 4 · Length & Pacing')}</div>
+        <h3 class="cardTitle" style="margin-bottom:14px">${T('ตั้งเวลาก่อน — แล้ว AI จะเขียนสคริปต์ + เลือก bg ให้พอดี','Set the time first — AI will write the script + pick bgs to fit')}</h3>
+        <!-- Total duration -->
+        <div style="margin-bottom:14px">
+          <div style="font-size:10.5px;font-weight:800;color:var(--purple);letter-spacing:.04em;text-transform:uppercase;margin-bottom:6px;display:flex;align-items:center;gap:5px">
+            ${I('play',11,'#5B21B6')} ${T('ความยาวคลิป','Total clip length')}
+          </div>
+          <div style="display:flex;gap:5px;flex-wrap:wrap">
+            ${[
+              {v:15,  th:'15 วิ',  en:'15 sec'},
+              {v:30,  th:'30 วิ',  en:'30 sec'},
+              {v:45,  th:'45 วิ',  en:'45 sec'},
+              {v:60,  th:'1 นาที', en:'1 min'},
+              {v:90,  th:'1:30',   en:'1:30'},
+              {v:120, th:'2 นาที', en:'2 min'},
+              {v:180, th:'3 นาที', en:'3 min'},
+              {v:300, th:'5 นาที', en:'5 min'},
+              {v:0,   th:'ตามเสียง', en:'Match audio'},
+            ].map(function(o){
+              var on = (state.avatarClipDuration||0) === o.v;
+              return '<button class="pill '+(on?'orange':'')+'" data-clipdur="'+o.v+'" '
+                + 'style="height:30px;font-size:11.5px;padding:0 12px">' + t({th:o.th,en:o.en}) + '</button>';
+            }).join('')}
+          </div>
+        </div>
+        <!-- Switch-scene interval -->
+        <div>
+          <div style="font-size:10.5px;font-weight:800;color:var(--purple);letter-spacing:.04em;text-transform:uppercase;margin-bottom:6px;display:flex;align-items:center;gap:5px">
+            ${I('refresh',11,'#5B21B6')} ${T('สลับฉากบ่อยแค่ไหน','Switch scene every')}
+          </div>
+          <div style="display:flex;gap:5px;flex-wrap:wrap">
+            ${[
+              {v:0,  th:'ไม่เปลี่ยน', en:'No switch'},
+              {v:3,  th:'3 วิ',      en:'3 sec'},
+              {v:5,  th:'5 วิ',      en:'5 sec'},
+              {v:8,  th:'8 วิ',      en:'8 sec'},
+              {v:12, th:'12 วิ',     en:'12 sec'},
+              {v:20, th:'20 วิ',     en:'20 sec'},
+            ].map(function(o){
+              var on = (state.avatarBgInterval||0) === o.v;
+              return '<button class="pill '+(on?'orange':'')+'" data-bginterval="'+o.v+'" '
+                + 'style="height:30px;font-size:11.5px;padding:0 12px">' + t({th:o.th,en:o.en}) + '</button>';
+            }).join('')}
+          </div>
+        </div>
+        <!-- Live computed slot count -->
+        ${(function(){
+          var dur = state.avatarClipDuration || 0;
+          var ivl = state.avatarBgInterval || 0;
+          var slots = (dur > 0 && ivl > 0) ? Math.ceil(dur / ivl) : (dur > 0 ? 1 : 0);
+          if (!dur) {
+            return '<div style="margin-top:14px;padding:10px 12px;border-radius:10px;background:#FEF3C7;border:1px solid #FDE68A;font-size:11.5px;color:#9A3412;line-height:1.5">'
+              + I('info',12,'#9A3412')+' '
+              + T('ใช้ความยาวเสียง TTS เป็นตัวกำหนด — ตั้งเวลาเองเพื่อให้ AI ช่วยจัดสรร bg ได้แม่นยำขึ้น','Will use TTS audio length — pick a fixed time to let AI plan bg slots precisely')
+              + '</div>';
+          }
+          var minStr = dur >= 60 ? Math.floor(dur/60) + ' ' + T('นาที','min') + (dur%60 ? ' ' + (dur%60) + ' ' + T('วิ','sec') : '') : dur + ' ' + T('วิ','sec');
+          return '<div style="margin-top:14px;padding:12px 14px;border-radius:10px;background:linear-gradient(135deg,#EDE9FE,#FAE8FF);border:1px solid #DDD6FE;font-size:13px;color:var(--purple);line-height:1.5;display:flex;align-items:center;gap:8px">'
+            + I('sparkles',14,'#5B21B6')
+            + '<span><b style="font-size:14.5px">'+minStr+'</b> ' + (ivl > 0 ? T('· สลับ bg ทุก ','· bg switches every ') + ivl + T(' วินาที',' sec') + ' = <b style="font-size:14.5px;color:var(--orange)">'+slots+'</b> ' + T('ฉาก','scenes') : T('· ใช้ bg เดียวตลอด','· one bg throughout')) + '</span>'
+            + '</div>';
+        })()}
+      </div>
+
+      <!-- Step 5: Script (was Step 4) -->
+      <div class="card">
+        <div class="eyebrow" style="margin-bottom:8px">${T('ขั้นที่ 5 · สคริปต์','Step 5 · Script')}</div>
         <div class="cardHeader">
           <h3 class="cardTitle">${T('สคริปต์พูด (Thai)','Speaking script')}</h3>
           <button class="btn ghost sm" data-avatarscript="1" style="color:var(--blue)" ${state.avatarScriptLoading?'disabled':''}>${I('sparkles',13,'#2563EB')} ${state.avatarScriptLoading?T('AI กำลังเขียน…','AI is writing…'):T('ให้ AI เขียนให้','AI write for me')}</button>
@@ -2532,123 +2604,98 @@ function pageAvatar() {
               + '</div>';
           })()}
         </div>
-        <!-- BG scene picker — OEM-style: scene chips + free-text search + thumbnail grid -->
-        <div style="margin-top:14px;padding:12px;border-radius:12px;background:var(--cream2);border:1px solid var(--line)">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-            <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:800;color:var(--purple);letter-spacing:.04em;text-transform:uppercase">
-              ${I('video',12,'#5B21B6')} ${T('ฉากพื้นหลังตอนพูด','Speaking background')}
-              <span style="padding:1px 6px;border-radius:99px;background:#EDE9FE;color:#5B21B6;font-size:9px;font-weight:800;letter-spacing:.03em">${T('ขับเคลื่อนโดย Pexels','Powered by Pexels')}</span>
+        <!-- 🎬 Storyboard — one bg per time slot, semantically matched to the script -->
+        <div style="margin-top:14px;padding:14px;border-radius:12px;background:var(--cream2);border:1px solid var(--line)">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+            <div style="display:flex;align-items:center;gap:6px">
+              <span style="font-size:11px;font-weight:800;color:var(--purple);letter-spacing:.04em;text-transform:uppercase;display:inline-flex;align-items:center;gap:5px">
+                ${I('video',12,'#5B21B6')} ${T('Storyboard — bg ตามจังหวะ','Storyboard — bg per scene')}
+              </span>
+              <span style="padding:1px 6px;border-radius:99px;background:#EDE9FE;color:#5B21B6;font-size:9px;font-weight:800;letter-spacing:.03em">${T('Pexels','Pexels')}</span>
             </div>
-            ${state.avatarBgLoading?`<span style="font-size:10px;color:var(--muted);display:flex;align-items:center;gap:4px">${I('refresh',10)} ${T('กำลังโหลด…','Loading…')}</span>`:''}
+            <button class="btn ${(state.avatarScript||'').trim()?'primary':'outline'}" data-genstoryboard="1" style="height:32px;font-size:11px;padding:0 14px" ${(!(state.avatarScript||'').trim() || state.storyboardLoading)?'disabled':''}>
+              ${state.storyboardLoading ? I('refresh',12) : I('sparkles',12)} ${state.storyboardLoading ? T('AI กำลังจัด…','AI is planning…') : (state.avatarStoryboard.length ? T('สร้างใหม่','Re-plan') : T('ให้ AI จัด bg ทั้งหมด','AI plan all bgs'))}
+            </button>
           </div>
-          <!-- Scene chips -->
-          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
-            ${AVATAR_BG_SCENES.map(function(s){
-              var on = (state.avatarBgScene||'auto') === s.id && !(state.avatarBgSearch||'').trim();
-              return '<button class="pill '+(on?'orange':'')+'" data-bgscene="'+s.id+'" '
-                + 'style="height:30px;font-size:11px;cursor:pointer;padding:0 10px;display:inline-flex;align-items:center;gap:4px">'
-                + I(s.icon,11,on?'#fff':'#9C8BB8')+' '+t({th:s.th,en:s.en})
-                + '</button>';
-            }).join('')}
-          </div>
-          <!-- Free-text Pexels search (OEM-style) -->
-          <div style="display:flex;gap:6px;margin-bottom:10px">
-            <div style="position:relative;flex:1">
-              <span style="position:absolute;top:50%;left:10px;transform:translateY(-50%);pointer-events:none;display:inline-flex">${I('search',12,'#9C8BB8')}</span>
-              <input class="input" id="ppAvatarBgSearch" placeholder="${T('ค้นหา Pexels เช่น: tarot cards, neon city, golden hour','Search Pexels e.g. tarot cards, neon city, golden hour')}" value="${escText(state.avatarBgSearch||'')}" style="height:32px;font-size:11.5px;padding-left:28px;padding-right:10px;width:100%"/>
-            </div>
-            <button class="btn outline" data-bgsearch="1" style="height:32px;font-size:11px;padding:0 12px">${I('refresh',12)} ${T('ค้นหา','Go')}</button>
-            ${(state.avatarBgSearch||'').trim() ? `<button class="btn ghost" data-bgsearchclear="1" style="height:32px;font-size:11px;padding:0 10px;color:var(--muted)">${I('x',12)} ${T('ล้าง','Clear')}</button>` : ''}
-          </div>
-          <!-- Thumbnail grid — OEM-style, click to lock a specific clip -->
           ${(function(){
-            var cands = state.avatarBgCandidates || [];
-            if (!cands.length && state.avatarBgLoading) {
-              return '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">'
-                + Array(4).fill(0).map(function(){
-                    return '<div style="aspect-ratio:9/16;border-radius:8px;background:linear-gradient(135deg,#EDE9FE,#FAE8FF);animation:ppBgPulse 1.4s ease-in-out infinite"></div>';
-                  }).join('')
-                + '<style>@keyframes ppBgPulse{0%,100%{opacity:.55}50%{opacity:1}}</style>'
+            // Empty state — nothing planned yet
+            if (state.avatarStoryboard.length === 0) {
+              return '<div style="padding:20px;text-align:center;background:#fff;border-radius:10px;border:1px dashed var(--line);font-size:12px;color:var(--muted);line-height:1.7">'
+                + I('info',16,'var(--muted)')
+                + '<div style="margin-top:6px">'+T('เขียนสคริปต์ + ตั้งความยาวก่อน — แล้วกด "ให้ AI จัด bg ทั้งหมด"','Write a script + set duration first — then hit "AI plan all bgs"')+'</div>'
+                + '<div style="font-size:10.5px;margin-top:4px;opacity:.8">'+T('AI จะแยก script เป็น N ช่วง และเลือก Pexels bg ที่เข้ากันให้แต่ละช่วง','AI splits the script into N segments and picks a matching Pexels bg for each')+'</div>'
                 + '</div>';
             }
-            if (!cands.length) {
-              return '<div style="font-size:11px;color:var(--muted);padding:10px;text-align:center;background:#fff;border-radius:8px;border:1px dashed var(--line)">'
-                + T('ไม่มี preview สำหรับฉากนี้ — ใช้ video bg อัตโนมัติ', 'No previews for this scene — using auto bg')
-                + '</div>';
-            }
-            return '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">'
-              + cands.slice(0, 8).map(function(v, i){
-                  var picked = state.avatarBgPickedUrl
-                    ? (v.url === state.avatarBgPickedUrl)
-                    : (i === 0 && !state.avatarBgPickedUrl);
-                  var thumb = v.preview || '';
+            // Render N slot cards
+            return '<div style="display:flex;flex-direction:column;gap:8px">'
+              + state.avatarStoryboard.map(function(slot, i){
+                  var open  = state.storyboardOpenSlot === i;
+                  var startM = Math.floor(slot.start_at_sec/60), startS = String(slot.start_at_sec%60).padStart(2,'0');
+                  var endSec = slot.start_at_sec + slot.duration_sec;
+                  var endM = Math.floor(endSec/60), endS = String(endSec%60).padStart(2,'0');
+                  var thumb = slot.preview || '';
                   var thumbStyle = thumb
                     ? 'background-image:url('+thumb+');background-size:cover;background-position:center'
                     : 'background:linear-gradient(135deg,#1a0033,#4A0E2C)';
-                  return '<button data-bgpick="'+escText(v.url||'')+'" '
-                    + 'style="position:relative;aspect-ratio:9/16;border-radius:8px;border:'+(picked?'3px solid var(--orange)':'2px solid transparent')+';padding:0;cursor:pointer;overflow:hidden;'+thumbStyle+';transition:transform .15s">'
-                    + (picked ? '<span style="position:absolute;top:4px;right:4px;width:18px;height:18px;border-radius:99px;background:var(--orange);color:#fff;display:grid;place-items:center;font-size:10px;font-weight:800">✓</span>' : '')
-                    + (v.isLocal ? '<span style="position:absolute;bottom:4px;left:4px;font-size:8px;font-weight:800;color:#fff;background:rgba(0,0,0,.55);padding:1px 5px;border-radius:4px;letter-spacing:.04em">LOCAL</span>' : '')
-                    + (v.duration ? '<span style="position:absolute;bottom:4px;right:4px;font-size:8px;font-weight:800;color:#fff;background:rgba(0,0,0,.55);padding:1px 5px;border-radius:4px">'+Math.round(v.duration)+'s</span>' : '')
-                    + '</button>';
+                  var html = '<div style="background:#fff;border-radius:10px;border:1px solid var(--line);overflow:hidden">';
+                  html += '<div style="display:flex;align-items:center;gap:10px;padding:10px">';
+                  html += '<div style="width:46px;aspect-ratio:9/16;border-radius:6px;'+thumbStyle+';flex-shrink:0;position:relative">';
+                  if (!slot.bg_url) html += '<div style="position:absolute;inset:0;display:grid;place-items:center;color:#fff">'+I('image',12,'#fff')+'</div>';
+                  html += '</div>';
+                  html += '<div style="flex:1;min-width:0">';
+                  html += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">';
+                  html += '<span style="font-size:10px;font-weight:800;color:var(--orange);background:var(--orange-soft);padding:2px 7px;border-radius:99px">⏱ '+startM+':'+startS+'-'+endM+':'+endS+'</span>';
+                  html += '<span style="font-size:9.5px;color:var(--muted)">'+slot.duration_sec+T(' วิ',' s')+'</span>';
+                  html += '</div>';
+                  html += '<div style="font-size:11.5px;color:var(--ink2);line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">';
+                  if (slot.script_chunk_th) html += '💬 '+escText(slot.script_chunk_th);
+                  else html += '<span style="color:var(--muted);font-style:italic">'+T('ไม่มีสคริปต์ในช่วงนี้','No script for this slot')+'</span>';
+                  html += '</div>';
+                  if (slot.bg_query_en) html += '<div style="font-size:9.5px;color:var(--muted);margin-top:3px">🔍 '+escText(slot.bg_query_en)+'</div>';
+                  html += '</div>';
+                  html += '<button class="btn outline" data-slottoggle="'+i+'" style="height:28px;font-size:10.5px;padding:0 10px;flex-shrink:0">';
+                  html += (open ? I('x',11)+' '+T('ปิด','Close') : I('refresh',11)+' '+T('เปลี่ยน','Change'));
+                  html += '</button>';
+                  html += '</div>';
+                  if (open) {
+                    html += '<div style="padding:10px;border-top:1px dashed var(--line);background:#FAF6EF">';
+                    html += '<div style="display:flex;gap:6px;margin-bottom:8px">';
+                    html += '<div style="position:relative;flex:1">';
+                    html += '<span style="position:absolute;top:50%;left:10px;transform:translateY(-50%);pointer-events:none;display:inline-flex">'+I('search',12,'#9C8BB8')+'</span>';
+                    var ssVal = (state.storyboardSearch[i]!=null ? state.storyboardSearch[i] : (slot.bg_query_en||''));
+                    html += '<input class="input" data-slotsearchin="'+i+'" placeholder="'+T('ค้นหา Pexels…','Search Pexels…')+'" value="'+escText(ssVal)+'" style="height:30px;font-size:11px;padding-left:28px;padding-right:10px;width:100%"/>';
+                    html += '</div>';
+                    html += '<button class="btn outline" data-slotsearch="'+i+'" style="height:30px;font-size:10.5px;padding:0 10px">'+T('ค้นหา','Go')+'</button>';
+                    html += '</div>';
+                    var cands = state.storyboardSlotCands[i] || [];
+                    if (state.storyboardSlotCands['_loading_'+i]) {
+                      html += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px">'
+                        + Array(4).fill(0).map(function(){ return '<div style="aspect-ratio:9/16;border-radius:6px;background:linear-gradient(135deg,#EDE9FE,#FAE8FF);animation:ppBgPulse 1.4s ease-in-out infinite"></div>'; }).join('')
+                        + '<style>@keyframes ppBgPulse{0%,100%{opacity:.55}50%{opacity:1}}</style>'
+                        + '</div>';
+                    } else if (!cands.length) {
+                      html += '<div style="font-size:10.5px;color:var(--muted);padding:8px;text-align:center;background:#fff;border-radius:8px;border:1px dashed var(--line)">'+T('กดค้นหาเพื่อโหลด Pexels','Hit Go to load Pexels')+'</div>';
+                    } else {
+                      html += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px">';
+                      cands.slice(0,8).forEach(function(v){
+                        var picked = (slot.bg_url === v.url);
+                        var ts = v.preview ? 'background-image:url('+v.preview+');background-size:cover;background-position:center' : 'background:linear-gradient(135deg,#1a0033,#4A0E2C)';
+                        html += '<button data-slotpickurl="'+i+'|'+escText(v.url||'')+'|'+escText(v.preview||'')+'" '
+                          + 'style="position:relative;aspect-ratio:9/16;border-radius:6px;border:'+(picked?'2px solid var(--orange)':'1px solid var(--line)')+';padding:0;cursor:pointer;overflow:hidden;'+ts+'">';
+                        if (picked) html += '<span style="position:absolute;top:3px;right:3px;width:14px;height:14px;border-radius:99px;background:var(--orange);color:#fff;display:grid;place-items:center;font-size:8px;font-weight:800">✓</span>';
+                        if (v.duration) html += '<span style="position:absolute;bottom:2px;right:2px;font-size:7.5px;font-weight:800;color:#fff;background:rgba(0,0,0,.55);padding:1px 4px;border-radius:3px">'+Math.round(v.duration)+'s</span>';
+                        html += '</button>';
+                      });
+                      html += '</div>';
+                    }
+                    html += '</div>';
+                  }
+                  html += '</div>';
+                  return html;
                 }).join('')
               + '</div>'
-              + '<div style="font-size:9.5px;color:var(--muted);margin-top:6px;text-align:right">' + T('คลิปจาก Pexels (ใช้ฟรี เครดิตที่ pexels.com)','Clips from Pexels (free, credit pexels.com)') + '</div>';
+              + '<div style="font-size:9.5px;color:var(--muted);margin-top:8px;text-align:right">'+T('คลิปจาก Pexels (ใช้ฟรี · เครดิตที่ pexels.com)','Clips from Pexels (free · credit pexels.com)')+'</div>';
           })()}
-          <!-- Rotation interval — how often the bg cycles through the picker's clips -->
-          <div style="margin-top:12px;padding-top:10px;border-top:1px dashed var(--line)">
-            <div style="font-size:10.5px;font-weight:800;color:var(--purple);letter-spacing:.04em;text-transform:uppercase;margin-bottom:6px;display:flex;align-items:center;gap:5px">
-              ${I('refresh',11,'#5B21B6')} ${T('สลับฉากบ่อยแค่ไหน','Switch scene every')}
-            </div>
-            <div style="display:flex;gap:5px;flex-wrap:wrap">
-              ${[
-                {v:0,  th:'ไม่เปลี่ยน', en:'No switch'},
-                {v:3,  th:'3 วิ',      en:'3 sec'},
-                {v:5,  th:'5 วิ',      en:'5 sec'},
-                {v:8,  th:'8 วิ',      en:'8 sec'},
-                {v:12, th:'12 วิ',     en:'12 sec'},
-                {v:20, th:'20 วิ',     en:'20 sec'},
-              ].map(function(o){
-                var on = (state.avatarBgInterval||0) === o.v;
-                return '<button class="pill '+(on?'orange':'')+'" data-bginterval="'+o.v+'" '
-                  + 'style="height:28px;font-size:11px;padding:0 10px">' + t({th:o.th,en:o.en}) + '</button>';
-              }).join('')}
-            </div>
-            <div style="font-size:10px;color:var(--muted);margin-top:5px;line-height:1.4">
-              ${(state.avatarBgInterval||0) > 0 && (state.avatarBgCandidates||[]).length > 1
-                ? T('จะวนระหว่าง '+(state.avatarBgCandidates.length)+' คลิปทุก '+state.avatarBgInterval+' วินาที','Will cycle through '+(state.avatarBgCandidates.length)+' clips every '+state.avatarBgInterval+'s')
-                : T('ใช้คลิปเดียววนลูป','Loops a single clip')}
-            </div>
-          </div>
-          <!-- Total clip duration — overrides TTS-audio length when set -->
-          <div style="margin-top:10px;padding-top:8px;border-top:1px dashed var(--line)">
-            <div style="font-size:10.5px;font-weight:800;color:var(--purple);letter-spacing:.04em;text-transform:uppercase;margin-bottom:6px;display:flex;align-items:center;gap:5px">
-              ${I('play',11,'#5B21B6')} ${T('ความยาวคลิป','Total clip length')}
-            </div>
-            <div style="display:flex;gap:5px;flex-wrap:wrap">
-              ${[
-                {v:0,   th:'ตามเสียง', en:'Match audio'},
-                {v:15,  th:'15 วิ',    en:'15 sec'},
-                {v:30,  th:'30 วิ',    en:'30 sec'},
-                {v:60,  th:'1 นาที',   en:'1 min'},
-                {v:90,  th:'1:30',     en:'1:30'},
-                {v:120, th:'2 นาที',   en:'2 min'},
-                {v:180, th:'3 นาที',   en:'3 min'},
-                {v:300, th:'5 นาที',   en:'5 min'},
-              ].map(function(o){
-                var on = (state.avatarClipDuration||0) === o.v;
-                return '<button class="pill '+(on?'orange':'')+'" data-clipdur="'+o.v+'" '
-                  + 'style="height:28px;font-size:11px;padding:0 10px">' + t({th:o.th,en:o.en}) + '</button>';
-              }).join('')}
-            </div>
-            <div style="font-size:10px;color:var(--muted);margin-top:5px;line-height:1.4">
-              ${(state.avatarClipDuration||0) > 0
-                ? ((state.avatarClipDuration||0) >= 60
-                    ? T('คลิปยาว '+Math.floor(state.avatarClipDuration/60)+' นาที '+(state.avatarClipDuration%60?state.avatarClipDuration%60+' วิ':'')+' — ถ้าเสียงสั้นกว่า bg จะวนต่อจนครบ','Renders '+Math.floor(state.avatarClipDuration/60)+'m '+(state.avatarClipDuration%60?state.avatarClipDuration%60+'s':'')+' — if audio is shorter, bg loops to fill')
-                    : T('คลิปยาว '+state.avatarClipDuration+' วินาที — ถ้าเสียงสั้นกว่า bg จะวนต่อจนครบ','Renders '+state.avatarClipDuration+'s — if audio is shorter, bg loops to fill'))
-                : T('ใช้ความยาวเสียง TTS เป็นตัวกำหนด','Uses TTS audio length')}
-            </div>
-          </div>
           <input type="file" accept="video/*" id="ppAvatarBgUploadInput" style="display:none"/>
         </div>
         <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
@@ -4316,10 +4363,12 @@ render();
     state.avatarScriptLoading = true; render();
     toast(state.lang==='th'?'AI กำลังเขียนสคริปต์…':'AI is writing the script…');
     try {
+      // Pass the user-picked clip duration so AI sizes the script to fit (defaults to 30s for Reels).
+      var targetDur = state.avatarClipDuration > 0 ? state.avatarClipDuration : 30;
       var j = await api('/api/ai/avatar-script-brand', { method:'POST', body:{
         brandName: ab.name, businessType: ab.bizType||'', brandDesc: ab.desc||state.brandDesc||'',
         voices: voiceLabels, archetype: arch?(state.lang==='th'?arch.th:arch.en):'',
-        topic: topic, duration_sec: 30,
+        topic: topic, duration_sec: targetDur,
         voice_gender: voiceGender,
         voice_persona: voicePersona,
       }});
@@ -4337,6 +4386,174 @@ render();
   }
   document.addEventListener('click', function(e){
     if (e.target.closest('[data-avatarscript]')) { e.preventDefault(); genAvatarScript(); }
+  });
+
+  // ── 🎬 Storyboard generator ─────────────────────────────────────────────
+  // Splits the avatar script into N time-aligned slots (N = duration ÷ interval),
+  // asks AI for a Pexels search query per slot, then fetches a bg per slot.
+  // User can later swap any slot's bg via the per-slot picker (data-slottoggle).
+  async function genStoryboard(){
+    if (state.storyboardLoading) return;
+    var script = (state.avatarScript||'').trim();
+    if (!script) { toast(state.lang==='th'?'เขียนสคริปต์ก่อน':'Write a script first','error'); return; }
+    var dur = state.avatarClipDuration || Math.max(15, Math.round(script.length / 15));
+    var ivl = state.avatarBgInterval || 0;
+    var nSlots = (ivl > 0) ? Math.max(1, Math.ceil(dur / ivl)) : 1;
+    state.storyboardLoading = true; state.storyboardOpenSlot = -1; render();
+    toast(state.lang==='th'?('AI กำลังแยกสคริปต์เป็น '+nSlots+' ฉาก…'):('AI splitting script into '+nSlots+' scenes…'));
+    try {
+      var ab = BRANDS.filter(function(b){ return b.id===state.brand; })[0];
+      var course = /ดูดวง|สายมู|tarot/.test((ab&&ab.bizType||'').toLowerCase()) ? 'GURU' : 'PFB';
+      var r = await api('/api/ai/avatar-scenes', { method:'POST', body:{ script: script, n_scenes: nSlots, course: course } });
+      var scenes = (r && r.scenes) || [];
+      if (!scenes.length) throw new Error('AI returned 0 scenes');
+      // Normalize: ensure each slot has duration = ivl (or split duration if ivl=0)
+      var even = (ivl > 0) ? ivl : Math.round(dur / scenes.length);
+      // Split the script into N approximately-equal chunks aligned to the slots
+      var chunks = splitScriptIntoChunks(script, scenes.length);
+      var slots = scenes.map(function(sc, i){
+        return {
+          idx: i,
+          start_at_sec: i * even,
+          duration_sec: (i === scenes.length-1) ? Math.max(2, dur - i*even) : even,
+          script_chunk_th: chunks[i] || '',
+          bg_query_en: sc.bg_query_en || 'lifestyle aesthetic',
+          bg_url: '',
+          preview: '',
+          title_thai: sc.title_thai || '',
+        };
+      });
+      state.avatarStoryboard = slots;
+      state.storyboardSlotCands = {};
+      state.storyboardSearch = {};
+      render();
+      // Fetch a Pexels bg for each slot in parallel — best-effort, render() each time one lands
+      slots.forEach(function(s, i){
+        api('/api/ai/pexels-video-search?q=' + encodeURIComponent(s.bg_query_en) + '&per_page=4&orientation=portrait')
+          .then(function(rp){
+            var vids = (rp && rp.videos) || [];
+            state.storyboardSlotCands[i] = vids;
+            if (vids.length && vids[0].url) {
+              state.avatarStoryboard[i].bg_url = vids[0].url;
+              state.avatarStoryboard[i].preview = vids[0].preview || '';
+              // Also mirror the first slot's bg into the live phone preview
+              if (i === 0) state.avatarPreviewBgUrl = vids[0].url;
+            }
+            render();
+          })
+          .catch(function(){ /* skip — leaves bg_url empty, gradient fallback at render time */ });
+      });
+      toast(state.lang==='th'?('Storyboard พร้อม — '+slots.length+' ฉาก ✓'):('Storyboard ready — '+slots.length+' scenes ✓'),'success');
+    } catch(e){
+      toast((state.lang==='th'?'จัด storyboard ไม่สำเร็จ: ':'Storyboard failed: ')+(e.message||''),'error');
+    } finally {
+      state.storyboardLoading = false; render();
+    }
+  }
+  // Split a Thai script into N approximately-equal chunks by sentence/clause boundary.
+  // Strategy: tokenize on punctuation + Thai sentence-ender particles, then re-group
+  // tokens into N buckets of ~equal total character count.
+  function splitScriptIntoChunks(script, n) {
+    script = String(script||'').trim();
+    if (n <= 1) return [script];
+    // Forward-match sentence-ish chunks ending in punctuation or Thai particles.
+    // No lookbehind — keeps parser-compat with older script-check tools.
+    var sentenceRe = new RegExp('[^.!?\\n]+?(?:[.!?]+|ครับ|ค่ะ|นะคะ|นะครับ|$)', 'g');
+    var matches = script.match(sentenceRe) || [];
+    var tokens = matches.map(function(s){ return s.trim(); }).filter(Boolean);
+    if (tokens.length < n) {
+      // Fall back to even char split with word-boundary awareness
+      var step = Math.ceil(script.length / n);
+      var out = [], i = 0;
+      while (i < script.length && out.length < n) {
+        var end = Math.min(script.length, i + step);
+        if (end < script.length) {
+          var sp = script.lastIndexOf(' ', end);
+          if (sp > i + step * 0.6) end = sp;
+        }
+        out.push(script.slice(i, end).trim());
+        i = end;
+      }
+      while (out.length < n) out.push('');
+      return out;
+    }
+    // Re-group tokens into N buckets of ~equal total length
+    var target = script.length / n;
+    var buckets = [];
+    var current = '', curLen = 0;
+    tokens.forEach(function(s){
+      if (curLen >= target && buckets.length < n - 1) {
+        buckets.push(current.trim()); current = ''; curLen = 0;
+      }
+      current += s + ' ';
+      curLen += s.length;
+    });
+    if (current) buckets.push(current.trim());
+    while (buckets.length < n) buckets.push('');
+    return buckets.slice(0, n);
+  }
+  // Per-slot Pexels search — fetches 8 candidates for the slot's current query
+  async function searchSlotBg(slotIdx){
+    var slot = state.avatarStoryboard[slotIdx]; if (!slot) return;
+    var query = (state.storyboardSearch[slotIdx]||'').trim() || slot.bg_query_en || 'lifestyle';
+    state.storyboardSlotCands['_loading_'+slotIdx] = true; render();
+    try {
+      var r = await api('/api/ai/pexels-video-search?q=' + encodeURIComponent(query) + '&per_page=8&orientation=portrait');
+      var vids = (r && r.videos) || [];
+      state.storyboardSlotCands[slotIdx] = vids;
+      state.avatarStoryboard[slotIdx].bg_query_en = query;   // remember the query that produced these
+    } catch(e){
+      toast((state.lang==='th'?'ค้นหา Pexels ไม่สำเร็จ: ':'Pexels search failed: ')+(e.message||''),'error');
+    } finally {
+      state.storyboardSlotCands['_loading_'+slotIdx] = false; render();
+    }
+  }
+  document.addEventListener('click', function(e){
+    if (e.target.closest('[data-genstoryboard]')) { e.preventDefault(); genStoryboard(); return; }
+    var st = e.target.closest('[data-slottoggle]');
+    if (st) {
+      e.preventDefault();
+      var idx = parseInt(st.getAttribute('data-slottoggle'), 10);
+      state.storyboardOpenSlot = (state.storyboardOpenSlot === idx) ? -1 : idx;
+      // Lazy-load candidates if this slot doesn't have any yet
+      if (state.storyboardOpenSlot === idx && !(state.storyboardSlotCands[idx]||[]).length) {
+        searchSlotBg(idx);
+      }
+      render();
+      return;
+    }
+    var ss = e.target.closest('[data-slotsearch]');
+    if (ss) {
+      e.preventDefault();
+      var i2 = parseInt(ss.getAttribute('data-slotsearch'), 10);
+      var inp = document.querySelector('[data-slotsearchin="'+i2+'"]');
+      if (inp) state.storyboardSearch[i2] = inp.value.trim();
+      searchSlotBg(i2);
+      return;
+    }
+    var sp = e.target.closest('[data-slotpickurl]');
+    if (sp) {
+      e.preventDefault();
+      var parts = sp.getAttribute('data-slotpickurl').split('|');
+      var i3 = parseInt(parts[0], 10);
+      var url = parts[1] || '';
+      var preview = parts[2] || '';
+      if (state.avatarStoryboard[i3]) {
+        state.avatarStoryboard[i3].bg_url = url;
+        state.avatarStoryboard[i3].preview = preview;
+        // Mirror the first slot's bg into the live phone preview
+        if (i3 === 0) state.avatarPreviewBgUrl = url;
+      }
+      render();
+      return;
+    }
+  });
+  document.addEventListener('input', function(e){
+    var t = e.target;
+    if (t && t.hasAttribute && t.hasAttribute('data-slotsearchin')) {
+      var i = parseInt(t.getAttribute('data-slotsearchin'), 10);
+      state.storyboardSearch[i] = t.value;
+    }
   });
 
   // Create a new presenter portrait with AI (Gemini image gen)
@@ -4518,57 +4735,67 @@ render();
         : audioDur;
 
       // 1) Build the scene timeline.
-      //    Mode A — user set a rotation interval AND has 2+ Pexels candidates
-      //              → cycle through them at that interval (no AI split needed)
-      //    Mode B — user set a single clip (or only 1 candidate)
-      //              → one scene covering the whole duration
-      //    Mode C — no candidates picked yet → fall back to AI scene-split (legacy)
+      //    Mode A — storyboard exists (user planned bgs per slot) → use verbatim
+      //    Mode B — no storyboard but rotation interval is set with 2+ candidates
+      //              → cycle through candidates at the interval
+      //    Mode C — single clip locked → one scene for the full duration
+      //    Mode D — nothing picked → legacy AI scene-split + per-scene Pexels
       var caption = (state.avatarScript||'').trim();
       var scenes = [];
-      var cands = (state.avatarBgCandidates || []).filter(function(c){ return c && c.url; });
-      var rotateSec = state.avatarBgInterval || 0;
-      var lockedUrl = state.avatarBgPickedUrl || (cands[0] && cands[0].url) || '';
+      var storyboard = (state.avatarStoryboard || []).filter(function(s){ return s && s.bg_url; });
 
-      if (rotateSec > 0 && cands.length > 1) {
-        // Mode A: even slices of `rotateSec`, looping through candidates
-        var nSlices = Math.max(1, Math.ceil(duration / rotateSec));
-        for (var k = 0; k < nSlices; k++) {
-          var startAt = k * rotateSec;
-          var dur = Math.min(rotateSec, duration - startAt);
-          var cand = cands[k % cands.length];
-          scenes.push({
-            idx: k,
-            title_thai: '',
-            bg_query_en: '',
-            bg_video_url: cand.url,
-            start_at_sec: startAt,
-            duration_sec: dur,
-          });
-        }
-      } else if (lockedUrl) {
-        // Mode B: single clip for the entire duration
-        scenes = [{ idx:0, title_thai:'', bg_query_en:'', bg_video_url: lockedUrl, start_at_sec:0, duration_sec: duration }];
+      if (storyboard.length > 0) {
+        // Mode A — storyboard wins. Use each slot's bg_url verbatim.
+        scenes = storyboard.map(function(s){
+          return {
+            idx: s.idx,
+            title_thai: s.title_thai || s.script_chunk_th || '',
+            bg_query_en: s.bg_query_en || '',
+            bg_video_url: s.bg_url,
+            start_at_sec: s.start_at_sec,
+            duration_sec: s.duration_sec,
+          };
+        });
       } else {
-        // Mode C: legacy AI-driven scene split (no candidates picked)
-        try {
-          var sceneR = await api('/api/ai/avatar-scenes', { method:'POST', body:{
-            script: caption,
-            n_scenes: Math.max(2, Math.round(duration / 6)),
-          }});
-          scenes = (sceneR && sceneR.scenes) || [];
-        } catch(e){ /* fall back to 1 unsplit scene */ }
-        if (!scenes.length) {
-          scenes = [{ idx:0, title_thai:'', bg_query_en: ((ab.bizType||'')+ ' lifestyle thai').trim() || 'lifestyle', start_at_sec:0, duration_sec: duration }];
-        }
-        // For each AI-suggested scene, fetch its Pexels video
-        for (var si = 0; si < scenes.length; si++) {
-          var scn = scenes[si];
-          if (scn.bg_video_url) continue;
+        var cands = (state.avatarBgCandidates || []).filter(function(c){ return c && c.url; });
+        var rotateSec = state.avatarBgInterval || 0;
+        var lockedUrl = state.avatarBgPickedUrl || (cands[0] && cands[0].url) || '';
+
+        if (rotateSec > 0 && cands.length > 1) {
+          // Mode B: even slices of `rotateSec`, looping through candidates
+          var nSlices = Math.max(1, Math.ceil(duration / rotateSec));
+          for (var k = 0; k < nSlices; k++) {
+            var startAt = k * rotateSec;
+            var dur = Math.min(rotateSec, duration - startAt);
+            var cand = cands[k % cands.length];
+            scenes.push({
+              idx: k, title_thai: '', bg_query_en: '', bg_video_url: cand.url,
+              start_at_sec: startAt, duration_sec: dur,
+            });
+          }
+        } else if (lockedUrl) {
+          // Mode C: single clip for the entire duration
+          scenes = [{ idx:0, title_thai:'', bg_query_en:'', bg_video_url: lockedUrl, start_at_sec:0, duration_sec: duration }];
+        } else {
+          // Mode D: legacy AI-driven scene split (rare — only when neither storyboard nor picker was used)
           try {
-            var pr = await api('/api/ai/pexels-video-search?q=' + encodeURIComponent(scn.bg_query_en) + '&per_page=3&orientation=portrait');
-            var vids = (pr && pr.videos) || [];
-            if (vids.length) scn.bg_video_url = vids[0].url;
-          } catch(_) { /* gradient fallback */ }
+            var sceneR = await api('/api/ai/avatar-scenes', { method:'POST', body:{
+              script: caption, n_scenes: Math.max(2, Math.round(duration / 6)),
+            }});
+            scenes = (sceneR && sceneR.scenes) || [];
+          } catch(e){ /* fall back to 1 unsplit scene */ }
+          if (!scenes.length) {
+            scenes = [{ idx:0, title_thai:'', bg_query_en: ((ab.bizType||'')+ ' lifestyle thai').trim() || 'lifestyle', start_at_sec:0, duration_sec: duration }];
+          }
+          for (var si = 0; si < scenes.length; si++) {
+            var scn = scenes[si];
+            if (scn.bg_video_url) continue;
+            try {
+              var pr = await api('/api/ai/pexels-video-search?q=' + encodeURIComponent(scn.bg_query_en) + '&per_page=3&orientation=portrait');
+              var vids = (pr && pr.videos) || [];
+              if (vids.length) scn.bg_video_url = vids[0].url;
+            } catch(_) { /* gradient fallback */ }
+          }
         }
       }
 
@@ -6142,7 +6369,7 @@ render();
     + '[data-filter],[data-filterclose],[data-sortby],[data-instocktoggle],'
     + '[data-gentopics],[data-topicgoal],'
     + '[data-saveproduct],[data-newimgclear],[data-newimg],[data-proddelete],[data-usetopic],[data-genall],[data-savedraft],[data-savevideodraft],[data-editdraft],[data-deletedraft],[data-schedule],[data-avatarscript],[data-veogen],[data-newavatar],'
-    + '[data-uploadavatar],[data-uploadref],[data-clearref],[data-pickrefproduct],[data-refclose],[data-refpick],[data-genvideoprompt],[data-delavatar],[data-addtoday],[data-pickdraft],[data-pickdraftclose],[data-pickdraftgo],[data-tts],[data-pickfbpage],[data-avatarvideo],[data-pastevideourl],[data-locallocaltoggle],[data-bgscene],[data-bgpick],[data-bgsearch],[data-bgsearchclear],[data-bginterval],[data-clipdur],[data-avatarabort],'
+    + '[data-uploadavatar],[data-uploadref],[data-clearref],[data-pickrefproduct],[data-refclose],[data-refpick],[data-genvideoprompt],[data-delavatar],[data-addtoday],[data-pickdraft],[data-pickdraftclose],[data-pickdraftgo],[data-tts],[data-pickfbpage],[data-avatarvideo],[data-pastevideourl],[data-locallocaltoggle],[data-bgscene],[data-bgpick],[data-bgsearch],[data-bgsearchclear],[data-bginterval],[data-clipdur],[data-avatarabort],[data-genstoryboard],[data-slottoggle],[data-slotsearch],[data-slotpickurl],'
     + '[data-previewaspect],[data-previewidx],[data-downloadpng]';
   document.addEventListener('click', function(e){
     var b = e.target.closest('button, a');
