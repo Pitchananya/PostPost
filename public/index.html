@@ -2708,7 +2708,8 @@ function pageAvatar() {
           ${state.avatarVideo
             ? `<a class="btn outline" style="flex:1;min-width:100px;text-decoration:none;justify-content:center" href="${state.avatarVideo}" download="postpost-avatar.${state.avatarVideoExt||'mp4'}">${I('download',14)} ${(state.avatarVideoExt||'mp4').toUpperCase()}</a>`
             : `<button class="btn outline" style="flex:1;min-width:100px" disabled>${I('download',14)} MP4</button>`}
-          <button class="btn outline" style="flex:1;min-width:140px">${I('send',14)} ${T('โพสต์','Post')}</button>
+          <button class="btn outline" data-saveavatardraft="1" style="flex:1;min-width:130px" ${(!state.avatarVideo || state.avatarSavingDraft)?'disabled':''}>${state.avatarSavingDraft?I('refresh',14):I('library',14)} ${state.avatarSavingDraft?T('กำลังบันทึก…','Saving…'):T('บันทึกดราฟ','Save draft')}</button>
+          <button class="btn outline" style="flex:1;min-width:100px">${I('send',14)} ${T('โพสต์','Post')}</button>
         </div>
         <div style="margin-top:14px;padding:12px;border-radius:12px;background:var(--blue-soft);border:1px solid #DBE5FF;display:flex;align-items:center;gap:10px">
           ${I('sparkles',14,'#2563EB')}
@@ -4717,12 +4718,18 @@ render();
           } catch (pollErr) { /* keep polling on transient errors */ }
         }
         if (videoUrl) {
-          state.avatarVideo = videoUrl;
-          toast(state.lang==='th'?'lip-sync เสร็จ ✓ — กด MP4 ดาวน์โหลด':'Lip-sync ready ✓','success');
-          return;                                          // success — skip canvas fallback
+          // The fal.ai output is a raw landscape clip of the avatar speaking (e.g. 896×448
+          // from OmniHuman). It has NO background — just the face/upper-body on whatever
+          // backdrop was in the uploaded photo. To match the user's reference clip we
+          // composite it on top of the Pexels storyboard bg via the canvas pipeline:
+          // bg video full-frame + lipsync video clipped to the centered circle + captions.
+          // Cache the URL so the canvas drawFrame() can pull frames from it per RAF tick.
+          state.avatarLipsyncRawVideo = videoUrl;
+          toast(state.lang==='th'?'lip-sync เสร็จ ✓ — กำลังประกอบกับพื้นหลัง…':'Lip-sync ready ✓ — compositing with bg…','success');
+          // fall through to canvas compositor (lipsyncRawVideo is the avatar layer)
+        } else {
+          toast(state.lang==='th'?'fal.ai ใช้เวลานานเกิน — สร้างแบบ static แทน':'fal.ai timed out — using static fallback','error');
         }
-        // poll timed out → fall through to canvas fallback
-        toast(state.lang==='th'?'fal.ai ใช้เวลานานเกิน — สร้างแบบ static แทน':'fal.ai timed out — using static fallback','error');
       }
     } catch (falErr) {
       var msg = (falErr && falErr.message) || '';
@@ -4832,9 +4839,26 @@ render();
         });
       }));
 
-      // 4) Load avatar image
+      // 4) Load avatar source — either the lipsync video (real mouth movement
+      //    from fal.ai) or the static portrait. The lipsync video has its own
+      //    audio track already perfectly synced, so when present we use it as
+      //    BOTH the avatar visual AND the audio source.
       var avImg = null;
-      if (picked && picked.image) {
+      var avLipsyncVideo = null;     // <video> element playing the fal.ai output
+      var hasLipsync = !!state.avatarLipsyncRawVideo;
+      if (hasLipsync) {
+        avLipsyncVideo = await new Promise(function(resolve){
+          var v = document.createElement('video');
+          v.crossOrigin = 'anonymous';
+          v.muted = false; v.playsInline = true; v.preload = 'auto';
+          v.src = state.avatarLipsyncRawVideo;
+          var done = false;
+          v.oncanplay = function(){ if (!done) { done = true; resolve(v); } };
+          v.onerror = function(){ if (!done) { done = true; resolve(null); } };
+          setTimeout(function(){ if (!done) { done = true; resolve(v); } }, 12000);
+        });
+      }
+      if (!avLipsyncVideo && picked && picked.image) {
         avImg = await new Promise(function(resolve){
           var im = new Image(); im.crossOrigin='anonymous';
           im.onload = function(){ resolve(im); };
@@ -4848,7 +4872,10 @@ render();
       var cv = document.createElement('canvas'); cv.width = W; cv.height = H;
       var cx = cv.getContext('2d');
       var canvasStream = cv.captureStream(30);
-      var audioEl = new Audio(state.ttsAudio); audioEl.crossOrigin = 'anonymous';
+      // Audio source: lipsync video has the synced TTS embedded; otherwise plain TTS.
+      var audioEl = avLipsyncVideo
+        ? avLipsyncVideo
+        : Object.assign(new Audio(state.ttsAudio), { crossOrigin: 'anonymous' });
       var srcNode = audioCtx.createMediaElementSource(audioEl);
       var dest = audioCtx.createMediaStreamDestination();
       // Connect ONLY to the recording stream — NOT to audioCtx.destination.
@@ -4973,19 +5000,34 @@ render();
         halo.addColorStop(1, 'rgba(0,0,0,.45)');
         cx.fillStyle = halo;
         cx.fillRect(bigX - bigR * 1.5, bigY - bigR * 1.5, bigR * 3, bigR * 3);
-        // Clip + draw the portrait inside the circle
+        // Clip + draw the portrait inside the circle.
+        // Prefer the live lipsync video (real mouth movement) over the static portrait.
         cx.save();
         cx.beginPath(); cx.arc(bigX, bigY, bigR, 0, Math.PI * 2); cx.closePath(); cx.clip();
-        if (avImg) {
-          // cover-fit: square crop centered on the face area (a bit above geometric center)
+        if (avLipsyncVideo && avLipsyncVideo.readyState >= 2) {
+          // The fal.ai output is usually landscape (e.g. 896×448 from OmniHuman) —
+          // crop the center vertical slice so the face sits in the circle.
+          var vvw = avLipsyncVideo.videoWidth || 896;
+          var vvh = avLipsyncVideo.videoHeight || 448;
+          var vvr = vvw / vvh;          // > 1 for landscape
+          var sdw, sdh, sdx, sdy;
+          if (vvr >= 1) {
+            // Landscape: fit height, crop sides
+            sdh = bigR * 2; sdw = sdh * vvr; sdx = bigX - sdw / 2; sdy = bigY - bigR;
+          } else {
+            // Portrait: fit width, crop top/bottom
+            sdw = bigR * 2; sdh = sdw / vvr; sdx = bigX - bigR;
+            sdy = bigY - bigR - (sdh - bigR * 2) * 0.18;
+          }
+          cx.drawImage(avLipsyncVideo, sdx, sdy, sdw, sdh);
+        } else if (avImg) {
+          // Static portrait fallback
           var iw = avImg.naturalWidth, ih = avImg.naturalHeight, ir = iw / ih, cr2 = 1;
           var idw, idh, idx2, idy;
           if (ir > cr2) {
             idh = bigR * 2; idw = idh * ir; idx2 = bigX - idw / 2; idy = bigY - bigR;
           } else {
             idw = bigR * 2; idh = idw / ir; idx2 = bigX - bigR;
-            // Shift the crop up so the face (typically in the upper third of a portrait)
-            // sits centered in the circle instead of the chest.
             idy = bigY - bigR - (idh - bigR * 2) * 0.18;
           }
           cx.drawImage(avImg, idx2, idy, idw, idh);
@@ -5157,6 +5199,7 @@ render();
       }
     } finally {
       state.avatarAbortRender = null;
+      state.avatarLipsyncRawVideo = '';     // clear — next render will go through lipsync again if user re-creates
       state.avatarVideoLoading = false; state.avatarVideoProgress = 0; render();
     }
   }
@@ -5811,6 +5854,7 @@ render();
   document.addEventListener('click', function(e){
     if (e.target.closest('[data-savedraft]')) { e.preventDefault(); saveDraft(); }
     if (e.target.closest('[data-savevideodraft]')) { e.preventDefault(); saveVideoDraft(); }
+    if (e.target.closest('[data-saveavatardraft]')) { e.preventDefault(); saveAvatarDraft(); }
   });
 
   // Pull the first frame of a video (URL or data URL) as a JPEG poster. Best-effort —
@@ -5848,6 +5892,85 @@ render();
   // Save the generated Veo video as a draft. Remote video_url drafts keep just the URL
   // in localStorage; base64 fallbacks go straight to IndexedDB so the 5MB cap doesn't
   // blow up. A poster (first frame, or the reference image) is kept for the Library card.
+  // ── 💾 Save the current Talking Avatar render as a draft ──
+  // Stores: avatar id, voice id, script, storyboard (slot bgs + chunks), and the
+  // rendered MP4. Blob URLs get materialised to base64 → IDB so the draft survives
+  // page reloads (Blob URLs are session-scoped, they'd die otherwise).
+  async function saveAvatarDraft(){
+    if (!state.avatarVideo) { toast(state.lang==='th'?'ยังไม่มีวิดีโอ':'No video yet','error'); return; }
+    if (state.avatarSavingDraft) return;
+    state.avatarSavingDraft = true; render();
+    try {
+      var ab = BRANDS.filter(function(b){ return b.id===state.brand; })[0];
+      var pickedAvatar = (typeof AVATARS!=='undefined'?AVATARS:[]).concat(state.customAvatars||[])
+        .filter(function(a){ return a.id===state.avatar; })[0];
+      var draftId = 'da' + Date.now();
+      // Build a poster — first frame of the rendered clip
+      var poster = '';
+      try { poster = await videoPosterDataUrl(state.avatarVideo, 360); } catch(_){}
+      if (!poster && pickedAvatar && pickedAvatar.image) {
+        try { poster = await compressImageDataUrl(pickedAvatar.image, 360, 0.7); } catch(_){}
+      }
+      // Convert the Blob URL to a base64 data URL, then store in IDB.
+      // (Blob URLs are session-scoped; they'd be dead after a reload.)
+      var videoId = null;
+      var videoUrl = '';
+      if (typeof state.avatarVideo === 'string' && state.avatarVideo.indexOf('blob:') === 0) {
+        try {
+          var blob = await fetch(state.avatarVideo).then(function(r){ return r.blob(); });
+          var dataUrl = await new Promise(function(resolve, reject){
+            var rd = new FileReader();
+            rd.onload = function(){ resolve(rd.result); };
+            rd.onerror = function(){ reject(new Error('read fail')); };
+            rd.readAsDataURL(blob);
+          });
+          videoId = 'av_' + draftId;
+          await idbPutImage(videoId, dataUrl);     // idb generic key/value store (reused from Veo flow)
+        } catch (e) {
+          videoId = null;
+          toast(state.lang==='th'?'พื้นที่เก็บไม่พอ — บันทึกข้อมูลแต่ไม่บันทึกวิดีโอ':'Storage low — saved meta only, not video','error');
+        }
+      } else if (typeof state.avatarVideo === 'string') {
+        videoUrl = state.avatarVideo;             // http / data URL — store as-is
+      }
+      var draft = {
+        id: draftId,
+        kind: 'avatar',                            // Library + editDraft hint
+        brandId: state.brand,
+        brandName: ab ? ab.name : '',
+        topic: (state.selectedTopic || (state.avatarScript||'').slice(0, 80) || (state.lang==='th'?'Talking Avatar':'Talking Avatar')),
+        script: state.avatarScript || '',
+        avatarId: state.avatar,
+        avatarName: pickedAvatar ? (pickedAvatar.name_th || pickedAvatar.name_en || '') : '',
+        avatarThumb: pickedAvatar ? pickedAvatar.image : '',
+        voiceId: state.avatarVoice || '',
+        mode: state.avatarMode || 'free',
+        lipsyncModel: state.avatarLipsyncModel || '',
+        clipDuration: state.avatarClipDuration || 0,
+        bgInterval: state.avatarBgInterval || 0,
+        storyboard: (state.avatarStoryboard||[]).map(function(s){
+          return { idx:s.idx, start_at_sec:s.start_at_sec, duration_sec:s.duration_sec,
+            script_chunk_th:s.script_chunk_th, bg_query_en:s.bg_query_en, bg_url:s.bg_url, preview:s.preview };
+        }),
+        videoUrl: videoUrl,
+        videoId: videoId,
+        videoExt: state.avatarVideoExt || 'mp4',
+        thumb: poster,
+        createdAt: Date.now(),
+      };
+      state.drafts = state.drafts || [];
+      state.drafts.unshift(draft);
+      try { localStorage.setItem('postpost_drafts', JSON.stringify(state.drafts)); }
+      catch(e) {
+        draft.thumb = '';
+        try { localStorage.setItem('postpost_drafts', JSON.stringify(state.drafts)); } catch(_){}
+      }
+      toast(state.lang==='th'?'บันทึกดราฟอวตารแล้ว ✓ (ดูได้ที่ "คลังคอนเทนต์")':'Avatar draft saved ✓ (see Library)','success');
+    } finally {
+      state.avatarSavingDraft = false; render();
+    }
+  }
+
   async function saveVideoDraft(){
     if (!state.ttvVideo) { toast(state.lang==='th'?'ยังไม่มีวิดีโอ':'No video yet','error'); return; }
     if (state.ttvSavingDraft) return;
@@ -6460,7 +6583,7 @@ render();
     + '[data-chconnect],[data-chdisconnect],[data-chsave],[data-chclose],'
     + '[data-filter],[data-filterclose],[data-sortby],[data-instocktoggle],'
     + '[data-gentopics],[data-topicgoal],'
-    + '[data-saveproduct],[data-newimgclear],[data-newimg],[data-proddelete],[data-usetopic],[data-genall],[data-savedraft],[data-savevideodraft],[data-editdraft],[data-deletedraft],[data-schedule],[data-avatarscript],[data-veogen],[data-newavatar],'
+    + '[data-saveproduct],[data-newimgclear],[data-newimg],[data-proddelete],[data-usetopic],[data-genall],[data-savedraft],[data-savevideodraft],[data-saveavatardraft],[data-editdraft],[data-deletedraft],[data-schedule],[data-avatarscript],[data-veogen],[data-newavatar],'
     + '[data-uploadavatar],[data-uploadref],[data-clearref],[data-pickrefproduct],[data-refclose],[data-refpick],[data-genvideoprompt],[data-delavatar],[data-addtoday],[data-pickdraft],[data-pickdraftclose],[data-pickdraftgo],[data-tts],[data-pickfbpage],[data-avatarvideo],[data-pastevideourl],[data-locallocaltoggle],[data-bgscene],[data-bgpick],[data-bgsearch],[data-bgsearchclear],[data-bginterval],[data-clipdur],[data-avatarabort],[data-genstoryboard],[data-slottoggle],[data-slotsearch],[data-slotpickurl],'
     + '[data-previewaspect],[data-previewidx],[data-downloadpng]';
   document.addEventListener('click', function(e){
