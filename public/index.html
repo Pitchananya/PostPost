@@ -493,6 +493,8 @@ const state = {
   shopUrl: '',
   shopScraping: false,
   shopStats: null,
+  useLocalScraper: false,     // when ON, /api/shopee/scrape calls go to http://localhost:3000 directly
+  localAgentAlive: null,      // null = unchecked, true/false = ping result for localhost:3000
   previewAspect: '4:5',    // 1:1 | 4:5 | 9:16  — aspect for post preview + PNG download
   previewIndex: 0,         // current slide in carousel
 };
@@ -1524,6 +1526,26 @@ function pageProfile() {
       <button class="btn ${state.shopScraping?'outline':'primary'}" data-shopeesync="1" ${state.shopScraping?'disabled':''}>${I('refresh',14)} ${state.shopScraping?T('กำลังดึง…','Syncing…'):T('ดึงข้อมูลใหม่','Re-sync')}</button>
       <button class="btn outline iconOnly">${I('external',14)}</button>
     </div>
+    ${(function(){
+      // Hint where the scrape will actually run + toggle to force-use the local Python agent.
+      // We check on Profile mount whether http://localhost:3000 is reachable (PostPost backend
+      // running on user's machine); if so the toggle shows up and lets them scrape on their own
+      // box — much faster than Render cold-start, and bypasses any cloud quota.
+      var alive = state.localAgentAlive;
+      var useLocal = state.useLocalScraper;
+      var onVercel = location.hostname.indexOf('vercel.app') >= 0 || location.protocol === 'https:';
+      // Only render the toggle on production (Vercel) since local dev already runs locally
+      if (!onVercel) return '';
+      return '<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:12px;background:'+(useLocal?'#ECFDF5':'#F8FAFC')+';border:1px solid '+(useLocal?'#10B981':'var(--line))')+';margin-bottom:16px;font-size:12.5px">'
+        + I(useLocal?'check':'package', 14, useLocal?'#059669':'#6B6473')
+        + '<div style="flex:1">'
+        +   '<b style="color:'+(useLocal?'#065F46':'var(--purple)')+'">'+T('ใช้เครื่องของคุณ scrape','Use your machine to scrape')+'</b>'
+        +   ' <span class="micro" style="margin-left:6px">'+(alive===true?T('🟢 localhost:3000 พร้อม','🟢 localhost:3000 ready'):alive===false?T('🔴 localhost:3000 ปิดอยู่ — เปิด `npm run dev` ก่อน','🔴 localhost:3000 down — run npm run dev'):T('🟡 กำลังตรวจ localhost…','🟡 checking localhost…'))+'</span>'
+        +   '<div class="micro" style="line-height:1.45;margin-top:2px">'+T('เปิดได้เมื่อรัน PostPost ที่เครื่อง (npm run dev) — เร็ว 14 วินาที, ผ่าน session Chrome ที่ login Shopee ไว้แล้ว','Only available when you run PostPost locally (npm run dev) — fast 14s scrape via your already-logged-in Chrome profile')+'</div>'
+        + '</div>'
+        + '<div class="toggle '+(useLocal?'on':'')+'" data-locallocaltoggle="1" '+(alive!==true?'style="opacity:.4;pointer-events:none"':'')+'></div>'
+        + '</div>';
+    })()}
     <div style="background:var(--blue-soft);border:1px solid #DBE5FF;border-radius:14px;padding:14px 16px;margin-bottom:16px">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
         ${I('info',14,'#2563EB')}
@@ -5197,6 +5219,47 @@ render();
   });
 
   // Shopee scraper — Re-sync button runs the real scrape
+  // Ping localhost:3000 to see if the user has PostPost running on their machine.
+  // Only run once per session — Vercel page load → silently check → flips state.localAgentAlive
+  // so the Profile page can show the "Use my machine" toggle.
+  async function checkLocalAgent(){
+    if (state.localAgentAlive !== null) return state.localAgentAlive;
+    try {
+      var ctrl = new AbortController();
+      var timer = setTimeout(function(){ ctrl.abort(); }, 1500);
+      var r = await fetch('http://localhost:3000/api/health', { signal: ctrl.signal });
+      clearTimeout(timer);
+      state.localAgentAlive = r.ok;
+    } catch (e) {
+      state.localAgentAlive = false;
+    }
+    return state.localAgentAlive;
+  }
+  // Auto-check on boot if we're on a non-localhost host (i.e. user visiting Vercel)
+  if (location.hostname && !/^(localhost|127\.|0\.0\.0\.0)/.test(location.hostname)) {
+    checkLocalAgent().then(function(){ render(); });
+  } else {
+    // We ARE on localhost — local agent is "us", no need to ping
+    state.localAgentAlive = true;
+  }
+
+  // Same as api() but lets us hit a different host (used for the "Use my machine" path)
+  async function apiAt(baseUrl, path, opts){
+    opts = opts || {};
+    var h = {};
+    if (opts.body !== undefined) h['Content-Type'] = 'application/json';
+    var tk = (typeof getTok==='function') ? getTok() : (localStorage.getItem('postpost_token')||'');
+    if (tk) h['Authorization'] = 'Bearer ' + tk;
+    var res = await fetch(baseUrl + path, {
+      method: opts.method || 'GET', headers: h,
+      body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+    });
+    var data = null;
+    try { data = await res.json(); } catch(e){}
+    if (!res.ok) throw new Error((data && (data.message || data.error)) || (res.status + ' ' + res.statusText));
+    return data;
+  }
+
   async function shopeeSync(){
     if (state.shopScraping) return;
     var inp = document.getElementById('ppShopUrl');
@@ -5204,12 +5267,20 @@ render();
     if (!url) { toast(state.lang==='th'?'วาง URL ร้าน Shopee ก่อน':'Paste a Shopee shop URL first','error'); return; }
     state.shopUrl = url;
     state.shopScraping = true;
+    // Use local machine (http://localhost:3000) if toggle is on AND local agent is alive.
+    // Note: same JWT_SECRET in local .env + Vercel env → same token works on both.
+    var useLocal = state.useLocalScraper && state.localAgentAlive === true;
+    var apiCall = useLocal
+      ? function(path, opts){ return apiAt('http://localhost:3000', path, opts); }
+      : api;
     render();
-    toast(state.lang==='th'?'กำลังดึงข้อมูลจาก Shopee… อาจใช้เวลา 1-3 นาที':'Scraping Shopee… 1-3 minutes');
+    toast(useLocal
+      ? (state.lang==='th'?'🖥 กำลังดึงผ่านเครื่องของคุณ… ~14 วินาที':'🖥 Scraping via your machine… ~14s')
+      : (state.lang==='th'?'☁ กำลังดึงผ่าน cloud… 1-3 นาที':'☁ Scraping via cloud… 1-3 min'));
     try {
       // Async pattern: submit returns 202 + job_id, then poll until done.
       // This avoids Vercel's 60s function timeout for slow cold-started workers.
-      var sub = await api('/api/shopee/scrape', { method:'POST', body:{ url: url } });
+      var sub = await apiCall('/api/shopee/scrape', { method:'POST', body:{ url: url, force_local: useLocal } });
       var j = sub;
       // If backend used async path (cloud mode), poll for completion
       if (sub && sub.job_id && sub.status === 'pending') {
@@ -5217,7 +5288,7 @@ render();
         for (var k = 0; k < pollMax; k++) {
           await new Promise(function(r){ setTimeout(r, 4000); });
           try {
-            var st = await api('/api/shopee/scrape-status?job_id=' + encodeURIComponent(sub.job_id));
+            var st = await apiCall('/api/shopee/scrape-status?job_id=' + encodeURIComponent(sub.job_id));
             if (st && st.status === 'done') { j = st.result || {}; break; }
             if (st && st.status === 'error') {
               j = st.result || { error: 'cloud', message: 'scrape failed on worker' };
@@ -5259,6 +5330,18 @@ render();
   }
   document.addEventListener('click', function(e){
     if (e.target.closest('[data-shopeesync]')) shopeeSync();
+    if (e.target.closest('[data-locallocaltoggle]')) {
+      e.preventDefault();
+      if (state.localAgentAlive !== true) {
+        toast(state.lang==='th'?'localhost:3000 ปิดอยู่ — เปิด `npm run dev` ที่เครื่องคุณก่อน':'localhost:3000 is down — run `npm run dev`','error');
+        return;
+      }
+      state.useLocalScraper = !state.useLocalScraper;
+      render();
+      toast(state.useLocalScraper
+        ? (state.lang==='th'?'🖥 จะใช้เครื่องคุณ scrape ครั้งหน้า':'🖥 Will scrape via your machine next time')
+        : (state.lang==='th'?'☁ กลับไปใช้ cloud':'☁ Switched back to cloud'),'success');
+    }
   });
 
   // AI brand-description writer — based on brand name + business type
@@ -5314,7 +5397,7 @@ render();
     + '[data-filter],[data-filterclose],[data-sortby],[data-instocktoggle],'
     + '[data-gentopics],[data-topicgoal],'
     + '[data-saveproduct],[data-newimgclear],[data-newimg],[data-proddelete],[data-usetopic],[data-genall],[data-savedraft],[data-savevideodraft],[data-editdraft],[data-deletedraft],[data-schedule],[data-avatarscript],[data-veogen],[data-newavatar],'
-    + '[data-uploadavatar],[data-uploadref],[data-clearref],[data-pickrefproduct],[data-refclose],[data-refpick],[data-genvideoprompt],[data-delavatar],[data-addtoday],[data-pickdraft],[data-pickdraftclose],[data-pickdraftgo],[data-tts],[data-pickfbpage],[data-avatarvideo],[data-pastevideourl],'
+    + '[data-uploadavatar],[data-uploadref],[data-clearref],[data-pickrefproduct],[data-refclose],[data-refpick],[data-genvideoprompt],[data-delavatar],[data-addtoday],[data-pickdraft],[data-pickdraftclose],[data-pickdraftgo],[data-tts],[data-pickfbpage],[data-avatarvideo],[data-pastevideourl],[data-locallocaltoggle],'
     + '[data-previewaspect],[data-previewidx],[data-downloadpng]';
   document.addEventListener('click', function(e){
     var b = e.target.closest('button, a');
