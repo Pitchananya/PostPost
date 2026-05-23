@@ -1304,7 +1304,7 @@ router.post('/lipsync-clip-async', async (req, res) => {
       .insert({
         image_url: String(image_url).slice(0, 2000),
         audio_url: String(audio_url).slice(0, 2000),
-        model: model || 'fal-ai/sadtalker',
+        model: model || process.env.FAL_LIPSYNC_MODEL || 'fal-ai/infinitalk',
         scene_idx: scene_idx ?? null,
         reel_session_id: reel_session_id || null,
         duration_sec: duration_sec || null,
