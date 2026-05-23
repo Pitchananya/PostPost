@@ -497,6 +497,9 @@ const state = {
   localAgentAlive: null,      // null = unchecked, true/false = ping result for localhost:3000
   avatarPreviewBgUrl: '',     // looping Pexels stock video shown behind the avatar in the phone preview
   avatarPreviewBgLoaded: false, // ensures we only fetch the bg once per session/brand
+  avatarBgScene: 'auto',      // picked bg scene id (auto | studio | cafe | beach | mystical | beauty | off | upload)
+  avatarBgUploadUrl: '',      // dataURL of user-uploaded bg video (used when avatarBgScene==='upload')
+  avatarBgLoading: false,     // true while fetching a Pexels video for the picked scene
   previewAspect: '4:5',    // 1:1 | 4:5 | 9:16  — aspect for post preview + PNG download
   previewIndex: 0,         // current slide in carousel
 };
@@ -2156,31 +2159,90 @@ const AVATARS = [
   { id:'wuth', name_th:'อาจารย์วุฒิ', name_en:'Wuth', sub_th:'อาวุโส 55', sub_en:'Senior · 55', bg:'linear-gradient(180deg,#FEF3C7,#92400E)', initial_th:'ว', initial_en:'W' },
 ];
 
+// Scene presets for the Talking Avatar background. The 'auto' query is derived
+// from the brand's bizType; the rest are fixed Pexels queries. 'off' shows just
+// the themed gradient; 'upload' uses state.avatarBgUploadUrl.
+// Scene presets — `local` field points to a bundled mp4 in /assets/avatar-bg/.
+// Local files take priority over Pexels API (no fetch needed, no PEXELS_API_KEY required,
+// faster load + smaller bandwidth). If no local file is mapped, we fall back to Pexels.
+const AVATAR_BG_SCENES = [
+  { id:'auto',     th:'อัตโนมัติ', en:'Auto',     icon:'sparkles' },
+  { id:'studio',   th:'สตูดิโอ',   en:'Studio',   icon:'image',     q:'minimal studio backdrop neutral' },
+  { id:'cafe',     th:'คาเฟ่',     en:'Cafe',     icon:'store',     q:'cafe coffee warm bokeh' },
+  { id:'beach',    th:'ทะเล',     en:'Beach',    icon:'zap',       q:'beach ocean sunset slow' },
+  { id:'beauty',   th:'บิวตี้',    en:'Beauty',   icon:'wand',      q:'skincare beauty pink soft' },
+  { id:'mystical', th:'สายมู',     en:'Mystical', icon:'lightbulb', q:'mystical candle dark smoke',
+    local:'/assets/avatar-bg/mystical-portrait.mp4' },                                // bundled: dark mystical 9:16, 15s loop, ~800KB
+  { id:'altar',    th:'แท่นบูชา',  en:'Altar',    icon:'lightbulb',
+    local:'/assets/avatar-bg/mystical-square.mp4' },                                  // bundled: square mystical, 30s loop, ~650KB
+  { id:'off',      th:'ปิด BG',    en:'Off',      icon:'x' },
+  { id:'upload',   th:'อัปโหลด',   en:'Upload',   icon:'upload' },
+];
+
+// Resolve the Pexels query for the current picked scene. 'auto' falls back to
+// bizType detection (preserves the original behavior), preset scenes use their q.
+function resolveAvatarBgQuery() {
+  var sceneId = state.avatarBgScene || 'auto';
+  if (sceneId === 'auto') {
+    var ab = BRANDS.filter(function(b){ return b.id===state.brand; })[0] || BRANDS[0];
+    var biz = (ab && ab.bizType || '').toLowerCase();
+    return /ดูดวง|สายมู|tarot/.test(biz) ? 'mystical candle dark'
+         : /สกินแคร์|ความงาม|beauty/.test(biz) ? 'skincare beauty pink'
+         : /อาหาร|food|กาแฟ|coffee/.test(biz) ? 'cafe coffee warm'
+         : /ฟิตเนส|fit|sport/.test(biz) ? 'gym workout fitness'
+         : 'lifestyle aesthetic';
+  }
+  var sc = AVATAR_BG_SCENES.filter(function(s){ return s.id===sceneId; })[0];
+  return sc && sc.q || 'lifestyle aesthetic';
+}
+
+// Fetch a new Pexels video for the current picked scene and update state.
+// Called on scene change (and lazily on first render).
+function fetchAvatarBg() {
+  if (!window.PP) return;
+  var sceneId = state.avatarBgScene || 'auto';
+  if (sceneId === 'off' || sceneId === 'upload') return;
+
+  // ── Step 1: Local file first ──
+  // Either: (a) the picked scene has a bundled `local` mp4, or
+  //         (b) sceneId === 'auto' AND active brand matches mystical/tarot
+  var sc = AVATAR_BG_SCENES.filter(function(s){ return s.id===sceneId; })[0];
+  if (sc && sc.local) {
+    state.avatarPreviewBgUrl = sc.local;
+    state.avatarBgLoading = false;
+    return;
+  }
+  if (sceneId === 'auto') {
+    var ab = BRANDS.filter(function(b){ return b.id===state.brand; })[0] || BRANDS[0];
+    var biz = (ab && ab.bizType || '').toLowerCase();
+    if (/ดูดวง|สายมู|tarot/.test(biz)) {
+      // Use bundled mystical bg directly — no API call needed
+      state.avatarPreviewBgUrl = '/assets/avatar-bg/mystical-portrait.mp4';
+      state.avatarBgLoading = false;
+      return;
+    }
+  }
+
+  // ── Step 2: Fall back to Pexels ──
+  state.avatarBgLoading = true;
+  var query = resolveAvatarBgQuery();
+  window.PP.api('/api/ai/pexels-video-search?q=' + encodeURIComponent(query) + '&per_page=3&orientation=portrait')
+    .then(function(r){
+      var vids = (r && r.videos) || [];
+      if (vids.length && vids[0].url) state.avatarPreviewBgUrl = vids[0].url;
+    })
+    .catch(function(){ /* PEXELS_API_KEY missing or other failure — gradient fallback */ })
+    .then(function(){ state.avatarBgLoading = false; render(); });
+}
+
 function pageAvatar() {
-  // Lazy-fetch a looping Pexels stock video for the phone preview background — keyed by
-  // brand bizType. Only triggers once per render-cycle while the bg is unset.
+  // Lazy-fetch a looping Pexels stock video for the phone preview background on
+  // first visit. Subsequent fetches are driven by user picks on the BG scene row.
   if (!state.avatarPreviewBgUrl && !state.avatarPreviewBgLoaded && typeof window !== 'undefined' && window.PP) {
     state.avatarPreviewBgLoaded = true;   // mark as attempted so we don't re-fire on every re-render
-    (function(){
-      try {
-        var ab = BRANDS.filter(function(b){ return b.id===state.brand; })[0] || BRANDS[0];
-        var biz = (ab && ab.bizType || '').toLowerCase();
-        var query = /ดูดวง|สายมู|tarot/.test(biz) ? 'mystical candle dark'
-                  : /สกินแคร์|ความงาม|beauty/.test(biz) ? 'skincare beauty pink'
-                  : /อาหาร|food|กาแฟ|coffee/.test(biz) ? 'cafe coffee warm'
-                  : /ฟิตเนส|fit|sport/.test(biz) ? 'gym workout fitness'
-                  : 'lifestyle aesthetic';
-        window.PP.api('/api/ai/pexels-video-search?q=' + encodeURIComponent(query) + '&per_page=3&orientation=portrait')
-          .then(function(r){
-            var vids = (r && r.videos) || [];
-            if (vids.length && vids[0].url) {
-              state.avatarPreviewBgUrl = vids[0].url;
-              render();
-            }
-          })
-          .catch(function(){ /* no PEXELS_API_KEY or other failure — fall back to gradient (already shown) */ });
-      } catch(_){}
-    })();
+    if ((state.avatarBgScene||'auto') !== 'off' && (state.avatarBgScene||'auto') !== 'upload') {
+      fetchAvatarBg();
+    }
   }
   return `${head('CREATE','Talking Avatar',
     T('เลือกผู้บรรยาย AI · ใส่สคริปต์ภาษาไทย · ได้คลิป MP4 พร้อมโพสต์ Reels / TikTok','Pick a presenter · type a Thai script · get an MP4 for Reels / TikTok'),
@@ -2334,15 +2396,15 @@ function pageAvatar() {
                 + '<video src="'+state.avatarVideo+'" controls autoplay loop playsinline style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:inherit;z-index:1"></video>'
                 + '</div>';
             }
-            // Background layer — Pexels stock video (looped, muted) if available, else gradient.
-            // bgUrl is fetched lazily on Avatar page mount and cached in state.avatarPreviewBgUrl
-            // so users see real motion behind the avatar (OEM-style scene preview).
+            // Background layer — Pexels stock video (looped, muted) or user-uploaded
+            // video, else gradient. Driven by state.avatarBgScene (auto | preset | off | upload).
             function bgLayer(){
-              if (state.avatarPreviewBgUrl) {
-                return '<video src="'+state.avatarPreviewBgUrl+'" autoplay loop muted playsinline style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0"></video>'
-                  + '<div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.55) 0%,rgba(0,0,0,.1) 25%,rgba(0,0,0,.1) 60%,rgba(0,0,0,.75) 100%);z-index:1"></div>';
-              }
-              return '';   // gradient base is on .phone itself
+              var scene = state.avatarBgScene || 'auto';
+              if (scene === 'off') return '';   // gradient base on .phone only
+              var src = (scene === 'upload') ? (state.avatarBgUploadUrl||'') : (state.avatarPreviewBgUrl||'');
+              if (!src) return '';
+              return '<video src="'+src+'" autoplay loop muted playsinline style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0"></video>'
+                + '<div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.55) 0%,rgba(0,0,0,.1) 25%,rgba(0,0,0,.1) 60%,rgba(0,0,0,.75) 100%);z-index:1"></div>';
             }
             if (state.avatarVideoLoading) {
               // ── Rendering overlay ──────────────────────────────────
@@ -2372,7 +2434,28 @@ function pageAvatar() {
               + '</div>';
           })()}
         </div>
-        <div style="display:flex;gap:8px;margin-top:18px;flex-wrap:wrap">
+        <!-- BG scene picker — choose what plays behind the avatar in the preview -->
+        <div style="margin-top:14px;padding:10px 12px;border-radius:12px;background:var(--cream2);border:1px solid var(--line)">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+            <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:800;color:var(--purple);letter-spacing:.04em;text-transform:uppercase">
+              ${I('video',12,'#5B21B6')} ${T('ฉากพื้นหลังตอนพูด','Speaking background')}
+            </div>
+            ${state.avatarBgLoading?`<span style="font-size:10px;color:var(--muted);display:flex;align-items:center;gap:4px">${I('refresh',10)} ${T('กำลังโหลด…','Loading…')}</span>`:''}
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            ${AVATAR_BG_SCENES.map(function(s){
+              var on = (state.avatarBgScene||'auto') === s.id;
+              var disabled = (s.id === 'upload' && !state.avatarBgUploadUrl) ? false : false;
+              return '<button class="pill '+(on?'orange':'')+'" data-bgscene="'+s.id+'" '
+                + 'style="height:30px;font-size:11px;cursor:pointer;padding:0 10px;display:inline-flex;align-items:center;gap:4px"'
+                + (disabled?' disabled':'')+'>'
+                + I(s.icon,11,on?'#fff':'#9C8BB8')+' '+t({th:s.th,en:s.en})
+                + '</button>';
+            }).join('')}
+          </div>
+          <input type="file" accept="video/*" id="ppAvatarBgUploadInput" style="display:none"/>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
           <button class="btn primary" data-avatarvideo="1" style="flex:1.6;min-width:170px" ${state.avatarVideoLoading?'disabled':''}>
             ${state.avatarVideoLoading ? I('refresh',14) : I('video',14)}
             ${state.avatarVideoLoading
@@ -4665,6 +4748,25 @@ render();
       var inp = document.getElementById('ppUploadAvatarInput'); if (inp) inp.click();
       return;
     }
+    var bgBtn = e.target.closest('[data-bgscene]');
+    if (bgBtn) {
+      e.preventDefault();
+      var sceneId = bgBtn.getAttribute('data-bgscene');
+      if (sceneId === 'upload') {
+        // No upload yet → open file picker. Already uploaded → just switch to it.
+        if (!state.avatarBgUploadUrl) {
+          var bgInp = document.getElementById('ppAvatarBgUploadInput'); if (bgInp) bgInp.click();
+          return;
+        }
+        state.avatarBgScene = 'upload'; render(); return;
+      }
+      state.avatarBgScene = sceneId;
+      if (sceneId === 'off') { render(); return; }
+      // Re-fetch a Pexels video matching the new scene (auto = bizType, otherwise the preset query)
+      fetchAvatarBg();
+      render();
+      return;
+    }
     if (e.target.closest('[data-uploadref]')) {
       var inp2 = document.getElementById('ppTtvRefInput'); if (inp2) inp2.click();
       return;
@@ -4697,6 +4799,20 @@ render();
       };
       rd.readAsDataURL(f);
       t.value = '';  // allow re-uploading the same file
+      return;
+    }
+    if (t && t.id === 'ppAvatarBgUploadInput' && t.files && t.files[0]) {
+      var fbg = t.files[0];
+      if (fbg.size > 25*1024*1024) { toast(state.lang==='th'?'วิดีโอต้องไม่เกิน 25MB':'≤25MB','error'); return; }
+      var rdbg = new FileReader();
+      rdbg.onload = function(){
+        state.avatarBgUploadUrl = rdbg.result;
+        state.avatarBgScene = 'upload';
+        render();
+        toast(state.lang==='th'?'ตั้งวิดีโอพื้นหลังแล้ว ✓':'Background video set ✓','success');
+      };
+      rdbg.readAsDataURL(fbg);
+      t.value = '';
       return;
     }
     if (t && t.id === 'ppTtvRefInput' && t.files && t.files[0]) {
@@ -5440,7 +5556,7 @@ render();
     + '[data-filter],[data-filterclose],[data-sortby],[data-instocktoggle],'
     + '[data-gentopics],[data-topicgoal],'
     + '[data-saveproduct],[data-newimgclear],[data-newimg],[data-proddelete],[data-usetopic],[data-genall],[data-savedraft],[data-savevideodraft],[data-editdraft],[data-deletedraft],[data-schedule],[data-avatarscript],[data-veogen],[data-newavatar],'
-    + '[data-uploadavatar],[data-uploadref],[data-clearref],[data-pickrefproduct],[data-refclose],[data-refpick],[data-genvideoprompt],[data-delavatar],[data-addtoday],[data-pickdraft],[data-pickdraftclose],[data-pickdraftgo],[data-tts],[data-pickfbpage],[data-avatarvideo],[data-pastevideourl],[data-locallocaltoggle],'
+    + '[data-uploadavatar],[data-uploadref],[data-clearref],[data-pickrefproduct],[data-refclose],[data-refpick],[data-genvideoprompt],[data-delavatar],[data-addtoday],[data-pickdraft],[data-pickdraftclose],[data-pickdraftgo],[data-tts],[data-pickfbpage],[data-avatarvideo],[data-pastevideourl],[data-locallocaltoggle],[data-bgscene],'
     + '[data-previewaspect],[data-previewidx],[data-downloadpng]';
   document.addEventListener('click', function(e){
     var b = e.target.closest('button, a');
