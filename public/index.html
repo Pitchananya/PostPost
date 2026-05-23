@@ -3354,8 +3354,22 @@ document.addEventListener('click', (e) => {
 });
 
 // boot
+// ---- Phase-2 bridge ------------------------------------------------------
+// Expose the bits that the ES-module page renderers need (state, helpers,
+// the PAGES map so they can swap themselves in, and render() so they can
+// trigger a re-paint after swapping). Disappears in Phase 3 once state/
+// icons/i18n move to their own modules.
+window.PP = Object.assign(window.PP || {}, {
+  state, T, t, I, LOGO_ICON, PAGES, render,
+});
+// --------------------------------------------------------------------------
 render();
 </script>
+
+<!-- Phase-2 ES module bootstrap: loads /js/main.js which swaps the landing
+     and login renderers for their module versions. Deferred by default,
+     so it runs after the inline script above has finished the first paint. -->
+<script type="module" src="/js/main.js"></script>
 
 <!-- ============================================================ -->
 <!-- PostPost backend wiring — API client + real auth             -->
