@@ -4037,11 +4037,63 @@ render();
       }
     }
 
-    // ── Client-side canvas fallback ────────────────────────────────────────
-    // No lip-sync (static avatar) but always works without external deps.
-    toast(state.lang==='th'?'กำลังเรนเดอร์วิดีโอ MP4 (static avatar)… ~30 วินาที':'Rendering static MP4… ~30s');
+    // ── Client-side canvas fallback — OEM style ────────────────────────────
+    // Background = Pexels stock video per scene + avatar in lower-right + scene
+    // title pill on top + caption rolling below. Falls back to themed gradient
+    // if PEXELS_API_KEY isn't configured.
+    toast(state.lang==='th'?'กำลังเรนเดอร์วิดีโอ MP4 พร้อม background… ~30-60 วินาที':'Rendering MP4 with background… ~30-60s');
     try {
-      // 1) Load avatar image (or render initial as fallback)
+      // 0) Decode TTS audio first so we know total duration → use it to ask AI for scenes
+      var audioBuf = await fetch(state.ttsAudio).then(function(r){ return r.arrayBuffer(); });
+      var audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+      var decoded = await audioCtx.decodeAudioData(audioBuf.slice(0));
+      var duration = decoded.duration;
+
+      // 1) Ask backend to split the script into N scenes with Pexels keywords
+      // Each scene gets a title_thai + bg_query_en + duration_sec
+      var caption = (state.avatarScript||'').trim();
+      var scenes = [];
+      try {
+        var sceneR = await api('/api/ai/avatar-scenes', { method:'POST', body:{
+          script: caption,
+          n_scenes: Math.max(2, Math.round(duration / 6)),     // ~6 sec per scene
+        }});
+        scenes = (sceneR && sceneR.scenes) || [];
+      } catch(e){ /* fall back to 1 unsplit scene */ }
+      if (!scenes.length) {
+        scenes = [{ idx:0, title_thai:'', bg_query_en: ((ab.bizType||'')+ ' lifestyle thai').trim() || 'lifestyle', start_at_sec:0, duration_sec: duration }];
+      }
+
+      // 2) For each scene, fetch a Pexels portrait video (best-effort)
+      // If PEXELS_API_KEY not set → bg = themed gradient with scene title
+      for (var si = 0; si < scenes.length; si++) {
+        var sc = scenes[si];
+        try {
+          var pr = await api('/api/ai/pexels-video-search?q=' + encodeURIComponent(sc.bg_query_en) + '&per_page=3&orientation=portrait');
+          var vids = (pr && pr.videos) || [];
+          // Pick the first MP4 with a duration close to the scene's needed length
+          if (vids.length) sc.bg_video_url = vids[0].url;
+        } catch(_) { /* leave bg_video_url unset → gradient fallback */ }
+      }
+
+      // 3) Pre-load all scene videos
+      var sceneVideos = await Promise.all(scenes.map(function(sc){
+        if (!sc.bg_video_url) return Promise.resolve(null);
+        return new Promise(function(resolve){
+          var v = document.createElement('video');
+          v.crossOrigin = 'anonymous';
+          v.muted = true; v.playsInline = true; v.loop = true; v.preload = 'auto';
+          v.src = sc.bg_video_url;
+          var done = false;
+          var ok = function(){ if (!done) { done = true; resolve(v); } };
+          var bail = function(){ if (!done) { done = true; resolve(null); } };
+          v.oncanplay = ok;
+          v.onerror = bail;
+          setTimeout(bail, 8000);   // 8s timeout per video
+        });
+      }));
+
+      // 4) Load avatar image
       var avImg = null;
       if (picked && picked.image) {
         avImg = await new Promise(function(resolve){
@@ -4051,103 +4103,157 @@ render();
           im.src = picked.image;
         });
       }
-      // 2) Set up 9:16 canvas (1080×1920) — Reels/TikTok format
+
+      // 5) Canvas + audio recording setup
       var W = 1080, H = 1920;
       var cv = document.createElement('canvas'); cv.width = W; cv.height = H;
       var cx = cv.getContext('2d');
-      // 3) Audio — decode TTS dataURL so we can drive the recorder + know duration
-      var audioBuf = await fetch(state.ttsAudio).then(function(r){ return r.arrayBuffer(); });
-      var audioCtx = new (window.AudioContext||window.webkitAudioContext)();
-      var decoded = await audioCtx.decodeAudioData(audioBuf.slice(0));
-      var duration = decoded.duration;        // seconds
-      // 4) Build a MediaStream: canvas video track + audio track from a hidden <audio>
-      var canvasStream = cv.captureStream(30);   // 30 fps
-      // Use a NEW <audio> element so MediaRecorder can capture its output via WebAudio
-      var audioEl = new Audio(state.ttsAudio);
-      audioEl.crossOrigin = 'anonymous';
+      var canvasStream = cv.captureStream(30);
+      var audioEl = new Audio(state.ttsAudio); audioEl.crossOrigin = 'anonymous';
       var srcNode = audioCtx.createMediaElementSource(audioEl);
       var dest = audioCtx.createMediaStreamDestination();
-      srcNode.connect(dest);
-      srcNode.connect(audioCtx.destination);     // also play through speakers during render (silent ok)
+      srcNode.connect(dest); srcNode.connect(audioCtx.destination);
       var combinedStream = new MediaStream([
         canvasStream.getVideoTracks()[0],
         dest.stream.getAudioTracks()[0],
       ]);
-      // 5) Pick the best MIME this browser supports
       var mime = 'video/webm;codecs=vp9,opus';
       if (!MediaRecorder.isTypeSupported(mime)) mime = 'video/webm;codecs=vp8,opus';
       if (!MediaRecorder.isTypeSupported(mime)) mime = 'video/webm';
-      var recorder = new MediaRecorder(combinedStream, { mimeType: mime, videoBitsPerSecond: 4_000_000 });
+      var recorder = new MediaRecorder(combinedStream, { mimeType: mime, videoBitsPerSecond: 5_500_000 });
       var chunks = [];
       recorder.ondataavailable = function(e){ if (e.data && e.data.size) chunks.push(e.data); };
-      // 6) Animate frames — orange gradient bg + product card top + avatar + script caption rolling
+
+      // 6) Brand-themed gradient (used when no Pexels video for a scene)
+      var bizGrad = (function(){
+        var key = (ab.bizType||'').toLowerCase();
+        if (/ดูดวง|สายมู|tarot/.test(key)) return ['#1a0033','#4A0E2C','#D4AF37'];      // mystical purple→gold
+        if (/สกินแคร์|ความงาม|beauty/.test(key)) return ['#FDF2F8','#FBCFE8','#DB2777']; // pink
+        if (/อาหาร|food|กาแฟ|coffee/.test(key)) return ['#FFF7ED','#FED7AA','#9A3412'];  // warm cream/orange
+        if (/ฟิตเนส|fit|sport/.test(key)) return ['#0F172A','#1E40AF','#06B6D4'];        // deep blue
+        return ['#FFE4B5','#FB923C','#9A3412'];                                          // default warm
+      })();
+
+      // 7) Draw a frame — picks the current scene's video bg or gradient
       var startTs = performance.now();
-      var stopTs = startTs + duration * 1000 + 400;      // +400ms tail
-      var caption = (state.avatarScript||'').trim();
+      var stopTs = startTs + duration * 1000 + 400;
+      function currentSceneIdx(elapsed){
+        var t = 0;
+        for (var i = 0; i < scenes.length; i++) {
+          t += (scenes[i].duration_sec || 0);
+          if (elapsed < t) return i;
+        }
+        return scenes.length - 1;
+      }
       function drawFrame(now){
         var elapsed = (now - startTs) / 1000;
         var pct = Math.min(1, elapsed / duration);
         state.avatarVideoProgress = Math.round(pct * 100);
-        // Background — warm orange gradient like the in-app phone preview
-        var g = cx.createLinearGradient(0, 0, 0, H);
-        g.addColorStop(0,'#FFE4B5'); g.addColorStop(.4,'#FB923C'); g.addColorStop(1,'#9A3412');
-        cx.fillStyle = g; cx.fillRect(0,0,W,H);
-        // Brand header
-        cx.fillStyle = 'rgba(255,255,255,.18)'; cx.fillRect(40,40,W-80,90);
-        cx.fillStyle = '#fff'; cx.font = '700 38px Prompt, sans-serif'; cx.textBaseline='middle';
-        cx.fillText(ab.name || 'Brand', 70, 85);
-        // Avatar — large centered portrait
-        var ax = W/2, ay = H/2 - 100, ar = 380;
-        cx.save();
-        cx.beginPath(); cx.arc(ax, ay, ar, 0, Math.PI*2); cx.closePath(); cx.clip();
-        if (avImg) {
-          // cover-fit
-          var iw = avImg.naturalWidth, ih = avImg.naturalHeight, ir = iw/ih, cr = 1;
+        var sIdx = currentSceneIdx(elapsed);
+        var sc = scenes[sIdx];
+        var sv = sceneVideos[sIdx];
+        // Background — video or themed gradient
+        if (sv && sv.readyState >= 2) {
+          // cover-fit: scale to fill 1080×1920
+          var vw = sv.videoWidth || 1080, vh = sv.videoHeight || 1920;
+          var vr = vw / vh, cr = W / H;
           var dw, dh, dx, dy;
-          if (ir > cr) { dh = ar*2; dw = dh*ir; dx = ax - dw/2; dy = ay - ar; }
-          else { dw = ar*2; dh = dw/ir; dx = ax - ar; dy = ay - dh/2; }
-          cx.drawImage(avImg, dx, dy, dw, dh);
+          if (vr > cr) { dh = H; dw = dh * vr; dx = (W - dw) / 2; dy = 0; }
+          else { dw = W; dh = dw / vr; dx = 0; dy = (H - dh) / 2; }
+          cx.drawImage(sv, dx, dy, dw, dh);
+          // Dark gradient overlay (top + bottom) for readability
+          var gtop = cx.createLinearGradient(0, 0, 0, 400);
+          gtop.addColorStop(0,'rgba(0,0,0,.6)'); gtop.addColorStop(1,'rgba(0,0,0,0)');
+          cx.fillStyle = gtop; cx.fillRect(0, 0, W, 400);
+          var gbot = cx.createLinearGradient(0, H - 700, 0, H);
+          gbot.addColorStop(0,'rgba(0,0,0,0)'); gbot.addColorStop(1,'rgba(0,0,0,.75)');
+          cx.fillStyle = gbot; cx.fillRect(0, H - 700, W, 700);
         } else {
-          // fallback color circle with initial
-          cx.fillStyle = '#FB923C'; cx.fillRect(ax-ar, ay-ar, ar*2, ar*2);
-          cx.fillStyle = '#fff'; cx.font = '900 240px Prompt, sans-serif';
-          cx.textAlign='center'; cx.textBaseline='middle';
-          cx.fillText((picked&&picked.initial_th)||(picked&&picked.name_th||'?').charAt(0), ax, ay);
+          // Gradient fallback — brand-themed
+          var g = cx.createLinearGradient(0, 0, W, H);
+          g.addColorStop(0, bizGrad[0]); g.addColorStop(.5, bizGrad[1]); g.addColorStop(1, bizGrad[2]);
+          cx.fillStyle = g; cx.fillRect(0, 0, W, H);
+        }
+        // Top: brand name pill (top-left)
+        cx.font = '700 30px Prompt, sans-serif'; cx.textBaseline = 'middle';
+        var brandLabel = (ab.name || 'Brand').slice(0, 24);
+        var bw = cx.measureText(brandLabel).width + 38;
+        cx.fillStyle = 'rgba(255,255,255,.95)';
+        roundRect(cx, 40, 50, bw, 56, 28); cx.fill();
+        cx.fillStyle = '#7C2D12'; cx.fillText(brandLabel, 40 + 19, 78);
+        // Top: scene title pill (top-right, optional)
+        if (sc.title_thai) {
+          var stitle = sc.title_thai.slice(0, 36);
+          cx.font = '700 26px Prompt, sans-serif';
+          var tw = cx.measureText(stitle).width + 32;
+          cx.fillStyle = 'rgba(0,0,0,.65)';
+          roundRect(cx, W - tw - 40, 50, tw, 56, 28); cx.fill();
+          cx.fillStyle = '#fff'; cx.fillText(stitle, W - tw - 40 + 16, 78);
+        }
+        // Bottom-right: small avatar circle (OEM style — corner overlay, not centered)
+        var ar = 130, ax = W - ar - 50, ay = H - 750;
+        cx.save();
+        cx.beginPath(); cx.arc(ax, ay, ar, 0, Math.PI * 2); cx.closePath(); cx.clip();
+        if (avImg) {
+          var iw = avImg.naturalWidth, ih = avImg.naturalHeight, ir = iw / ih, cr2 = 1;
+          var idw, idh, idx2, idy;
+          if (ir > cr2) { idh = ar * 2; idw = idh * ir; idx2 = ax - idw / 2; idy = ay - ar; }
+          else { idw = ar * 2; idh = idw / ir; idx2 = ax - ar; idy = ay - idh / 2; }
+          cx.drawImage(avImg, idx2, idy, idw, idh);
+        } else {
+          cx.fillStyle = bizGrad[2]; cx.fillRect(ax - ar, ay - ar, ar * 2, ar * 2);
+          cx.fillStyle = '#fff'; cx.font = '900 110px Prompt, sans-serif';
+          cx.textAlign = 'center'; cx.textBaseline = 'middle';
+          cx.fillText((picked && picked.initial_th) || (picked && picked.name_th || '?').charAt(0), ax, ay);
         }
         cx.restore();
-        // Avatar ring
-        cx.lineWidth = 12; cx.strokeStyle = 'rgba(255,255,255,.9)';
-        cx.beginPath(); cx.arc(ax, ay, ar, 0, Math.PI*2); cx.stroke();
-        // Caption rolling — show ~25 chars at a time, advance with audio
-        cx.fillStyle = 'rgba(0,0,0,.6)';
-        cx.fillRect(60, H-470, W-120, 380);
+        cx.lineWidth = 6; cx.strokeStyle = '#fff';
+        cx.beginPath(); cx.arc(ax, ay, ar, 0, Math.PI * 2); cx.stroke();
+        // "ON AIR" red dot pulse next to avatar
+        var pulse = (Math.sin(elapsed * 4) + 1) / 2;          // 0..1
+        cx.fillStyle = 'rgba(239,68,68,' + (0.6 + 0.4 * pulse) + ')';
+        cx.beginPath(); cx.arc(ax - ar - 18, ay - ar + 12, 12, 0, Math.PI * 2); cx.fill();
+        // Bottom: caption — black translucent card with scrolling lines
+        cx.textAlign = 'left'; cx.textBaseline = 'top';
+        cx.fillStyle = 'rgba(0,0,0,.7)';
+        roundRect(cx, 60, H - 580, W - 120, 470, 24); cx.fill();
         cx.fillStyle = '#fff'; cx.font = '600 44px Prompt, sans-serif';
-        cx.textAlign='left'; cx.textBaseline='top';
-        // wrap caption into lines and scroll through them
         var words = caption.split(/(\s+)/);
         var lines = [], cur = '';
-        for (var wi=0; wi<words.length; wi++){
+        for (var wi = 0; wi < words.length; wi++) {
           var test = cur + words[wi];
-          if (cx.measureText(test).width > W - 180 && cur) { lines.push(cur.trim()); cur = words[wi]; }
+          if (cx.measureText(test).width > W - 200 && cur) { lines.push(cur.trim()); cur = words[wi]; }
           else cur = test;
         }
         if (cur.trim()) lines.push(cur.trim());
-        var totalLines = Math.max(1, lines.length);
-        var visibleLines = 6;
-        var maxScroll = Math.max(0, totalLines - visibleLines);
+        var visibleLines = 7;
+        var maxScroll = Math.max(0, lines.length - visibleLines);
         var scrollStart = Math.floor(pct * maxScroll);
-        var lineY = H - 430;
-        for (var li=0; li<visibleLines; li++){
+        var lineY = H - 545;
+        for (var li = 0; li < visibleLines; li++) {
           var idx = scrollStart + li;
           if (idx >= lines.length) break;
           cx.fillText(lines[idx], 100, lineY + li * 58);
         }
-        // Progress bar at bottom
-        cx.fillStyle = 'rgba(255,255,255,.35)';
-        cx.fillRect(60, H-50, W-120, 8);
-        cx.fillStyle = '#fff';
-        cx.fillRect(60, H-50, (W-120) * pct, 8);
+        // Bottom: progress bar
+        cx.fillStyle = 'rgba(255,255,255,.3)';
+        roundRect(cx, 60, H - 60, W - 120, 8, 4); cx.fill();
+        cx.fillStyle = '#FB923C';
+        roundRect(cx, 60, H - 60, (W - 120) * pct, 8, 4); cx.fill();
       }
+      // Small helper — rounded-rect path (used by pills, captions, progress bar)
+      function roundRect(c, x, y, w, h, r) {
+        if (w < 2 * r) r = w / 2; if (h < 2 * r) r = h / 2;
+        c.beginPath();
+        c.moveTo(x + r, y);
+        c.arcTo(x + w, y, x + w, y + h, r);
+        c.arcTo(x + w, y + h, x, y + h, r);
+        c.arcTo(x, y + h, x, y, r);
+        c.arcTo(x, y, x + w, y, r);
+        c.closePath();
+      }
+      // Play all scene videos in parallel (they're muted) — drawFrame picks the active one
+      sceneVideos.forEach(function(v){ if (v) try { v.play(); } catch(_) {} });
       // 7) Start everything
       var rafId = null;
       function loop(now){

@@ -2636,7 +2636,9 @@ router.get('/veo-status', async (req, res) => {
 // Requires FAL_KEY env var. Auto-creates Supabase Storage bucket 'lipsync-input'.
 // ============================================================
 const LIPSYNC_BUCKET = 'lipsync-input';
-const FAL_DEFAULT_MODEL = process.env.FAL_LIPSYNC_MODEL || 'fal-ai/sadtalker';
+// Default to Infinitalk — better quality + smoother mouth movement than SadTalker.
+// Override with FAL_LIPSYNC_MODEL env var if you want a different model.
+const FAL_DEFAULT_MODEL = process.env.FAL_LIPSYNC_MODEL || 'fal-ai/infinitalk';
 
 async function ensureLipsyncBucket() {
   if (!supabase) throw new Error('Supabase not configured');
