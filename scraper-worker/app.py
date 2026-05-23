@@ -53,6 +53,28 @@ def normalize(p, shopid, shop):
     }
 
 
+def chrome_major_version():
+    """Read Google Chrome's major version from the installed binary so
+    undetected-chromedriver can fetch a matching driver. Render's Docker image
+    pulls Chrome stable, which ticks ahead of the chromedriver UC auto-picks —
+    pin to the installed major to avoid SessionNotCreatedException."""
+    import subprocess
+    for cmd in (
+        ["google-chrome", "--version"],
+        ["chromium", "--version"],
+        ["chromium-browser", "--version"],
+        ["/usr/bin/google-chrome", "--version"],
+    ):
+        try:
+            out = subprocess.check_output(cmd, stderr=subprocess.DEVNULL, timeout=5).decode()
+            m = re.search(r"(\d+)\.\d+\.\d+\.\d+", out)
+            if m:
+                return int(m.group(1))
+        except Exception:
+            continue
+    return None
+
+
 def scrape(shop_arg):
     import undetected_chromedriver as uc
 
@@ -70,7 +92,10 @@ def scrape(shop_arg):
     if PROXY:
         opts.add_argument("--proxy-server=" + PROXY)
 
-    driver = uc.Chrome(options=opts, headless=True)
+    # Pass version_main so undetected_chromedriver downloads the matching driver
+    # (Render's Chrome may be a release behind UC's default chromedriver build)
+    version_main = chrome_major_version()
+    driver = uc.Chrome(options=opts, headless=True, version_main=version_main)
     try:
         driver.get(f"https://shopee.co.th/{shop}")
         time.sleep(6)
