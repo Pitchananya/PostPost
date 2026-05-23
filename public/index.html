@@ -477,7 +477,7 @@ const state = {
   selectedHook: 1,
   avatar: 'mintra',
   avatarMode: 'real',
-  avatarLipsyncModel: 'fal-ai/infinitalk',  // model passed to /api/ai/lipsync-submit when avatarMode==='real'
+  avatarLipsyncModel: 'fal-ai/bytedance/omnihuman/v1.5',  // default: OmniHuman v1.5 (face + body gestures, $0.50) — Infinitalk = face only
   ttvStyle: 0,                                          // index into the styles[] array on the Text-to-Video page (0 = Creator/UGC)
   ttvModel: 'fal-ai/wan/v2.2-a14b/text-to-video',       // default to Wan 2.2 — cheapest reliable ($0.30/clip, no quota gamble)
   ttvDuration: '8s',
@@ -2320,20 +2320,26 @@ function pageAvatar() {
         <div style="margin-top:12px;padding:11px 13px;border-radius:10px;background:#FEF3C7;border:1px solid #FDE68A;display:flex;align-items:flex-start;gap:9px;font-size:11.5px;line-height:1.55;color:#92400E">
           ${I('info',14,'#92400E')}
           <div><b>${T('ในโหมดนี้หน้าจะไม่ขยับจริง','Face stays static in this mode')}</b> — ${T('แค่หายใจ + ขยับเล็กตามเสียง','just breathing + audio-driven motion')}<br>
-          ${T('อยากให้หน้าขยับตามคำพูดจริง? เปลี่ยนเป็น','Want real face animation? Switch to')} <b>${T('Real lip-sync','Real lip-sync')}</b> ${T('+ เลือกโมเดล','+ pick model')} <b>OmniHuman v1.5</b> ${T('(เคลื่อนไหวตัวด้วย)','(body motion too)')}</div>
+          ${T('อยากให้เหมือนคนพูดจริง (ปากขยับ + ตัวขยับ + ทำท่า)? เปลี่ยนเป็น','Want real talking-person animation (mouth + body + gestures)? Switch to')} <b>${T('Real lip-sync','Real lip-sync')}</b> ${T('— โมเดลแนะนำ','— recommended model')} <b>OmniHuman v1.5</b></div>
+        </div>`:''}
+        ${state.avatarMode==='real' && (state.avatarLipsyncModel||'').indexOf('infinitalk')>=0 ? `
+        <div style="margin-top:12px;padding:11px 13px;border-radius:10px;background:#FEE2E2;border:1px solid #FCA5A5;display:flex;align-items:flex-start;gap:9px;font-size:11.5px;line-height:1.55;color:#991B1B">
+          ${I('info',14,'#991B1B')}
+          <div><b>${T('Infinitalk = ขยับแค่ปาก/หน้าเบาๆ','Infinitalk = mouth + slight face only')}</b><br>
+          ${T('อยากให้ขยับตัว+ทำท่าเหมือนคนพูดจริง → เลือก','Want body + hand gestures like a real speaker? Pick')} <b>OmniHuman v1.5</b> ${T('ด้านล่าง','below')}</div>
         </div>`:''}
         ${state.avatarMode==='real'?`
         <div style="margin-top:14px;padding-top:14px;border-top:1px dashed var(--line)">
           <div class="micro" style="font-weight:700;color:var(--purple);margin-bottom:8px">${T('โมเดล lip-sync','Lip-sync model')}</div>
           <div style="display:flex;flex-direction:column;gap:6px">
             ${[
-              { id:'fal-ai/sadtalker',                       name:'SadTalker',        price:'$0.10', desc_th:'ถูกสุด · เร็ว',           desc_en:'Cheapest · fast' },
-              { id:'fal-ai/infinitalk',                      name:'Infinitalk',       price:'$0.20', desc_th:'แนะนำ · ปากธรรมชาติ',     desc_en:'Recommended · natural',   badge:'BEST' },
-              { id:'veed/fabric-1.0',                        name:'VEED Fabric 1.0',  price:'$0.30', desc_th:'คุณภาพดี · ลื่น',          desc_en:'Quality · smooth' },
-              { id:'fal-ai/bytedance/omnihuman',             name:'OmniHuman',        price:'$0.50', desc_th:'พรีเมียม · เสมือนจริง',    desc_en:'Premium · realistic' },
-              { id:'fal-ai/bytedance/omnihuman/v1.5',        name:'OmniHuman v1.5',   price:'$0.50', desc_th:'สุดยอด · เหมือนจริงสุด',   desc_en:'Best · most realistic',   badge:'TOP' },
+              { id:'fal-ai/sadtalker',                       name:'SadTalker',        price:'$0.10', desc_th:'ปากอย่างเดียว · ถูกสุด',         desc_en:'Mouth only · cheapest' },
+              { id:'fal-ai/infinitalk',                      name:'Infinitalk',       price:'$0.20', desc_th:'หน้า+ปาก ขยับเบาๆ (ไม่มีท่าทางตัว)', desc_en:'Face+mouth only (no body gestures)' },
+              { id:'veed/fabric-1.0',                        name:'VEED Fabric 1.0',  price:'$0.30', desc_th:'หน้า ลื่นสมูท',                desc_en:'Face · smooth' },
+              { id:'fal-ai/bytedance/omnihuman',             name:'OmniHuman',        price:'$0.50', desc_th:'หน้า + ตัว + มือ ขยับจริง',     desc_en:'Face + body + hand gestures' },
+              { id:'fal-ai/bytedance/omnihuman/v1.5',        name:'OmniHuman v1.5',   price:'$0.50', desc_th:'แนะนำ · หน้า+ตัว+มือ เหมือนคนพูดจริง', desc_en:'Recommended · full body realistic talking', badge:'BEST' },
             ].map(m=>{
-              const on = (state.avatarLipsyncModel||'fal-ai/infinitalk') === m.id;
+              const on = (state.avatarLipsyncModel||'fal-ai/bytedance/omnihuman/v1.5') === m.id;
               const badgeColor = m.badge==='BEST' ? {bg:'#FFE4E6',fg:'#9F1239'} : m.badge==='TOP' ? {bg:'#EDE9FE',fg:'#5B21B6'} : null;
               return `<button class="toneTile ${on?'active':''}" data-set="avatarLipsyncModel=${m.id}" style="padding:10px 12px;align-items:center;gap:10px">
                 <div class="toneEmoji" style="background:${on?'#fff':'var(--cream2)'};color:${on?'var(--orange)':'var(--muted)'};width:28px;height:28px">${I('sparkles',12)}</div>
@@ -4768,7 +4774,10 @@ render();
     // Background = Pexels stock video per scene + avatar in lower-right + scene
     // title pill on top + caption rolling below. Falls back to themed gradient
     // if PEXELS_API_KEY isn't configured.
-    toast(state.lang==='th'?'กำลังเรนเดอร์วิดีโอ MP4 พร้อม background… ~30-60 วินาที':'Rendering MP4 with background… ~30-60s');
+    var renderModeMsg = state.avatarLipsyncRawVideo
+      ? (state.lang==='th'?'🎬 ประกอบ lip-sync จาก fal.ai เข้ากับพื้นหลัง… ~30-60 วิ':'🎬 Compositing fal.ai lipsync with bg… ~30-60s')
+      : (state.lang==='th'?'🎬 กำลังเรนเดอร์ (รูปนิ่ง + bg)… ~30-60 วิ — กด Real lip-sync เพื่อให้หน้าขยับ':'🎬 Rendering (static + bg)… ~30-60s — switch to Real lip-sync for face animation');
+    toast(renderModeMsg);
     try {
       // 0) Decode TTS audio first so we know its natural duration
       var audioBuf = await fetch(state.ttsAudio).then(function(r){ return r.arrayBuffer(); });
@@ -4870,16 +4879,40 @@ render();
       var avLipsyncVideo = null;     // <video> element playing the fal.ai output
       var hasLipsync = !!state.avatarLipsyncRawVideo;
       if (hasLipsync) {
+        console.log('[avatar-video] Loading lipsync source:', state.avatarLipsyncRawVideo);
         avLipsyncVideo = await new Promise(function(resolve){
           var v = document.createElement('video');
           v.crossOrigin = 'anonymous';
           v.muted = false; v.playsInline = true; v.preload = 'auto';
           v.src = state.avatarLipsyncRawVideo;
           var done = false;
-          v.oncanplay = function(){ if (!done) { done = true; resolve(v); } };
-          v.onerror = function(){ if (!done) { done = true; resolve(null); } };
-          setTimeout(function(){ if (!done) { done = true; resolve(v); } }, 12000);
+          // 'canplaythrough' is stronger than 'canplay' — guarantees the browser
+          // has buffered enough to play to the end without stalling, so drawImage
+          // gets fresh frames instead of replaying the same first frame.
+          v.oncanplaythrough = function(){ if (!done) { done = true; console.log('[avatar-video] lipsync canplaythrough'); resolve(v); } };
+          v.oncanplay = function(){ if (!done) { done = true; console.log('[avatar-video] lipsync canplay'); resolve(v); } };
+          v.onerror = function(){ if (!done) { done = true; console.warn('[avatar-video] lipsync video failed to load — falling back to static image'); resolve(null); } };
+          setTimeout(function(){ if (!done) { done = true; console.warn('[avatar-video] lipsync load timed out (30s)'); resolve(v.readyState >= 2 ? v : null); } }, 30000);
         });
+        if (avLipsyncVideo) {
+          // Make sure playback ACTUALLY works (some browsers report readyState=2
+          // but won't advance currentTime without a successful play() call).
+          // Then immediately reset so the recording starts from frame 0 when
+          // audioEl.play() fires below.
+          try {
+            await avLipsyncVideo.play();
+            avLipsyncVideo.pause();
+            avLipsyncVideo.currentTime = 0;
+            console.log('[avatar-video] lipsync playback verified, duration=' + avLipsyncVideo.duration);
+          } catch (e) {
+            console.warn('[avatar-video] lipsync play() rejected:', e.message);
+            // Don't bail — audioEl.play() later may still succeed.
+          }
+        } else {
+          toast(state.lang==='th'
+            ? '⚠ โหลดวิดีโอ lip-sync จาก fal.ai ไม่ได้ — ใช้รูปนิ่งแทน'
+            : '⚠ Could not load fal.ai lipsync video — using static portrait', 'error');
+        }
       }
       if (!avLipsyncVideo && picked && picked.image) {
         avImg = await new Promise(function(resolve){
