@@ -2304,14 +2304,18 @@ function pageTextVideo() {
     { id:'anime',    th:'Anime/3D',   en:'Anime/3D',   sub_th:'การ์ตูน', sub_en:'Animated',            bg:'linear-gradient(135deg,#C7D2FE,#818CF8)' },
   ];
 
-  // Gemini API key มี Veo ทั้ง 6 รุ่น ลำดับจาก "ฟรี/ถูก" → "พรีเมียม/แพง"
-  // Veo 2 = มี free tier เหลือ (paid $0.10/sec); Veo 3.x = paid-only (ต้องเปิด billing)
+  // Mixed Veo (Google) + fal.ai models — sorted by recommended use.
+  // Veo 2 = Google Gemini free tier · Veo 3.x = Google paid · fal-ai/* = via FAL_KEY ($0.30-0.70/clip)
   const models = [
-    { id:'veo-2.0-generate-001',          name:'Veo 2 (Free tier)',     sub_th:'ฟรี ~2-5 คลิป/วัน · คุณภาพมาตรฐาน',  sub_en:'Free ~2-5 clips/day · standard',  time_th:'~1-2 นาที',  time_en:'~1-2 min', badge:'FREE' },
-    { id:'veo-3.0-fast-generate-001',     name:'Veo 3 Fast',            sub_th:'จ่ายเงิน ~$0.80/คลิป · ลื่น คมชัด',   sub_en:'Paid ~$0.80/clip · sharp',         time_th:'~1-2 นาที',  time_en:'~1-2 min', badge:'PAID' },
-    { id:'veo-3.0-generate-001',          name:'Veo 3 Pro',             sub_th:'จ่ายเงิน ~$3.20/คลิป · คุณภาพสูงสุด',   sub_en:'Paid ~$3.20/clip · highest',       time_th:'~2-3 นาที',  time_en:'~2-3 min', badge:'PAID' },
-    { id:'veo-3.1-fast-generate-preview', name:'Veo 3.1 Fast (preview)', sub_th:'จ่ายเงิน · รุ่นใหม่ ลื่นไหลกว่า',     sub_en:'Paid · newer · smoother',          time_th:'~1-2 นาที',  time_en:'~1-2 min', badge:'PAID' },
-    { id:'veo-3.1-generate-preview',      name:'Veo 3.1 Pro (preview)',  sub_th:'จ่ายเงิน · ใหม่สุด พรีเมียม',          sub_en:'Paid · newest premium',            time_th:'~3 นาที',    time_en:'~3 min',   badge:'PAID' },
+    { id:'veo-2.0-generate-001',                         provider:'veo',   name:'Veo 2',                       sub_th:'Google · ฟรี ~2-5 คลิป/วัน · มาตรฐาน',         sub_en:'Google · free 2-5 clips/day',         time_th:'~1-2 นาที', time_en:'~1-2 min', badge:'FREE' },
+    { id:'fal-ai/wan/v2.2-a14b/text-to-video',           provider:'fal',   name:'Wan 2.2',                     sub_th:'fal.ai · ~$0.30/คลิป · เร็ว ลื่น',                  sub_en:'fal.ai · ~$0.30 · fast smooth',        time_th:'~1-2 นาที', time_en:'~1-2 min', badge:'$0.30' },
+    { id:'fal-ai/minimax/hailuo-02/standard/text-to-video', provider:'fal', name:'Hailuo 02',                 sub_th:'fal.ai · ~$0.45/คลิป · cinematic 6 วินาที',         sub_en:'fal.ai · ~$0.45 · cinematic 6s',       time_th:'~2 นาที',   time_en:'~2 min',   badge:'$0.45' },
+    { id:'fal-ai/luma-dream-machine',                    provider:'fal',   name:'Luma Dream Machine',          sub_th:'fal.ai · ~$0.40/คลิป · character ดี ลื่น',          sub_en:'fal.ai · ~$0.40 · char consistency',   time_th:'~2 นาที',   time_en:'~2 min',   badge:'$0.40' },
+    { id:'fal-ai/wan-2.5/text-to-video/preview',         provider:'fal',   name:'Wan 2.5 (preview)',           sub_th:'fal.ai · ~$0.40/คลิป · รุ่นใหม่ ดีกว่า 2.2',         sub_en:'fal.ai · ~$0.40 · newer + better',     time_th:'~2 นาที',   time_en:'~2 min',   badge:'$0.40' },
+    { id:'fal-ai/kling-video/v2.5-turbo/pro/text-to-video', provider:'fal', name:'Kling 2.5 Turbo Pro',       sub_th:'fal.ai · ~$0.70/คลิป · premium cinematic',           sub_en:'fal.ai · ~$0.70 · premium cinematic',  time_th:'~3 นาที',   time_en:'~3 min',   badge:'$0.70' },
+    { id:'veo-3.0-fast-generate-001',                    provider:'veo',   name:'Veo 3 Fast',                  sub_th:'Google · ~$0.80/คลิป · ลื่น คมชัด',                  sub_en:'Google · ~$0.80 · sharp',              time_th:'~1-2 นาที', time_en:'~1-2 min', badge:'$0.80' },
+    { id:'veo-3.0-generate-001',                         provider:'veo',   name:'Veo 3 Pro',                   sub_th:'Google · ~$3.20/คลิป · คุณภาพสูงสุด',                sub_en:'Google · ~$3.20 · highest',            time_th:'~2-3 นาที', time_en:'~2-3 min', badge:'$3.20' },
+    { id:'veo-3.1-generate-preview',                     provider:'veo',   name:'Veo 3.1 Pro (preview)',       sub_th:'Google · ~$3.20+ · ใหม่สุด',                          sub_en:'Google · ~$3.20+ · newest',            time_th:'~3 นาที',   time_en:'~3 min',   badge:'$3.20' },
   ];
 
   return `${head('CREATE',T('สร้างวิดีโอจากข้อความ','Text to Video'),
@@ -4600,42 +4604,81 @@ render();
     var promptEl = document.getElementById('ppTtvPrompt');
     var prompt = ((promptEl ? promptEl.value : (state.ttvPrompt||'')) || '').trim();
     if (!prompt) { toast(state.lang==='th'?'ใส่คำสั่งบรรยายวิดีโอก่อน':'Enter a video prompt first','error'); return; }
+    var picked = state.ttvModel || 'veo-2.0-generate-001';
+    // Pick provider from model id prefix — Veo endpoints vs fal.ai endpoints differ
+    var isFal = picked.indexOf('fal-ai/') === 0;
     state.ttvGenLoading = true;
-    state.ttvGenStatus = state.lang==='th'?'ส่งคำขอไป Veo…':'Submitting to Veo…';
+    state.ttvGenStatus = state.lang==='th'?(isFal?'ส่งคำขอไป fal.ai…':'ส่งคำขอไป Veo…'):(isFal?'Submitting to fal.ai…':'Submitting to Veo…');
     state.ttvVideo = null;
     render();
-    toast(state.lang==='th'?'Veo เริ่มเรนเดอร์ (~1-3 นาที)':'Veo started (~1-3 min)');
+    toast(state.lang==='th'
+      ? ((isFal?picked.split('/').pop():'Veo')+' เริ่มเรนเดอร์ (~1-3 นาที)')
+      : ((isFal?'fal.ai':'Veo')+' started (~1-3 min)'));
     try {
-      var sub = await api('/api/ai/veo-generate', { method:'POST', body:{
-        prompt: prompt,
-        aspect: state.ttvAspect||'9:16',
-        referenceImage: state.ttvReference || null,    // base64 / dataURL — Veo conditions video on this if present
-        model: state.ttvModel || 'veo-3.0-fast-generate-001',
-      } });
-      if (!sub || !sub.operation) throw new Error((sub && sub.error) || 'submit failed');
-      var op = sub.operation;
-      state.ttvGenStatus = state.lang==='th'?'Veo กำลังเรนเดอร์…':'Veo rendering…';
-      render();
-      var ok = false;
-      for (var i = 0; i < 40; i++) {
-        await new Promise(function(r){ setTimeout(r, 10000); });
-        try {
-          var st = await api('/api/ai/veo-status?op=' + encodeURIComponent(op));
-          if (st && st.done) {
-            if (st.failed) throw new Error(st.error || 'render failed');
-            if (st.video_url) state.ttvVideo = st.video_url;
-            else if (st.video_base64) state.ttvVideo = 'data:video/mp4;base64,' + st.video_base64;
-            else throw new Error('no video in response');
-            ok = true;
-            toast(state.lang==='th'?'สร้างวิดีโอเสร็จแล้ว ✓':'Video ready ✓','success');
-            break;
-          } else {
-            state.ttvGenStatus = state.lang==='th'?('รอ '+((i+1)*10)+' วินาที…'):('Waited '+((i+1)*10)+'s…');
+      if (isFal) {
+        // ── fal.ai path: submit → poll /fal-t2v-poll
+        var sub = await api('/api/ai/fal-t2v-submit', { method:'POST', body:{
+          prompt: prompt,
+          aspect: state.ttvAspect||'9:16',
+          referenceImage: state.ttvReference || null,
+          model: picked,
+          duration_sec: parseInt((state.ttvDuration||'8s'),10) || 8,
+        }});
+        if (!sub || !sub.request_id) throw new Error((sub && sub.error) || 'submit failed');
+        state.ttvGenStatus = state.lang==='th'?'fal.ai กำลังเรนเดอร์…':'fal.ai rendering…';
+        render();
+        var ok = false;
+        for (var i = 0; i < 60; i++) {                  // 60 × 5s = 5 min
+          await new Promise(function(r){ setTimeout(r, 5000); });
+          try {
+            var st = await api('/api/ai/fal-t2v-poll?request_id=' + encodeURIComponent(sub.request_id)
+              + '&model=' + encodeURIComponent(sub.model)
+              + '&status_url=' + encodeURIComponent(sub.status_url||'')
+              + '&response_url=' + encodeURIComponent(sub.response_url||''));
+            if (st && st.status === 'done' && st.video_url) {
+              state.ttvVideo = st.video_url; ok = true;
+              toast(state.lang==='th'?'สร้างวิดีโอเสร็จแล้ว ✓':'Video ready ✓','success');
+              break;
+            }
+            if (st && st.status === 'error') throw new Error(st.error || 'fal failed');
+            state.ttvGenStatus = state.lang==='th'?('รอ '+((i+1)*5)+' วินาที…'):('Waited '+((i+1)*5)+'s…');
             render();
-          }
-        } catch(_){ /* keep polling on transient errors */ }
+          } catch(_){}
+        }
+        if (!ok) toast(state.lang==='th'?'หมดเวลารอ (~5 นาที) — ลองใหม่':'Timed out — try again','error');
+      } else {
+        // ── Veo path
+        var sub = await api('/api/ai/veo-generate', { method:'POST', body:{
+          prompt: prompt,
+          aspect: state.ttvAspect||'9:16',
+          referenceImage: state.ttvReference || null,
+          model: picked,
+        } });
+        if (!sub || !sub.operation) throw new Error((sub && sub.error) || 'submit failed');
+        var op = sub.operation;
+        state.ttvGenStatus = state.lang==='th'?'Veo กำลังเรนเดอร์…':'Veo rendering…';
+        render();
+        var ok = false;
+        for (var i = 0; i < 40; i++) {
+          await new Promise(function(r){ setTimeout(r, 10000); });
+          try {
+            var st = await api('/api/ai/veo-status?op=' + encodeURIComponent(op));
+            if (st && st.done) {
+              if (st.failed) throw new Error(st.error || 'render failed');
+              if (st.video_url) state.ttvVideo = st.video_url;
+              else if (st.video_base64) state.ttvVideo = 'data:video/mp4;base64,' + st.video_base64;
+              else throw new Error('no video in response');
+              ok = true;
+              toast(state.lang==='th'?'สร้างวิดีโอเสร็จแล้ว ✓':'Video ready ✓','success');
+              break;
+            } else {
+              state.ttvGenStatus = state.lang==='th'?('รอ '+((i+1)*10)+' วินาที…'):('Waited '+((i+1)*10)+'s…');
+              render();
+            }
+          } catch(_){ /* keep polling on transient errors */ }
+        }
+        if (!ok) toast(state.lang==='th'?'หมดเวลารอ (~7 นาที) — ลองใหม่':'Timed out — try again','error');
       }
-      if (!ok) toast(state.lang==='th'?'หมดเวลารอ (~7 นาที) — ลองใหม่':'Timed out — try again','error');
     } catch(e){
       var em = e.message || '';
       // Quota / billing — Veo 3.x requires paid plan; offer to retry with the free-tier Veo 2

@@ -2765,6 +2765,123 @@ router.get('/lipsync-poll', async (req, res) => {
   }
 });
 
+// ============================================================
+// 🎬 Text-to-Video via fal.ai — alternatives to Google Veo
+//
+//   POST /api/ai/fal-t2v-submit  body: { prompt, aspect?, model?, duration_sec?, referenceImage? }
+//     → submits to fal.ai queue, returns { request_id, model, status_url, response_url }
+//
+//   GET  /api/ai/fal-t2v-poll?request_id=&model=&status_url=&response_url=
+//     → polls until COMPLETED, returns { status:'done', video_url } or { status:'pending' }
+//
+// Supported models (all via FAL_KEY):
+//   fal-ai/wan/v2.2-a14b/text-to-video         — Wan 2.2 (cheap, fast, 5s)
+//   fal-ai/wan-2.5/text-to-video/preview       — Wan 2.5 (newer, smoother)
+//   fal-ai/minimax/hailuo-02/standard/text-to-video — Hailuo (cinematic, 6s)
+//   fal-ai/kling-video/v2.5-turbo/pro/text-to-video — Kling 2.5 (premium, 5-10s)
+//   fal-ai/luma-dream-machine                  — Luma Dream Machine (character consistency)
+// ============================================================
+router.post('/fal-t2v-submit', async (req, res) => {
+  const { prompt, aspect = '9:16', model: modelIn, duration_sec = 5, referenceImage = null } = req.body || {};
+  const falKey = process.env.FAL_KEY;
+  if (!falKey) return res.status(400).json({ error: 'FAL_KEY not set — ตั้ง env ที่ Vercel → Settings → Environment Variables' });
+  if (!prompt) return res.status(400).json({ error: 'prompt required' });
+  const model = String(modelIn || 'fal-ai/wan/v2.2-a14b/text-to-video');
+
+  try {
+    // Optional reference image — uploaded to Supabase Storage so fal models that support
+    // image input can grab it. Most text-to-video models ignore this; Wan/Kling support it
+    // via image_url for image-to-video conditioning.
+    let image_url = null;
+    if (referenceImage && typeof referenceImage === 'string' && referenceImage.indexOf('data:') === 0) {
+      try {
+        await ensureLipsyncBucket();
+        image_url = await uploadDataUrlToBucket(referenceImage, 't2v-ref', 'png');
+      } catch (e) { console.warn('[fal-t2v] reference upload failed:', e.message); }
+    }
+
+    // Per-model input schema — fal.ai is annoyingly inconsistent across models
+    const dur = Math.max(2, Math.min(parseInt(duration_sec, 10) || 5, 10));
+    const aspectRatio = String(aspect);                            // '9:16' | '16:9' | '1:1'
+    const FAL_T2V_INPUT = {
+      'fal-ai/wan/v2.2-a14b/text-to-video':            { prompt, aspect_ratio: aspectRatio, num_frames: dur * 16, ...(image_url ? { image_url } : {}) },
+      'fal-ai/wan-2.5/text-to-video/preview':          { prompt, aspect_ratio: aspectRatio, duration: dur, ...(image_url ? { image_url } : {}) },
+      'fal-ai/minimax/hailuo-02/standard/text-to-video': { prompt, aspect_ratio: aspectRatio, duration: dur === 10 ? 10 : 6, prompt_optimizer: true },
+      'fal-ai/kling-video/v2.5-turbo/pro/text-to-video': { prompt, aspect_ratio: aspectRatio, duration: dur >= 10 ? '10' : '5', cfg_scale: 0.5 },
+      'fal-ai/kling-video/v2.1/master/text-to-video':  { prompt, aspect_ratio: aspectRatio, duration: dur >= 10 ? '10' : '5' },
+      'fal-ai/luma-dream-machine':                     { prompt, aspect_ratio: aspectRatio, loop: false },
+    };
+    const inputBody = FAL_T2V_INPUT[model] || { prompt, aspect_ratio: aspectRatio };
+
+    const r = await fetch(`https://queue.fal.run/${model}`, {
+      method: 'POST',
+      headers: { 'Authorization': `Key ${falKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(inputBody),
+    });
+    const submitText = await r.text();
+    if (!r.ok) {
+      console.error('[fal-t2v-submit]', r.status, submitText.slice(0, 400));
+      return res.status(r.status >= 400 && r.status < 500 ? r.status : 502).json({
+        error: 'fal_submit', status: r.status, detail: submitText.slice(0, 400),
+      });
+    }
+    let submitData;
+    try { submitData = JSON.parse(submitText); }
+    catch { return res.status(502).json({ error: 'fal_submit', detail: 'non-JSON: ' + submitText.slice(0, 200) }); }
+    const request_id = submitData.request_id;
+    if (!request_id) return res.status(502).json({ error: 'fal_submit', detail: 'no request_id', raw: submitData });
+    res.json({
+      ok: true,
+      request_id,
+      model,
+      aspect: aspectRatio,
+      status_url: submitData.status_url || `https://queue.fal.run/${model}/requests/${request_id}/status`,
+      response_url: submitData.response_url || `https://queue.fal.run/${model}/requests/${request_id}`,
+    });
+  } catch (e) {
+    console.error('[fal-t2v-submit]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.get('/fal-t2v-poll', async (req, res) => {
+  const request_id = String(req.query.request_id || '');
+  const model = String(req.query.model || 'fal-ai/wan/v2.2-a14b/text-to-video');
+  const status_url_q = req.query.status_url ? String(req.query.status_url) : null;
+  const response_url_q = req.query.response_url ? String(req.query.response_url) : null;
+  if (!request_id) return res.status(400).json({ error: 'request_id required' });
+  const falKey = process.env.FAL_KEY;
+  if (!falKey) return res.status(400).json({ error: 'FAL_KEY not set' });
+
+  try {
+    const statusUrl = status_url_q || `https://queue.fal.run/${model}/requests/${request_id}/status`;
+    const sr = await fetch(statusUrl, { headers: { 'Authorization': `Key ${falKey}` } });
+    const stxt = await sr.text();
+    let sdata = {};
+    try { sdata = JSON.parse(stxt); } catch (_) {}
+    if (!sr.ok) return res.status(502).json({ error: 'fal_status', status: sr.status, detail: stxt.slice(0, 300) });
+
+    const status = String(sdata.status || '').toUpperCase();
+    if (status === 'COMPLETED') {
+      const responseUrl = response_url_q || `https://queue.fal.run/${model}/requests/${request_id}`;
+      const rr = await fetch(responseUrl, { headers: { 'Authorization': `Key ${falKey}` } });
+      const rdata = await rr.json().catch(() => ({}));
+      // text-to-video result paths vary by model — try the common ones
+      const video_url = rdata.video?.url || rdata.output?.video?.url || rdata.video_url || rdata.url
+        || rdata.video || rdata.output_url || (Array.isArray(rdata.videos) ? rdata.videos[0]?.url : null);
+      if (!video_url) return res.json({ status: 'done', error: 'no video_url in fal response', raw: rdata });
+      return res.json({ status: 'done', video_url });
+    }
+    if (status === 'FAILED' || status === 'CANCELED') {
+      return res.json({ status: 'error', error: sdata.error || status });
+    }
+    return res.json({ status: 'pending', fal_status: status, queue_position: sdata.queue_position });
+  } catch (e) {
+    console.error('[fal-t2v-poll]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // 🔮 POST /ai/pick-a-card — สร้างคอนเทนต์ดูดวง "Pick a Card" 3 กองไพ่ สไตล์คุรุเทพ
 router.post('/pick-a-card', async (req, res) => {
   const { theme, num_piles } = req.body || {};
