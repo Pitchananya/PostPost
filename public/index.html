@@ -5346,18 +5346,24 @@ render();
   }
 
   // ── Cloud sync (Supabase via /api/workspace) ───────────────────────────
+  // Cloud is the single source of truth. localStorage acts only as offline cache
+  // (read on boot if cloud is unreachable; overwritten by cloudPull on success).
   // Saves brands + drafts + customAvatars to team_workspace.state as JSON.
   // Last-writer-wins via upsert on tenant_id.
   var _cloudPushTimer = null;
   var _cloudPushLastBody = '';
+  var _cloudPushInflight = false;
+  // Default delay = 250ms — nearly immediate but allows batching of rapid edits
+  // (e.g. typing in a textarea fires 'input' events on every keystroke).
   function schedCloudPush(delay){
-    delay = delay || 2500;
+    if (delay === undefined) delay = 250;
     if (_cloudPushTimer) clearTimeout(_cloudPushTimer);
     _cloudPushTimer = setTimeout(cloudPushNow, delay);
   }
   async function cloudPushNow(){
     if (typeof api !== 'function') return;
     if (!getTok || !getTok()) return;   // not logged in
+    if (_cloudPushInflight) return;     // request already in-flight (re-runs after)
     var body = {
       brands: BRANDS,
       drafts: state.drafts || [],
@@ -5367,18 +5373,67 @@ render();
     };
     var serialized = JSON.stringify(body);
     if (serialized === _cloudPushLastBody) return;    // nothing changed
+    // Skip huge payloads (>5MB) — likely a draft with full base64 image slipped in
+    if (serialized.length > 5 * 1024 * 1024) {
+      console.warn('[cloud-sync] payload too big ('+Math.round(serialized.length/1024)+'KB) — skipping');
+      setCloudSyncStatus('error', 'ใหญ่เกิน 5MB');
+      return;
+    }
+    _cloudPushInflight = true;
+    setCloudSyncStatus('saving');
     try {
-      // Skip huge payloads (>5MB) — likely a draft with full base64 image slipped in
-      if (serialized.length > 5 * 1024 * 1024) {
-        console.warn('[cloud-sync] payload too big ('+Math.round(serialized.length/1024)+'KB) — skipping');
-        return;
-      }
       await api('/api/workspace', { method:'PUT', body:{ state: body } });
       _cloudPushLastBody = serialized;
+      setCloudSyncStatus('saved');
     } catch (e) {
       console.warn('[cloud-sync] push failed:', e.message);
+      setCloudSyncStatus('error', e.message);
+    } finally {
+      _cloudPushInflight = false;
     }
   }
+  // Cloud sync status — shown as a small pill in the top bar (handled by the
+  // existing render loop; status reads state.cloudSyncStatus / state.cloudSyncMsg)
+  function setCloudSyncStatus(status, msg){
+    state.cloudSyncStatus = status;        // 'saving' | 'saved' | 'error' | ''
+    state.cloudSyncMsg = msg || '';
+    state.cloudSyncAt = Date.now();
+    // Don't full-render — just update the pill if visible
+    var pill = document.querySelector('[data-cloud-pill]');
+    if (pill) renderCloudPill(pill);
+    // Auto-clear 'saved' state after 2.5s so the pill reverts to silent
+    if (status === 'saved') {
+      clearTimeout(window._cloudPillClearT);
+      window._cloudPillClearT = setTimeout(function(){
+        if (state.cloudSyncStatus === 'saved') { state.cloudSyncStatus = ''; if (pill) renderCloudPill(pill); }
+      }, 2500);
+    }
+  }
+  function renderCloudPill(el){
+    var s = state.cloudSyncStatus, m = state.cloudSyncMsg;
+    var label = '', color = '', bg = '';
+    if (s === 'saving') { label = '⏳ กำลังบันทึก…'; color = '#1E40AF'; bg = '#DBE5FF'; }
+    else if (s === 'saved') { label = '☁ บันทึกแล้ว'; color = '#065F46'; bg = '#D1FAE5'; }
+    else if (s === 'error') { label = '⚠ บันทึกไม่ได้: ' + (m||'').slice(0,40); color = '#92400E'; bg = '#FEF3C7'; }
+    else { label = '☁ Cloud'; color = '#6B6473'; bg = '#F3F0EA'; }
+    el.style.cssText = 'position:fixed;bottom:18px;right:18px;padding:6px 12px;border-radius:99px;font-size:11.5px;font-weight:700;'
+      + 'background:'+bg+';color:'+color+';box-shadow:0 4px 16px rgba(0,0,0,.08);z-index:9998;'
+      + 'transition:opacity .25s;pointer-events:none;';
+    el.textContent = label;
+  }
+  // Mount the cloud pill once (independent of page render — bottom-right corner)
+  (function mountCloudPill(){
+    if (typeof document === 'undefined') return;
+    function attach(){
+      if (document.querySelector('[data-cloud-pill]')) return;
+      var el = document.createElement('div');
+      el.setAttribute('data-cloud-pill','1');
+      renderCloudPill(el);
+      document.body.appendChild(el);
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', attach);
+    else attach();
+  })();
   async function cloudPullOnBoot(){
     if (typeof api !== 'function') return;
     if (!getTok || !getTok()) return;
