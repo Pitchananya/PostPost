@@ -477,6 +477,7 @@ const state = {
   selectedHook: 1,
   avatar: 'mintra',
   avatarMode: 'real',
+  avatarLipsyncModel: 'fal-ai/infinitalk',  // model passed to /api/ai/lipsync-submit when avatarMode==='real'
   ttvStyle: 0,                                          // index into the styles[] array on the Text-to-Video page (0 = Creator/UGC)
   ttvModel: 'fal-ai/wan/v2.2-a14b/text-to-video',       // default to Wan 2.2 — cheapest reliable ($0.30/clip, no quota gamble)
   ttvDuration: '8s',
@@ -2282,6 +2283,35 @@ function pageAvatar() {
             </button>`;
           }).join('')}
         </div>
+        ${state.avatarMode==='real'?`
+        <div style="margin-top:14px;padding-top:14px;border-top:1px dashed var(--line)">
+          <div class="micro" style="font-weight:700;color:var(--purple);margin-bottom:8px">${T('โมเดล lip-sync','Lip-sync model')}</div>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            ${[
+              { id:'fal-ai/sadtalker',                       name:'SadTalker',        price:'$0.10', desc_th:'ถูกสุด · เร็ว',           desc_en:'Cheapest · fast' },
+              { id:'fal-ai/infinitalk',                      name:'Infinitalk',       price:'$0.20', desc_th:'แนะนำ · ปากธรรมชาติ',     desc_en:'Recommended · natural',   badge:'BEST' },
+              { id:'veed/fabric-1.0',                        name:'VEED Fabric 1.0',  price:'$0.30', desc_th:'คุณภาพดี · ลื่น',          desc_en:'Quality · smooth' },
+              { id:'fal-ai/bytedance/omnihuman',             name:'OmniHuman',        price:'$0.50', desc_th:'พรีเมียม · เสมือนจริง',    desc_en:'Premium · realistic' },
+              { id:'fal-ai/bytedance/omnihuman/v1.5',        name:'OmniHuman v1.5',   price:'$0.50', desc_th:'สุดยอด · เหมือนจริงสุด',   desc_en:'Best · most realistic',   badge:'TOP' },
+            ].map(m=>{
+              const on = (state.avatarLipsyncModel||'fal-ai/infinitalk') === m.id;
+              const badgeColor = m.badge==='BEST' ? {bg:'#FFE4E6',fg:'#9F1239'} : m.badge==='TOP' ? {bg:'#EDE9FE',fg:'#5B21B6'} : null;
+              return `<button class="toneTile ${on?'active':''}" data-set="avatarLipsyncModel=${m.id}" style="padding:10px 12px;align-items:center;gap:10px">
+                <div class="toneEmoji" style="background:${on?'#fff':'var(--cream2)'};color:${on?'var(--orange)':'var(--muted)'};width:28px;height:28px">${I('sparkles',12)}</div>
+                <div style="flex:1;min-width:0">
+                  <div style="display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;color:var(--purple)">
+                    ${m.name}
+                    ${badgeColor?`<span style="background:${badgeColor.bg};color:${badgeColor.fg};font-size:9px;font-weight:800;padding:1px 5px;border-radius:99px">${m.badge}</span>`:''}
+                  </div>
+                  <div class="micro" style="line-height:1.4">${t({th:m.desc_th,en:m.desc_en})}</div>
+                </div>
+                <div style="font-size:11.5px;font-weight:800;color:${on?'var(--orange)':'var(--muted)'}">${m.price}</div>
+                ${on?`<span style="color:var(--orange)">${I('check',13)}</span>`:''}
+              </button>`;
+            }).join('')}
+          </div>
+          <div class="micro" style="margin-top:8px;font-size:10.5px;color:var(--muted);line-height:1.4">${T('ราคาต่อคลิป 30 วินาที — fal.ai bill ตามจริง','Per 30s clip — fal.ai bills usage')}</div>
+        </div>`:''}
       </div>
 
       <!-- Step 2: Presenter -->
@@ -4207,11 +4237,13 @@ render();
     // Backend uploads image+audio to Supabase Storage → submits to fal.ai queue,
     // we poll until done. Real mouth movement, ~60-180s. Requires FAL_KEY env var.
     try {
-      toast(state.lang==='th'?'ส่งงานไป fal.ai สำหรับ lip-sync…':'Submitting to fal.ai…');
+      var lsModel = state.avatarLipsyncModel || 'fal-ai/infinitalk';
+      var lsName = lsModel.split('/').pop();
+      toast(state.lang==='th'?('ส่งงานไป fal.ai · '+lsName+'…'):('Submitting to fal.ai · '+lsName+'…'));
       var sub = await api('/api/ai/lipsync-submit', { method:'POST', body:{
         image_b64: picked.image,         // dataURL — backend extracts mime + base64
         audio_b64: state.ttsAudio,
-        // model — left to backend default (FAL_LIPSYNC_MODEL env, defaults to fal-ai/sadtalker)
+        model: lsModel,                  // user-picked model from Step 1 sub-picker
       }});
       if (sub && sub.request_id) {
         state.avatarVideoProgress = 5; render();
