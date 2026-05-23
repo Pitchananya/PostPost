@@ -355,9 +355,9 @@ a{color:inherit;text-decoration:none}
 .brandTile{padding:14px;border-radius:16px;border:1px solid var(--line);background:#fff;display:flex;flex-direction:column;gap:10px;cursor:pointer;transition:.15s ease;position:relative;text-align:left}
 .brandTile:hover{transform:translateY(-2px);box-shadow:var(--shadow2)}
 .brandTile.active{border:2px solid var(--orange);background:var(--orange-soft);padding:13px}
-.brandTile .bMark{width:40px;height:40px;border-radius:11px;display:grid;place-items:center;color:#fff;font-weight:800;font-size:14px;flex-shrink:0;box-shadow:var(--shadow3)}
+.brandTile .bMark{width:58px;height:58px;border-radius:13px;display:grid;place-items:center;color:#fff;font-weight:800;font-size:18px;flex-shrink:0;box-shadow:var(--shadow3)}
 .brandTile .bInfo{display:flex;gap:10px;align-items:center}
-.brandTile .bInfo > div{flex:1;min-width:0}
+.brandTile .bInfo > div:not(.bMark){flex:1;min-width:0}
 .brandTile b{font-size:14px;color:var(--purple);display:block;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .brandTile .bSub{font-size:11px;color:var(--muted)}
 .brandTile.add{border:1.5px dashed var(--line3);background:transparent;align-items:center;justify-content:center;min-height:96px;color:var(--muted)}
@@ -373,6 +373,8 @@ a{color:inherit;text-decoration:none}
 .productCard .pPrice{color:var(--orange);font-weight:800;font-size:13px}
 .productCard .checkBadge{position:absolute;top:10px;right:10px;z-index:2;width:22px;height:22px;border-radius:99px;background:var(--orange);color:#fff;display:none;align-items:center;justify-content:center;font-size:11px;font-weight:900;box-shadow:var(--shadow3)}
 .productCard.active .checkBadge{display:flex}
+.ppProdView{margin-top:2px;width:100%;border:1px solid var(--line);background:#faf6ef;color:var(--purple);border-radius:8px;padding:5px 0;font-size:10.5px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:4px;font-family:inherit;transition:.13s ease}
+.ppProdView:hover{background:var(--orange-soft);color:var(--orange3);border-color:var(--orange)}
 
 /* Voice / Archetype tiles */
 .toneTile{padding:12px;border-radius:14px;border:1px solid var(--line);background:#fff;display:flex;gap:10px;cursor:pointer;text-align:left;transition:.15s;position:relative;align-items:flex-start}
@@ -475,10 +477,10 @@ const state = {
   selectedHook: 1,
   avatar: 'mintra',
   avatarMode: 'real',
-  ttvStyle: 0,
-  ttvModel: 'sora',
-  ttvDuration: '10s',
-  ttvAspect: '1:1',
+  ttvStyle: 0,                                     // index into the styles[] array on the Text-to-Video page (0 = Creator/UGC)
+  ttvModel: 'veo-3.0-fast-generate-001',           // real Veo model id — sent to /api/ai/veo-generate
+  ttvDuration: '8s',
+  ttvAspect: '9:16',     // Veo supports 9:16 / 16:9 only
   calDay: 11,
   autoFilter: 'all',
   libraryFilter: 'all',
@@ -491,10 +493,13 @@ const state = {
   shopUrl: '',
   shopScraping: false,
   shopStats: null,
+  previewAspect: '4:5',    // 1:1 | 4:5 | 9:16  — aspect for post preview + PNG download
+  previewIndex: 0,         // current slide in carousel
 };
 
 const T = (th, en) => state.lang === 'th' ? th : en;
 const t = (obj) => typeof obj === 'object' ? (state.lang === 'th' ? obj.th : obj.en) : obj;
+const escText = (s) => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
 // ====================================================================
 // ICONS
@@ -672,12 +677,17 @@ function topbarHTML() {
         <span class="searchKbd">⌘K</span>
       </div>
       <div class="chWidget" title="${T('เชื่อมต่อ ช่องทางโพสต์','Connected channels')}">
-        <div class="chStack">
-          <div>${I('facebook',16,'#1877F2')}<span class="chDot"></span></div>
-          <div>${I('instagram',16,'#E1306C')}<span class="chDot"></span></div>
-          <div class="off">${I('tiktok',16,'#0F172A')}<span class="chDot warn"></span></div>
-        </div>
-        <div><span>${T('2 จาก 3','2 of 3')}</span><small>${T('เชื่อมต่อแล้ว','connected')}</small></div>
+        ${(function(){
+          var ab = BRANDS.find(function(b){ return b.id===state.brand; }) || BRANDS[0];
+          var ch = (ab && ab.ch) || [];
+          var cols = {facebook:'#1877F2',instagram:'#E1306C',tiktok:'#0F172A'};
+          var icons = ['facebook','instagram','tiktok'].map(function(k){
+            var on = ch.indexOf(k)>=0;
+            return '<div'+(on?'':' class="off"')+'>'+I(k,16,cols[k])+'<span class="chDot'+(on?'':' warn')+'"></span></div>';
+          }).join('');
+          return '<div class="chStack">'+icons+'</div>'
+            + '<div><span>'+T(ch.length+' จาก 3', ch.length+' of 3')+'</span><small>'+T('เชื่อมต่อแล้ว','connected')+'</small></div>';
+        })()}
         ${I('chev_down',12)}
       </div>
       <div class="lang"><button class="${state.lang==='th'?'active':''}" data-lang="th">ไทย</button><button class="${state.lang==='en'?'active':''}" data-lang="en">EN</button></div>
@@ -1052,12 +1062,21 @@ function normalizeBrand(b){
     sub_en: b.sub_en || b.type || (b.sub && b.sub.en) || 'Brand',
     ch: Array.isArray(b.ch) ? b.ch : [],
     logo: b.logo || '',
+    bizType: b.bizType || '',
+    desc: b.desc || '',
+    voice: Array.isArray(b.voice) ? b.voice : [],
+    products: Array.isArray(b.products) ? b.products : null,
+    shopStats: b.shopStats || null,
+    shopUrl: b.shopUrl || '',
+    channelInfo: (b.channelInfo && typeof b.channelInfo === 'object') ? b.channelInfo : {},
+    archetype: b.archetype || '',
+    topics: Array.isArray(b.topics) ? b.topics : null,
   };
 }
 // brand avatar — uploaded logo image, or the colored 2-letter mark
 function brandMark(b){
   return b.logo
-    ? '<img src="'+b.logo+'" alt="" style="width:100%;height:100%;object-fit:cover;display:block">'
+    ? '<img src="'+b.logo+'" alt="" style="width:100%;height:100%;object-fit:contain;display:block">'
     : b.mark;
 }
 BRANDS = BRANDS.map(normalizeBrand);
@@ -1094,7 +1113,7 @@ const BUSINESS_TYPES = [
   {th:'การเกษตร & ออร์แกนิค',en:'Agriculture & Organic'},
   {th:'อื่น ๆ',en:'Other'},
 ];
-const businessOptions = () => BUSINESS_TYPES.map(function(b){ return '<option>'+T(b.th,b.en)+'</option>'; }).join('');
+const businessOptions = (sel) => BUSINESS_TYPES.map(function(b){ var label=T(b.th,b.en); return '<option'+(label===sel?' selected':'')+'>'+label+'</option>'; }).join('');
 
 const VOICES = [
   { id:'friendly', emoji:'🤗', th:'เป็นกันเอง', en:'Friendly', alt_th:'Friendly', alt_en:'เป็นกันเอง', sample_th:'สวัสดีค่าคุณลูกค้า วันนี้พีร์มีของดีมาฝาก ✨', sample_en:'Hey! We picked something just for you ✨' },
@@ -1256,6 +1275,17 @@ let PRODUCTS = [
   { id:'p7', name_th:'Linhzhimin หลินจือมิน 60 เม็ด', name_en:'Linhzhimin · 60 caps', short:'Linhzhimin', price:1120, sales:'420', rating:4.9, badge:'พรีเมียม', hue:['#FEF3C7','#FCD9A8'], label:'LINH' },
   { id:'p8', name_th:'Kumiko Collagen สเต็มเซลล์รกปลาแซลม่อน 15ซอง', name_en:'Kumiko Collagen · 15 sachets', short:'Kumiko', price:250, sales:'880', rating:4.6, hue:['#FFE4E6','#E0E7FF'], label:'KUMI' },
 ];
+const DEMO_PRODUCTS = PRODUCTS.slice();
+state.selectedProducts = PRODUCTS.map(function(p){ return p.id; });
+const PRODUCT_CATEGORIES = [
+  {th:'สกินแคร์',en:'Skincare'},{th:'เครื่องสำอาง',en:'Cosmetics'},
+  {th:'อาหารเสริม & วิตามิน',en:'Supplements & Vitamins'},{th:'สุขภาพ & ความงาม',en:'Health & Beauty'},
+  {th:'อาหาร & เครื่องดื่ม',en:'Food & Drink'},{th:'แฟชั่น & เสื้อผ้า',en:'Fashion & Apparel'},
+  {th:'เครื่องประดับ',en:'Jewelry & Accessories'},{th:'ของใช้ในบ้าน & ไลฟ์สไตล์',en:'Home & Living'},
+  {th:'แม่ & เด็ก',en:'Mom & Baby'},{th:'สัตว์เลี้ยง',en:'Pet Products'},
+  {th:'แกดเจ็ต & ไอที',en:'Gadgets & IT'},{th:'ของมงคล / สายมู',en:'Spiritual & Lucky'},
+  {th:'งานฝีมือ & DIY',en:'Handmade & DIY'},{th:'อื่นๆ',en:'Other'},
+];
 
 const productImgHTML = (p, opts={}) => {
   const badge = opts.badge && p.badge ? `<span style="position:absolute;top:6px;left:6px;background:var(--orange);color:#fff;padding:1px 7px;border-radius:99px;font-size:9px;font-weight:800;z-index:2">${p.badge}</span>` : '';
@@ -1288,12 +1318,21 @@ function pageProfile() {
     { tag_th:'เล่าเรื่อง', tag_en:'Storytelling', text_th:'แบรนด์ที่เกิดจากความเชื่อว่าผิวบอบบางสมควรได้รับการดูแลที่ดีกว่านี้ ใช้กุหลาบออร์แกนิกจากฟาร์มของเราเอง ทดสอบทุก batch โดยเภสัชกร', text_en:'Born from the belief that sensitive skin deserves better. Roses from our own organic farm, every batch tested by pharmacists.' },
   ];
 
+  // product carousel — filter & sort view
+  let viewProducts = PRODUCTS.slice();
+  if (state.productInStockOnly) viewProducts = viewProducts.filter(p => (p.stock||0) > 0);
+  if (state.productSort === 'sold') viewProducts.sort((a,b)=>(b.sold||0)-(a.sold||0));
+  else if (state.productSort === 'price_asc') viewProducts.sort((a,b)=>(a.price||0)-(b.price||0));
+  else if (state.productSort === 'price_desc') viewProducts.sort((a,b)=>(b.price||0)-(a.price||0));
+  else if (state.productSort === 'rating') viewProducts.sort((a,b)=>(b.rating||0)-(a.rating||0));
+  const filterOn = !!(state.productSort || state.productInStockOnly);
+
   return `${head(
     T('WORKSPACE','WORKSPACE'),
     T('Profile ของแบรนด์','Brand profile'),
     T('จัดการแบรนด์ทั้งหมดของคุณ · ตั้ง Brand Voice · เลือกสินค้าที่ AI จะใช้','Manage all your brands · set brand voice · pick products AI uses'),
     `<button class="btn outline sm">${I('info',14)} ${T('ดูสคริปต์ AI','View AI prompt')}</button>
-     <button class="btn primary sm">${I('check',14)} ${T('บันทึก','Save')}</button>`
+     <button class="btn primary sm" data-savebrand="1">${I('check',14)} ${T('บันทึก','Save')}</button>`
   )}
 
   <!-- === Brand switcher === -->
@@ -1344,18 +1383,18 @@ function pageProfile() {
       </div>
       <div class="field">
         <label class="label">${T('ชื่อแบรนด์','Brand name')}</label>
-        <input class="input" value="${activeBrand.name}" />
+        <input class="input" id="ppBrandNameEdit" value="${activeBrand.name}" />
       </div>
       <div class="field">
         <label class="label">${T('ประเภทธุรกิจ','Business type')}</label>
-        <select class="select" id="ppBizType">${businessOptions()}</select>
+        <select class="select" id="ppBizType">${businessOptions(activeBrand.bizType)}</select>
       </div>
       <div class="field">
         <div style="display:flex;justify-content:space-between;align-items:baseline">
           <label class="label">${T('คำอธิบายแบรนด์','Brand description')}</label>
           <button class="btn ghost sm" data-aiwrite="1" style="color:var(--blue);height:26px;padding:0 8px">${I('sparkles',12,'#2563EB')} ${T('ให้ AI ช่วยเขียน','AI write for me')}</button>
         </div>
-        <textarea class="textarea" rows="4" id="ppBrandDesc">${state.brandDesc || T('ร้าน HappyPrice ขายสกินแคร์ออร์แกนิคจากดอกกุหลาบเขาใหญ่ เน้นผิวบอบบางแพ้ง่าย กลุ่มลูกค้าหญิงวัย 25-40 ปี','HappyPrice sells organic skincare from Khao Yai roses, focused on sensitive skin, for women aged 25-40.')}</textarea>
+        <textarea class="textarea" rows="4" id="ppBrandDesc">${state.brandDesc || activeBrand.desc || T('ร้าน HappyPrice ขายสกินแคร์ออร์แกนิคจากดอกกุหลาบเขาใหญ่ เน้นผิวบอบบางแพ้ง่าย กลุ่มลูกค้าหญิงวัย 25-40 ปี','HappyPrice sells organic skincare from Khao Yai roses, focused on sensitive skin, for women aged 25-40.')}</textarea>
         <div class="hint" style="display:flex;justify-content:space-between">
           <span>${T('AI ใช้ข้อความนี้ทุกครั้งที่สร้างคอนเทนต์','AI reads this on every generation')}</span>
         </div>
@@ -1431,13 +1470,44 @@ function pageProfile() {
     </div>
   </div>
 
+  <!-- === Posting channels (per brand) === -->
+  <div class="card" style="margin-top:18px">
+    <div class="cardHeader">
+      <div>
+        <h3 class="cardTitle">${T('เชื่อมต่อช่องทางโพสต์','Connect posting channels')}</h3>
+        <p class="cardSub">${T('แต่ละแบรนด์เชื่อมเพจ Facebook / IG ของตัวเอง','Each brand connects its own Facebook / IG pages')} · <b style="color:var(--purple)">${activeBrand.name}</b></p>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      ${[
+        {key:'facebook',name:'Facebook Page',color:'#1877F2'},
+        {key:'instagram',name:'Instagram Business',color:'#E1306C'},
+        {key:'tiktok',name:'TikTok',color:'#0F172A'},
+      ].map(c=>{
+        const connected = (activeBrand.ch||[]).indexOf(c.key)>=0;
+        const info = (activeBrand.channelInfo||{})[c.key] || {};
+        return `<div style="display:flex;align-items:center;gap:12px;border:1px solid var(--line);border-radius:14px;padding:12px 14px">
+          <div style="width:40px;height:40px;border-radius:10px;background:${c.color}1a;display:grid;place-items:center;flex-shrink:0">${I(c.key,20,c.color)}</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:700;color:var(--purple)">${c.name}</div>
+            ${connected
+              ? `<div style="font-size:11.5px;color:var(--green);font-weight:700">${I('check',11,'#16A34A')} ${T('เชื่อมแล้ว','Connected')}${info.handle?' · '+info.handle:''}</div>`
+              : `<div style="font-size:11.5px;color:var(--muted)">${T('ยังไม่ได้เชื่อมกับแบรนด์นี้','Not connected for this brand')}</div>`}
+          </div>
+          ${connected
+            ? `<button class="btn ghost sm" data-chdisconnect="${c.key}" style="color:var(--red)">${I('x',12,'#DC2626')} ${T('ยกเลิก','Disconnect')}</button>`
+            : `<button class="btn primary sm" data-chconnect="${c.key}">${I('link',13)} ${T('เชื่อมต่อ','Connect')}</button>`}
+        </div>`;
+      }).join('')}
+    </div>
+  </div>
+
   <!-- === Shopee scraper === -->
   <div class="card" style="margin-top:18px">
     <div class="cardHeader">
       <div>
         <div style="display:flex;align-items:center;gap:10px">
           <h3 class="cardTitle">${T('สินค้าจากร้านของคุณ','Products from your store')}</h3>
-          <span class="pill green"><span class="dot" style="background:var(--green);width:6px;height:6px"></span> ${T('ซิงค์ล่าสุด 12 นาทีที่แล้ว','Synced 12 min ago')}</span>
         </div>
         <p class="cardSub">${T('วาง URL ร้าน Shopee/Lazada/TikTok Shop — AI จะดึงรูป ราคา ชื่อสินค้ามาใช้สร้างคอนเทนต์','Paste your Shopee/Lazada URL — AI pulls images, prices, names into every post')}</p>
       </div>
@@ -1474,19 +1544,30 @@ function pageProfile() {
       </div>
     </div>
     <div class="card flat" style="padding:0;background:var(--cream2);margin-bottom:16px;display:flex">
-      ${(state.shopStats
-          ? [[String(state.shopStats.count), T('สินค้าทั้งหมด','Products')],
-             [String(state.shopStats.inStock), T('มีสต็อก','In stock')],
-             ['฿'+state.shopStats.avgPrice, T('ราคาเฉลี่ย','Avg price')],
-             [state.shopStats.rating || '—', T('เรทติ้งเฉลี่ย','Avg rating')]]
-          : [['34',T('สินค้าทั้งหมด','Products')],['12',T('AI ใช้บ่อย','AI uses often')],['฿590',T('ราคาเฉลี่ย','Avg price')],['4.9',T('เรทติ้งร้าน','Shop rating')]]
-        ).map((s,i)=>`<div style="flex:1;padding:14px 18px;${i>0?'border-left:1px solid var(--line)':''}"><div style="font-size:20px;font-weight:800;color:var(--purple);letter-spacing:-.02em">${s[0]}</div><div style="font-size:11.5px;color:var(--muted);font-weight:600">${s[1]}</div></div>`).join('')}
+      ${(function(){
+          var st = state.shopStats, ps = PRODUCTS;
+          var sel = (state.selectedProducts||[]).length;
+          var total, avgP, avgR;
+          if (st) {
+            total = st.count; avgP = st.avgPrice; avgR = st.rating || '—';
+          } else {
+            total = ps.length;
+            var priced = ps.filter(function(p){ return p.price>0; });
+            avgP = priced.length ? Math.round(priced.reduce(function(s,p){ return s+p.price; },0)/priced.length).toLocaleString() : '0';
+            var rated = ps.filter(function(p){ return p.rating>0; });
+            avgR = rated.length ? (rated.reduce(function(s,p){ return s+(p.rating||0); },0)/rated.length).toFixed(1) : '—';
+          }
+          return [[String(total), T('สินค้าทั้งหมด','Products')],
+                  [String(sel), T('เลือกใช้กับ AI','Picked for AI')],
+                  ['฿'+avgP, T('ราคาเฉลี่ย','Avg price')],
+                  [String(avgR), T('เรทติ้งเฉลี่ย','Avg rating')]];
+        })().map((s,i)=>`<div style="flex:1;padding:14px 18px;${i>0?'border-left:1px solid var(--line)':''}"><div style="font-size:20px;font-weight:800;color:var(--purple);letter-spacing:-.02em">${s[0]}</div><div style="font-size:11.5px;color:var(--muted);font-weight:600">${s[1]}</div></div>`).join('')}
     </div>
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
       <h3 class="cardTitle">${T('เลือกสินค้าที่ให้ AI ใช้สร้างคอนเทนต์','Pick products AI may feature')}</h3>
       <div style="display:flex;gap:6px;align-items:center">
-        <span class="micro"><b style="color:var(--purple)">4</b> / 8 ${T('เลือกแล้ว','selected')}</span>
-        <button class="btn ghost sm">${I('filter',12)} ${T('กรอง','Filter')}</button>
+        <span class="micro"><b style="color:var(--purple)">${viewProducts.filter(p=>(state.selectedProducts||[]).indexOf(p.id)>=0).length}</b> / ${viewProducts.length} ${T('เลือกแล้ว','selected')}</span>
+        <button class="btn ${filterOn?'primary':'ghost'} sm" data-filter="1">${I('filter',12,filterOn?'#fff':'#6B6473')} ${T('กรอง','Filter')}</button>
         <button class="btn outline sm" data-toggle="manualOpen">${I(manualOpen?'x':'plus',13)} ${T('เพิ่มสินค้าเอง','Add manually')}</button>
       </div>
     </div>
@@ -1499,22 +1580,26 @@ function pageProfile() {
       <div style="display:grid;grid-template-columns:160px 1fr;gap:18px">
         <div>
           <label class="label">${T('รูปสินค้า','Photo')}</label>
-          <div style="aspect-ratio:1;border-radius:12px;border:1.5px dashed var(--line3);background:rgba(255,255,255,.6);display:grid;place-items:center;color:var(--muted);text-align:center;padding:10px">
-            ${I('upload',24)}
-            <div style="font-size:11px;font-weight:600;margin-top:4px">${T('คลิกหรือลากรูปมาวาง','Click or drag (max 5)')}</div>
-            <div style="font-size:10px;color:var(--muted)">JPG · PNG · 5MB</div>
+          <div id="ppNewImgBox" data-newimg="1" style="aspect-ratio:1;border-radius:12px;border:1.5px dashed var(--line3);background:rgba(255,255,255,.6);display:grid;place-items:center;color:var(--muted);text-align:center;padding:10px;cursor:pointer;overflow:hidden">
+            ${state.newProductImg
+              ? `<img src="${state.newProductImg}" alt="" style="width:100%;height:100%;object-fit:cover"/>`
+              : `${I('upload',24)}
+                 <div style="font-size:11px;font-weight:600;margin-top:4px">${T('คลิกเพื่ออัปโหลดรูป','Click to upload')}</div>
+                 <div style="font-size:10px;color:var(--muted)">JPG · PNG · 5MB</div>`}
           </div>
+          <input type="file" accept="image/*" id="ppNewImgInput" style="display:none"/>
+          ${state.newProductImg?`<button class="btn ghost sm" data-newimgclear="1" style="margin-top:6px;color:var(--red);font-size:11px;height:24px;width:100%">${I('x',11,'#DC2626')} ${T('ลบรูป','Remove photo')}</button>`:''}
         </div>
         <div>
-          <div class="field"><label class="label">${T('ชื่อสินค้า','Product name')} <span style="color:var(--red)">*</span></label><input class="input" placeholder="${T('เช่น Rose Repair Serum 30ml','e.g. Rose Repair Serum 30ml')}"/></div>
+          <div class="field"><label class="label">${T('ชื่อสินค้า','Product name')} <span style="color:var(--red)">*</span></label><input class="input" id="ppNewName" placeholder="${T('เช่น Rose Repair Serum 30ml','e.g. Rose Repair Serum 30ml')}"/></div>
           <div class="grid g3" style="gap:10px">
-            <div><label class="label">${T('ราคา','Price')} *</label><input class="input" placeholder="690"/></div>
-            <div><label class="label">${T('ราคาก่อนลด','Original')}</label><input class="input" placeholder="990"/></div>
-            <div><label class="label">${T('หมวด','Category')}</label><select class="select"><option>${T('สกินแคร์','Skincare')}</option></select></div>
+            <div><label class="label">${T('ราคา','Price')} *</label><input class="input" id="ppNewPrice" type="number" min="0" placeholder="690"/></div>
+            <div><label class="label">${T('ราคาก่อนลด','Original')}</label><input class="input" id="ppNewBefore" type="number" min="0" placeholder="990"/></div>
+            <div><label class="label">${T('หมวด','Category')}</label><select class="select" id="ppNewCat">${PRODUCT_CATEGORIES.map(c=>`<option>${T(c.th,c.en)}</option>`).join('')}</select></div>
           </div>
           <div class="field" style="margin-top:10px">
-            <label class="label">${T('คำอธิบาย / จุดเด่น','Description')} <button class="btn ghost sm" style="height:22px;padding:0 6px;color:var(--blue);font-size:11px">${I('sparkles',11,'#2563EB')} ${T('AI ช่วย','AI assist')}</button></label>
-            <textarea class="textarea" rows="2" placeholder="${T('เซรั่มสกัดเย็น เห็นผลใน 7 วัน','Cold-pressed serum · 7-day results')}"></textarea>
+            <label class="label">${T('คำอธิบาย / จุดเด่น','Description')}</label>
+            <textarea class="textarea" rows="2" id="ppNewDesc" placeholder="${T('เซรั่มสกัดเย็น เห็นผลใน 7 วัน','Cold-pressed serum · 7-day results')}"></textarea>
           </div>
         </div>
       </div>
@@ -1522,34 +1607,32 @@ function pageProfile() {
         <span class="micro">${T('ช่อง * จำเป็น','* required')}</span>
         <div style="display:flex;gap:8px">
           <button class="btn outline sm" data-toggle="manualOpen">${T('ยกเลิก','Cancel')}</button>
-          <button class="btn outline sm">${I('plus',13)} ${T('บันทึก + เพิ่มอีก','Save + add another')}</button>
-          <button class="btn primary sm">${I('check',13)} ${T('บันทึก','Save')}</button>
+          <button class="btn outline sm" data-saveproduct="again">${I('plus',13)} ${T('บันทึก + เพิ่มอีก','Save + add another')}</button>
+          <button class="btn primary sm" data-saveproduct="close">${I('check',13)} ${T('บันทึก','Save')}</button>
         </div>
       </div>
     </div>` : ''}
 
-    <div class="grid" style="grid-template-columns:repeat(6,1fr);gap:10px">
-      ${PRODUCTS.slice(0,5).map(p => `<div class="productCard ${p.id===state.product?'active':''}" data-product="${p.id}">
+    <div class="grid" style="grid-template-columns:repeat(5,1fr);gap:10px">
+      ${(state.productsExpanded ? viewProducts : viewProducts.slice(0,5)).map(p => `<div class="productCard ${(state.selectedProducts||[]).indexOf(p.id)>=0?'active':''}" data-product="${p.id}">
         <span class="checkBadge">✓</span>
         ${productImgHTML(p, {badge:true})}
         <div class="pName">${t({th:p.name_th,en:p.name_en})}</div>
         <div class="split"><span class="pPrice">฿${p.price}</span><span style="font-size:10px;color:var(--muted)">${T('ขายแล้ว','Sold')} ${p.sales}</span></div>
+        <button class="ppProdView" data-prodview="${p.id}">${I('eye',12)} ${T('ดูรายละเอียด','View details')}</button>
       </div>`).join('')}
-      <button class="productCard" data-toggle="manualOpen" style="border:1.5px dashed var(--line3);background:transparent;align-items:center;justify-content:center;gap:8px">
-        <div style="width:44px;height:44px;border-radius:99px;background:var(--orange-soft);display:grid;place-items:center;color:var(--orange);margin:auto">${I('plus',20)}</div>
-        <b style="font-size:12.5px;color:var(--purple);text-align:center">${T('เพิ่มสินค้าเอง','Add manually')}</b>
-        <span style="font-size:10px;color:var(--muted);text-align:center">${T('พิมพ์ชื่อ + รูปเอง','Type name + photo')}</span>
-      </button>
     </div>
-    <div style="display:flex;justify-content:center;margin-top:18px">
-      <button class="btn ghost sm">${T('ดูสินค้าอีก 28 รายการ','Show 28 more')} ${I('chev_down',14)}</button>
-    </div>
+    ${viewProducts.length > 5 ? `<div style="display:flex;justify-content:center;margin-top:18px">
+      <button class="btn ghost sm" data-toggle="productsExpanded">${state.productsExpanded
+        ? `${T('ย่อรายการสินค้า','Show less')} ${I('chev_up',14)}`
+        : `${T('ดูสินค้าอีก '+(viewProducts.length-5)+' รายการ','Show '+(viewProducts.length-5)+' more')} ${I('chev_down',14)}`}</button>
+    </div>` : ''}
   </div>`;
 }
 // ====================================================================
 // PAGE: TOPIC BANK
 // ====================================================================
-const TOPICS = [
+let TOPICS = [
   { kind:'tip', f:'F1', len_th:'80-120 คำ', len_en:'80-120 words', th:'ผิวบอบบางใช่ไหมคะ? 5 ขั้นตอนตอนเช้าที่ห้ามข้าม', en:"Sensitive skin? 5 morning steps you can't skip" },
   { kind:'knowledge', f:'F2', len_th:'100-160 คำ', len_en:'100-160 words', th:'รู้ไหม? Marine Collagen ดูดซึมได้ดีกว่า Bovine Collagen 1.5 เท่า', en:'Did you know? Marine collagen absorbs 1.5× better than bovine' },
   { kind:'promo', f:'F3', len_th:'60-90 คำ', len_en:'60-90 words', used:true, th:'11.11 มาถึงแล้ว! Rose Repair ลด 50% เฉพาะวันเดียว', en:'11.11 is here! Rose Repair 50% off — today only' },
@@ -1569,6 +1652,7 @@ const TOPICS = [
   { kind:'tip', f:'F1', len_th:'80-120 คำ', len_en:'80-120 words', th:'7-step skincare แบบเกาหลี — ที่คนไทยใช้จริงได้', en:'7-step Korean skincare — Thailand edition' },
   { kind:'review', f:'F2', len_th:'200+ คำ', len_en:'200+ words', th:'รีวิวจริง — Sheet Mask 7 ยี่ห้อ อันไหนคุ้มสุด?', en:'Real review — 7 sheet mask brands compared' },
 ];
+const DEMO_TOPICS = TOPICS.slice();
 
 const KIND_MAP = {
   knowledge:{th:'ให้ความรู้',en:'Knowledge',pill:'blue'},
@@ -1586,7 +1670,7 @@ function pageTopics() {
   return `${head('WORKSPACE','Topic Bank',
     T('ให้ AI วางแผนหัวข้อทั้งเดือน 30 หัวข้อ · เลือกธีม + สินค้า แล้วกดสร้าง','Let AI plan 30 topics · pick a theme, then generate'),
     `<button class="btn outline sm">${I('download',14)} ${T('Export','Export')}</button>
-     <button class="btn primary sm">${I('sparkles',14)} ${T('ปั่น 30 หัวข้อใหม่','Generate 30')}</button>`
+     <button class="btn primary sm" data-gentopics="1" ${state.topicGenLoading?'disabled':''}>${I('sparkles',14)} ${state.topicGenLoading?T('AI กำลังสร้าง…','Generating…'):T('ปั่นหัวข้อใหม่ด้วย AI','Generate with AI')}</button>`
   )}
 
   <!-- Controls -->
@@ -1594,30 +1678,28 @@ function pageTopics() {
     <div class="grid" style="grid-template-columns:1fr 2fr 110px;gap:12px;align-items:end">
       <div>
         <label class="label">${T('แบรนด์','Brand')}</label>
-        <button class="input" style="text-align:left;display:flex;align-items:center;gap:8px">
-          <div style="width:22px;height:22px;border-radius:5px;background:linear-gradient(135deg,#FB923C,#F97316);display:grid;place-items:center;color:#fff;font-weight:800;font-size:10px">HP</div>
-          <span style="flex:1">HappyPrice Shop</span>
-          ${I('chev_down',14)}
-        </button>
+        <select class="select" id="ppTopicBrand">
+          ${BRANDS.map(b=>`<option value="${b.id}" ${b.id===state.brand?'selected':''}>${b.name}</option>`).join('')}
+        </select>
       </div>
       <div>
         <label class="label">${T('ธีมเดือนนี้','Theme for this month')}</label>
-        <input class="input" value="${T('โปรโมชั่น 11.11 + เคล็ดลับผิวบอบบาง','11.11 sale + sensitive skin tips')}"/>
+        <input class="input" id="ppTopicTheme" value="${state.topicTheme||''}" placeholder="${T('เช่น โปรโมชั่น 11.11, เคล็ดลับสำหรับลูกค้า…','e.g. 11.11 promo, customer tips…')}"/>
       </div>
       <div>
         <label class="label">${T('จำนวน','How many')}</label>
-        <input class="input" value="30" type="number"/>
+        <input class="input" id="ppTopicCount" value="${state.topicCount||30}" type="number" min="5" max="60"/>
       </div>
     </div>
     <div style="margin-top:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
       <span class="micro" style="font-weight:700">${T('จุดมุ่งหมาย:','Goals:')}</span>
       ${[
-        {th:'เพิ่มยอดขาย',en:'Drive sales',on:true},
-        {th:'สร้าง Awareness',en:'Brand awareness',on:true},
-        {th:'ให้ความรู้',en:'Educate'},
-        {th:'สร้าง Community',en:'Build community'},
-        {th:'รับ Feedback',en:'Get feedback'},
-      ].map(g=>`<span class="pill ${g.on?'orange':''}" style="cursor:pointer;height:28px">${g.on?'✓ ':''}${T(g.th,g.en)}</span>`).join('')}
+        {key:'sales',th:'เพิ่มยอดขาย',en:'Drive sales'},
+        {key:'awareness',th:'สร้าง Awareness',en:'Brand awareness'},
+        {key:'educate',th:'ให้ความรู้',en:'Educate'},
+        {key:'community',th:'สร้าง Community',en:'Build community'},
+        {key:'feedback',th:'รับ Feedback',en:'Get feedback'},
+      ].map(g=>{const on=(state.topicGoals||['sales','awareness']).indexOf(g.key)>=0;return `<span class="pill ${on?'orange':''}" data-topicgoal="${g.key}" style="cursor:pointer;height:28px">${on?'✓ ':''}${T(g.th,g.en)}</span>`;}).join('')}
     </div>
   </div>
 
@@ -1646,7 +1728,7 @@ function pageTopics() {
             <span style="display:inline-flex;align-items:center;gap:3px">${I('type',11)} ${t({th:tp.len_th,en:tp.len_en})}</span>
             ${tp.used?`<span class="pill green" style="height:18px;font-size:10px">✓ ${T('ใช้แล้ว','Used')}</span>`:''}
           </div>
-          <button class="btn ghost sm" style="color:var(--orange);height:26px;padding:0 8px;font-size:11.5px" data-go="caption">${T('ใช้หัวข้อนี้','Use this')} ${I('chev_right',11,'#FF7A1A')}</button>
+          <button class="btn ghost sm" style="color:var(--orange);height:26px;padding:0 8px;font-size:11.5px" data-usetopic="${TOPICS.indexOf(tp)}">${T('ใช้หัวข้อนี้','Use this')} ${I('chev_right',11,'#FF7A1A')}</button>
         </div>
       </div>`;
     }).join('')}
@@ -1676,7 +1758,7 @@ function productPickerHTML() {
       </div>
     </div>
     <div style="display:flex;gap:10px;overflow-x:auto;padding-bottom:6px">
-      ${PRODUCTS.map(p => `<button class="productCard ${p.id===state.product?'active':''}" data-product="${p.id}" style="width:130px;flex-shrink:0">
+      ${PRODUCTS.map(p => `<button class="productCard ${(state.selectedProducts||[]).indexOf(p.id)>=0?'active':''}" data-product="${p.id}" style="width:130px;flex-shrink:0">
         <span class="checkBadge">✓</span>
         ${productImgHTML(p, {badge:true})}
         <div class="pName" style="font-size:11px;height:28px">${p.short}</div>
@@ -1696,30 +1778,105 @@ function generateInputHTML() {
     <div class="split" style="margin-bottom:10px">
       <label class="label" style="margin:0">${T('หัวข้อ / สิ่งที่อยากจะโพสต์','Topic — what to post about')}</label>
       <div style="display:flex;gap:6px">
-        <button class="pill" data-go="topics" style="cursor:pointer;color:var(--blue)">${I('lightbulb',11,'#2563EB')} ${T('ดู Topic Bank','Topic Bank')}</button>
         <button class="pill" style="cursor:pointer;color:var(--blue)">${I('sparkles',11,'#2563EB')} ${T('คิดหัวข้อให้','Suggest topic')}</button>
       </div>
     </div>
     <div style="position:relative">
-      <textarea class="textarea" rows="3" style="padding-right:110px">${T('โปรโมชั่น 11.11 ลด 50% Marine Collagen from New Zealand 100g — เน้นกลุ่มคุณแม่วัย 30-45 ที่อยากเริ่มดูแลผิวอย่างจริงจัง · ดึงข้อมูลจาก Shopee อัตโนมัติ','11.11 sale · Marine Collagen NZ 100g 50% off — for moms 30-45 ready to take skincare seriously. Auto-pulls from Shopee.')}</textarea>
+      <textarea class="textarea" rows="3" id="ppGenTopic" style="padding-right:110px" placeholder="${T('พิมพ์หัวข้อที่อยากโพสต์ หรือกด \'ดู Topic Bank\' เพื่อเลือกหัวข้อที่ AI วางแผนไว้','Type a topic, or pick one from Topic Bank')}">${state.selectedTopic || ''}</textarea>
       <button class="btn ghost sm" style="position:absolute;bottom:12px;right:12px;color:var(--muted)">${I('sparkles',13)} ${T('ปรับให้สั้น','Shorten')}</button>
     </div>
     <div style="margin-top:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
       <div style="display:flex;align-items:center;gap:6px"><span class="micro" style="font-weight:700">${T('โทน:','Tone:')}</span>
-        <span class="pill orange" style="cursor:pointer;height:30px">🤗 ${T('เป็นกันเอง','Friendly')} ${I('chev_down',12)}</span></div>
+        <select class="select" id="ppGenTone" style="height:34px;width:auto;padding:0 30px 0 10px;font-size:12px">
+          ${VOICES.map(v=>`<option value="${v.id}" ${(state.genTone||(state.voice&&state.voice[0])||'friendly')===v.id?'selected':''}>${v.emoji} ${T(v.th,v.en)}</option>`).join('')}
+        </select></div>
       <div style="display:flex;align-items:center;gap:6px"><span class="micro" style="font-weight:700">${T('ภาษา:','Lang:')}</span>
-        <span class="pill" style="cursor:pointer;height:30px">${T('ไทย','Thai')} ${I('chev_down',12)}</span></div>
+        <select class="select" id="ppGenLang" style="height:34px;width:auto;padding:0 30px 0 10px;font-size:12px">
+          <option value="th" ${(state.genLang||'th')==='th'?'selected':''}>${T('ไทย','Thai')}</option>
+          <option value="en" ${state.genLang==='en'?'selected':''}>${T('อังกฤษ','English')}</option>
+        </select></div>
       <div style="display:flex;align-items:center;gap:6px"><span class="micro" style="font-weight:700">${T('ความยาว:','Length:')}</span>
-        <span class="pill" style="cursor:pointer;height:30px">${T('ปานกลาง (150 คำ)','Medium (150)')} ${I('chev_down',12)}</span></div>
+        <select class="select" id="ppGenLength" style="height:34px;width:auto;padding:0 30px 0 10px;font-size:12px">
+          <option value="short" ${state.genLength==='short'?'selected':''}>${T('สั้น (~80 คำ)','Short (~80)')}</option>
+          <option value="medium" ${(state.genLength||'medium')==='medium'?'selected':''}>${T('ปานกลาง (~150 คำ)','Medium (~150)')}</option>
+          <option value="long" ${state.genLength==='long'?'selected':''}>${T('ยาว (~250 คำ)','Long (~250)')}</option>
+        </select></div>
       <div style="margin-left:auto;display:flex;gap:8px">
         <button class="btn outline">${I('upload',15)} ${T('อัปโหลดรูป','Upload')}</button>
-        <button class="btn primary">${I('sparkles',16)} ${T('สร้างทั้งหมด','Generate All')}</button>
+        <button class="btn primary" data-genall="1" ${state.genLoading?'disabled':''}>${I('sparkles',16)} ${state.genLoading?T('AI กำลังสร้าง…','Generating…'):T('สร้างทั้งหมด','Generate All')}</button>
       </div>
     </div>
   </div>`;
 }
 
+function postPreviewHTML() {
+  var ab = BRANDS.find(b=>b.id===state.brand) || BRANDS[0];
+  var hookObj = (state.genHooks||[])[((state.selectedHook||1)-1)];
+  var imgs = (state.genImages||[]).filter(Boolean);
+  var n = imgs.length;
+  var idx = Math.min(Math.max(0, state.previewIndex||0), Math.max(0, n-1));
+  var aspect = state.previewAspect || '4:5';
+  var aspectCss = { '1:1':'1/1', '4:5':'4/5', '9:16':'9/16' }[aspect] || '4/5';
+  var tabs = ['1:1','4:5','9:16'].map(function(a){
+    return '<button class="tab '+(aspect===a?'active':'')+'" data-previewaspect="'+a+'" style="padding:5px 10px">'+a+'</button>';
+  }).join('');
+  var imageBlock;
+  if (n > 0) {
+    var dots = '';
+    if (n > 1) {
+      dots = '<div style="position:absolute;left:0;right:0;bottom:8px;display:flex;justify-content:center;gap:5px;z-index:2">'
+        + imgs.map(function(_, i){
+            return '<button data-previewidx="'+i+'" style="border:0;width:7px;height:7px;border-radius:99px;background:'+(i===idx?'#fff':'rgba(255,255,255,.55)')+';box-shadow:0 0 0 1px rgba(0,0,0,.2);cursor:pointer;padding:0"></button>';
+          }).join('')
+        + '</div>';
+    }
+    var navBtns = '';
+    if (n > 1) {
+      var prev = (idx - 1 + n) % n, next = (idx + 1) % n;
+      navBtns =
+          '<button data-previewidx="'+prev+'" style="position:absolute;left:8px;top:50%;transform:translateY(-50%);width:30px;height:30px;border-radius:99px;border:0;background:rgba(255,255,255,.85);display:grid;place-items:center;cursor:pointer;z-index:2;box-shadow:0 1px 4px rgba(0,0,0,.18)">'+I('chev_left',14)+'</button>'
+        + '<button data-previewidx="'+next+'" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);width:30px;height:30px;border-radius:99px;border:0;background:rgba(255,255,255,.85);display:grid;place-items:center;cursor:pointer;z-index:2;box-shadow:0 1px 4px rgba(0,0,0,.18)">'+I('chev_right',14)+'</button>'
+        + '<div style="position:absolute;top:8px;right:10px;background:rgba(0,0,0,.55);color:#fff;font-size:11px;font-weight:700;padding:3px 8px;border-radius:99px;z-index:2">'+(idx+1)+' / '+n+'</div>';
+    }
+    imageBlock = '<div style="position:relative;aspect-ratio:'+aspectCss+';background:#f3f0ea;overflow:hidden">'
+      + '<img src="'+imgs[idx]+'" alt="" style="width:100%;height:100%;object-fit:cover;display:block"/>'
+      + navBtns + dots
+      + '</div>';
+  } else {
+    imageBlock = '<div style="aspect-ratio:'+aspectCss+';background:linear-gradient(135deg,#FFF4E6,#FED7AA 50%,#FECDD3);display:grid;place-items:center;text-align:center;padding:20px;color:#9A3412"><div>'+I('image',32,'#C2693B')+'<div style="font-size:11px;margin-top:8px;font-weight:600">'+T('รูปจะแสดงที่นี่เมื่อสร้าง Creative','Your image appears here')+'</div></div></div>';
+  }
+  return `<div class="card">
+    <div class="cardHeader">
+      <h3 class="cardTitle">${T('ตัวอย่างโพสต์','Post preview')}</h3>
+      <div class="tabs" style="padding:3px">${tabs}</div>
+    </div>
+    <div style="border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#fff">
+      <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--line)">
+        <div style="width:32px;height:32px;border-radius:99px;overflow:hidden;background:${ab?ab.color:'#FB923C'};display:grid;place-items:center;color:#fff;font-weight:800;font-size:12px">${ab?brandMark(ab):'P'}</div>
+        <div><div style="font-size:12.5px;font-weight:700;color:var(--purple)">${ab?escText(ab.name):'Brand'}</div><div style="font-size:10px;color:var(--muted)">${T('ตัวอย่างโพสต์ · เดี๋ยวนี้','Preview · just now')}</div></div>
+      </div>
+      ${imageBlock}
+      <div style="padding:12px 14px">
+        ${hookObj?`<div style="font-size:13px;font-weight:800;color:var(--ink);margin-bottom:6px;line-height:1.5">${escText(hookObj.text)}</div>`:''}
+        ${state.genCaption
+          ? `<div style="font-size:12.5px;color:var(--ink2);line-height:1.65;white-space:pre-wrap">${escText(state.genCaption)}</div>`
+          : `<div style="font-size:12px;color:var(--muted)">${T('ยังไม่มีแคปชั่น — กด "สร้างทั้งหมด" ด้านบนเพื่อให้ AI เขียน Hook / Caption / Hashtag','No caption yet — hit "Generate All" above')}</div>`}
+        ${(state.genHashtags&&state.genHashtags.length)?`<div style="margin-top:8px;font-size:12px;color:#1D4ED8;line-height:1.7">${state.genHashtags.map(escText).join(' ')}</div>`:''}
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button class="btn outline" style="flex:1" data-downloadpng="current" ${n?'':'disabled'}>${I('download',14)} PNG ${aspect}</button>
+      ${n>1?`<button class="btn outline" style="flex:1" data-downloadpng="all">${I('download',14)} ${T('ทั้งหมด','All')} (${n})</button>`:''}
+      <button class="btn outline" style="flex:1" data-genall="1">${I('refresh',14)} ${T('สร้างใหม่','Regenerate')}</button>
+      <button class="btn primary" style="flex:1.2" data-savedraft="1">${I('library',14)} ${T('บันทึกดราฟ','Save draft')}</button>
+    </div>
+  </div>`;
+}
+
 function publishCardHTML() {
+  const _pubBrand = BRANDS.find(b => b.id === state.brand) || BRANDS[0];
+  const _pubCh = (_pubBrand && _pubBrand.ch) || [];
+  const _pubInfo = (_pubBrand && _pubBrand.channelInfo) || {};
   return `<div class="card">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
       ${I('rocket',18,'#FF7A1A')}
@@ -1728,18 +1885,20 @@ function publishCardHTML() {
     <label class="label" style="font-size:12px">${T('ช่องทางที่จะโพสต์','Post to channels')}</label>
     <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">
       ${[
-        {key:'facebook',name:'HappyPrice',sub_th:'Facebook · 24.3k ผู้ติดตาม',sub_en:'Facebook · 24.3k followers',color:'#1877F2'},
-        {key:'instagram',name:'@happyprice.sh',sub_th:'IG Business · 18.1k',sub_en:'IG Business · 18.1k',color:'#E1306C'},
-        {key:'tiktok',name:T('— ไม่ได้เชื่อม —','— not connected —'),sub_th:'คลิกเพื่อเชื่อม TikTok',sub_en:'Click to connect TikTok',color:'#0F172A',off:true},
+        {key:'facebook',label:'Facebook',color:'#1877F2'},
+        {key:'instagram',label:'Instagram',color:'#E1306C'},
+        {key:'tiktok',label:'TikTok',color:'#0F172A'},
       ].map(ch => {
-        const on = state.channels[ch.key];
-        return `<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;background:${ch.off?'var(--cream2)':on?'var(--orange-soft)':'#fff'};border:1px solid ${on?'var(--orange)':'var(--line)'};opacity:${ch.off?.7:1}">
+        const connected = _pubCh.indexOf(ch.key) >= 0;
+        const handle = (_pubInfo[ch.key] && _pubInfo[ch.key].handle) || (_pubBrand ? _pubBrand.name : '');
+        const on = connected && state.channels[ch.key] !== false;
+        return `<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;background:${!connected?'var(--cream2)':on?'var(--orange-soft)':'#fff'};border:1px solid ${on?'var(--orange)':'var(--line)'};opacity:${connected?1:.75}">
           <div style="width:22px;height:22px;color:${ch.color}">${I(ch.key,22,ch.color)}</div>
           <div style="flex:1;min-width:0">
-            <b style="font-size:13px;color:var(--purple)">${ch.name}</b>
-            <div style="font-size:11px;color:var(--muted)">${t({th:ch.sub_th,en:ch.sub_en})}</div>
+            <b style="font-size:13px;color:var(--purple)">${connected?escText(handle):ch.label}</b>
+            <div style="font-size:11px;color:var(--muted)">${connected?(ch.label+' · '+T('เชื่อมแล้ว','connected')):T('ยังไม่ได้เชื่อมกับแบรนด์นี้','Not connected for this brand')}</div>
           </div>
-          ${ch.off?`<button class="btn ghost sm" style="color:var(--blue);height:28px;padding:0 10px">${I('link',12)} ${T('เชื่อม','Connect')}</button>`:`<div class="toggle ${on?'on':''}" data-toggle="ch:${ch.key}"></div>`}
+          ${connected?`<div class="toggle ${on?'on':''}" data-toggle="ch:${ch.key}"></div>`:`<button class="btn ghost sm" style="color:var(--blue);height:28px;padding:0 10px" data-chconnect="${ch.key}">${I('link',12)} ${T('เชื่อม','Connect')}</button>`}
         </div>`;
       }).join('')}
     </div>
@@ -1765,7 +1924,7 @@ function publishCardHTML() {
       <div style="flex:1;font-size:11.5px;line-height:1.5;color:#1E40AF"><b>${T('AI แนะนำ:','AI suggests:')}</b> ${T('19:00 น. คือเวลาที่ผู้ติดตามของคุณ active สูงสุด','7:00 PM is when your followers are most active.')}</div>
     </div>
     <div style="display:flex;gap:8px">
-      <button class="btn outline" style="flex:1">${I('library',14)} ${T('Draft','Draft')}</button>
+      <button class="btn outline" style="flex:1" data-savedraft="1">${I('library',14)} ${T('Draft','Draft')}</button>
       <button class="btn primary" style="flex:1.3">${I('send',14)} ${T('ตั้งเวลา','Schedule')}</button>
     </div>
     <div style="margin-top:12px;padding-top:12px;border-top:1px dashed var(--line);display:flex;justify-content:space-between;font-size:11px;color:var(--muted)">
@@ -1779,11 +1938,10 @@ function publishCardHTML() {
 // PAGE: GENERATE CAPTION
 // ====================================================================
 function pageCaption() {
-  const hooks = [
-    { id:1, text_th:'อายุ 30+ คอลลาเจนหายไป 1.5% ทุกปี — เริ่มเติมตอนนี้ยังทัน', text_en:"After 30, collagen drops 1.5% a year — start now", sub_th:'แรง · เน้นความเร่งด่วน', sub_en:'Punchy · urgent' },
-    { id:2, text_th:'Marine Collagen จากนิวซีแลนด์ — ดูดซึมดีกว่า Bovine 1.5 เท่า ผิวเริ่มเปลี่ยนใน 14 วัน', text_en:"Marine collagen from NZ — absorbs 1.5× better, skin changes in 14 days", sub_th:'อ่อนโยน · เน้นข้อพิสูจน์ทางวิทยาศาสตร์', sub_en:'Gentle · science-backed' },
-    { id:3, text_th:'แม่ ๆ วัย 35+ ลองดูค่ะ — คอลลาเจนตัวที่อร่อย ไม่คาว แค่วันละ 1 ช้อน', text_en:'Moms 35+ — finally a tasty collagen, no fishy smell, just 1 scoop a day', sub_th:'ใกล้ชิด · กลุ่มเป้าหมายตรง', sub_en:'Intimate · audience-targeted' },
-  ];
+  const hooks = (state.genHooks && state.genHooks.length)
+    ? state.genHooks.map((h,i)=>({ id:i+1, text_th:h.text, text_en:h.text, sub_th:h.angle||'', sub_en:h.angle||'' }))
+    : [];
+  const genEmpty = (msg) => `<div style="padding:30px 20px;text-align:center;color:var(--muted)"><div style="font-size:26px;margin-bottom:6px">✨</div><div style="font-size:13px;line-height:1.6">${msg}</div></div>`;
 
   return `${head('CREATE',T('สร้างคอนเทนต์ด้วย AI','AI content generator'),
     T('เลือกสินค้า → ใส่หัวข้อ → AI คิด Hook / Caption / Hashtag / รูป / บทความ ครบในคลิกเดียว','Pick a product → topic → AI writes hook, caption, hashtags, image, and article in 1 click'),
@@ -1808,10 +1966,10 @@ function pageCaption() {
             <h3 class="cardTitle">${T('เลือก Hook ที่ใช่','Pick a hook')}</h3>
             <p class="cardSub">${T('AI สร้าง 3 แนว · เลือก 1 อันเพื่อใช้ในแคปชั่น','AI wrote 3 angles · pick one')}</p>
           </div>
-          <button class="btn ghost sm">${I('refresh',13)} ${T('สร้างใหม่','Regenerate')}</button>
+          <button class="btn ghost sm" data-genall="1">${I('refresh',13)} ${T('สร้างใหม่','Regenerate')}</button>
         </div>
         <div style="display:flex;flex-direction:column;gap:8px">
-          ${hooks.map(h => {
+          ${hooks.length ? hooks.map(h => {
             const on = h.id === state.selectedHook;
             return `<button data-set="selectedHook=${h.id}" style="text-align:left;border-radius:14px;padding:14px 16px;border:${on?'2px solid var(--orange)':'1px solid var(--line)'};background:${on?'var(--orange-soft)':'#fff'};display:flex;gap:14px;align-items:flex-start;cursor:pointer;width:100%">
               <div style="width:22px;height:22px;border-radius:99px;flex-shrink:0;margin-top:2px;border:${on?'6px solid var(--orange)':'2px solid var(--line3)'};background:${on?'#fff':'transparent'};box-sizing:border-box"></div>
@@ -1821,7 +1979,7 @@ function pageCaption() {
               </div>
               <button class="btn ghost sm iconOnly">${I('copy',13)}</button>
             </button>`;
-          }).join('')}
+          }).join('') : genEmpty(T('กด "สร้างทั้งหมด" ด้านบน เพื่อให้ AI สร้าง Hook 3 แนว','Hit "Generate All" above — AI writes 3 hook angles'))}
         </div>
       </div>
 
@@ -1830,7 +1988,7 @@ function pageCaption() {
         <div class="cardHeader">
           <div>
             <h3 class="cardTitle">${T('แคปชั่น','Caption')}</h3>
-            <p class="cardSub">${T('247 ตัวอักษร · เหมาะกับ Facebook & Instagram Post','247 chars · ideal for FB & IG Post')}</p>
+            <p class="cardSub">${state.genCaption ? (state.genCaption.length+T(' ตัวอักษร · พร้อมโพสต์',' chars · ready to post')) : T('เหมาะกับ Facebook & Instagram Post','For Facebook & Instagram Post')}</p>
           </div>
           <div style="display:flex;gap:4px">
             <button class="btn ghost sm iconOnly">${I('edit',13)}</button>
@@ -1838,15 +1996,8 @@ function pageCaption() {
             <button class="btn ghost sm iconOnly">${I('refresh',13)}</button>
           </div>
         </div>
-        <div style="background:var(--cream2);border-radius:12px;padding:16px;font-size:14px;line-height:1.65;color:var(--ink);border:1px solid var(--line)">
-          ${T(`<p style="margin:0"><b>Marine Collagen from New Zealand 100g</b> 🌿</p>
-          <p style="margin:12px 0 0">คอลลาเจนเปปไทด์จากปลาทะเลน้ำเย็น <b>ดูดซึมได้ดีกว่า Bovine Collagen 1.5 เท่า</b> ไม่มีกลิ่นคาว ไม่ใส่น้ำตาล กินง่าย วันละ 1 ช้อน ผสมในกาแฟหรือน้ำเปล่าก็อร่อย</p>
-          <p style="margin:12px 0 0">🎁 <b>11.11 ลด 50%</b> เหลือเพียง <b>฿275</b> เฉพาะวันที่ 11 พ.ย. นี้เท่านั้น<br>📦 ส่งฟรีทั่วประเทศ</p>
-          <p style="margin:12px 0 0;color:var(--muted)">👉 สั่งซื้อทักแชทเลยค่ะ คุณลูกค้า หรือกดลิงก์ Shopee ใต้โพสต์</p>`,
-          `<p style="margin:0"><b>Marine Collagen from New Zealand 100g</b> 🌿</p>
-          <p style="margin:12px 0 0">Cold-water fish peptides — <b>absorbs 1.5× better than bovine collagen</b>. No fishy smell, no sugar, just 1 scoop a day in coffee or water.</p>
-          <p style="margin:12px 0 0">🎁 <b>11.11 — 50% off</b>, only <b>฿275</b> on Nov 11<br>📦 Free shipping nationwide</p>
-          <p style="margin:12px 0 0;color:var(--muted)">👉 DM us or tap the Shopee link to order</p>`)}
+        <div style="background:var(--cream2);border-radius:12px;padding:16px;font-size:14px;line-height:1.65;color:var(--ink);border:1px solid var(--line)${state.genCaption?';white-space:pre-wrap':''}">
+          ${state.genCaption ? escText(state.genCaption) : genEmpty(T('ยังไม่มีแคปชั่น — กด "สร้างทั้งหมด" เพื่อให้ AI เขียนให้','No caption yet — hit "Generate All"'))}
         </div>
       </div>
 
@@ -1854,10 +2005,10 @@ function pageCaption() {
       <div class="card">
         <div class="cardHeader">
           <h3 class="cardTitle">${T('แฮชแท็ก','Hashtags')}</h3>
-          <button class="btn ghost sm">${I('refresh',13)} ${T('สร้างใหม่','New set')}</button>
+          <button class="btn ghost sm" data-genall="1">${I('refresh',13)} ${T('สร้างใหม่','New set')}</button>
         </div>
         <div style="display:flex;flex-wrap:wrap;gap:6px">
-          ${'#marinecollagen #คอลลาเจน #คอลลาเจนปลา #ผิวสวย #ดูแลผิว #1111sale #happyprice #beautythailand #11.11 #คอลลาเจนกินดี #รีวิวจริง #ผิวบอบบาง #skincaretip #คอลลาเจนนิวซีแลนด์'.split(' ').map(t=>`<span style="padding:5px 10px;border-radius:99px;background:var(--blue-soft);color:#1D4ED8;font-size:12px;font-weight:600;cursor:pointer">${t}</span>`).join('')}
+          ${(state.genHashtags&&state.genHashtags.length) ? state.genHashtags.map(t=>`<span style="padding:5px 10px;border-radius:99px;background:var(--blue-soft);color:#1D4ED8;font-size:12px;font-weight:600;cursor:pointer">${t}</span>`).join('') : genEmpty(T('ยังไม่มีแฮชแท็ก — กด "สร้างทั้งหมด"','No hashtags yet — hit "Generate All"'))}
         </div>
       </div>
 
@@ -1866,7 +2017,7 @@ function pageCaption() {
         <div class="cardHeader">
           <div>
             <h3 class="cardTitle">${T('บทความ (Long-form)','Article (Long-form)')}</h3>
-            <p class="cardSub">${T('540 คำ · แนะ 5 หัวข้อย่อย · AI เขียนตาม Brand Voice','540 words · 5 sub-sections · written in your Brand Voice')}</p>
+            <p class="cardSub">${T('บทความยาว AI เขียนตาม Brand Voice','Long-form article in your Brand Voice')}</p>
           </div>
           <div style="display:flex;gap:4px">
             <span class="pill blue">${T('สำหรับ Facebook Note / Blog','For Facebook Note / Blog')}</span>
@@ -1875,19 +2026,14 @@ function pageCaption() {
             <button class="btn ghost sm iconOnly">${I('refresh',13)}</button>
           </div>
         </div>
-        <div style="background:#fff;border:1px solid var(--line);border-radius:12px;padding:18px;max-height:280px;overflow-y:auto;font-size:13.5px;line-height:1.7">
-          <h3 style="margin:0 0 10px;color:var(--purple);font-size:18px">${T('Marine Collagen NZ 100g: คอลลาเจนจริง ๆ ที่คุณรอ','Marine Collagen NZ 100g: the collagen you\'ve been waiting for')}</h3>
-          <p style="margin:0 0 12px">${T('เมื่ออายุเกิน 30 ปี ร่างกายเริ่มสูญเสียคอลลาเจนปีละ 1.5% ทำให้ผิวเริ่มแห้งกร้าน เกิดริ้วรอย และสูญเสียความยืดหยุ่น','After age 30, the body loses 1.5% of collagen each year — leading to dry skin, fine lines, and reduced elasticity.')}</p>
-          <h4 style="margin:14px 0 6px;color:var(--purple);font-size:14px">${T('ทำไมต้อง Marine Collagen?','Why Marine Collagen?')}</h4>
-          <p style="margin:0 0 12px">${T('Marine Collagen สกัดจากปลาทะเลน้ำเย็น มีโมเลกุลขนาดเล็กกว่า Bovine Collagen ดูดซึมได้ดีกว่า 1.5 เท่า ไม่มีกลิ่นคาว และเหมาะกับคนที่งดเนื้อแดง','Marine collagen is extracted from cold-water fish — smaller molecules absorb 1.5× better than bovine. No fishy smell, perfect for non-red-meat diets.')}</p>
-          <h4 style="margin:14px 0 6px;color:var(--purple);font-size:14px">${T('เห็นผลใน 14 วันแรก','Results in the first 14 days')}</h4>
-          <p style="margin:0">${T('จากการศึกษากับผู้ใช้ 124 คน อายุ 28-50 ปี พบว่าผิวมีความชุ่มชื้นเพิ่มขึ้น 32%, ริ้วรอยลดลง 18%, และความยืดหยุ่นดีขึ้น 24% หลังใช้ต่อเนื่อง 14 วัน','In a study with 124 users aged 28-50, skin hydration improved 32%, wrinkles reduced 18%, and elasticity gained 24% after 14 consecutive days.')}</p>
-          <p style="margin:12px 0 0;color:var(--muted);font-size:12px;font-style:italic">— ${T('อ่านต่อด้านล่าง...','Continue reading...')}</p>
+        <div style="background:#fff;border:1px solid var(--line);border-radius:12px;padding:18px;max-height:280px;overflow-y:auto;font-size:13.5px;line-height:1.7${state.genArticle?';white-space:pre-wrap':''}">
+          ${state.genArticle ? escText(state.genArticle) : genEmpty(T('ยังไม่มีบทความ — กด "สร้างทั้งหมด" เพื่อให้ AI เขียนบทความยาว','No article yet — hit "Generate All"'))}
         </div>
       </div>
     </div>
 
     <div style="display:flex;flex-direction:column;gap:18px">
+      ${postPreviewHTML()}
       ${publishCardHTML()}
     </div>
   </div>`;
@@ -1897,14 +2043,7 @@ function pageCaption() {
 // PAGE: GENERATE CREATIVE
 // ====================================================================
 function pageCreative() {
-  const slides = [
-    { n:1, tag_th:'Hook',tag_en:'Hook', cap_th:'อายุ 30+ คอลลาเจนหายไปปีละ 1.5% — เริ่มเติมตอนนี้ยังทัน',cap_en:'After 30, collagen drops 1.5% a year' },
-    { n:2, tag_th:'Proof',tag_en:'Proof', cap_th:'Marine ดูดซึมดีกว่า Bovine 1.5 เท่า — ผ่านการรับรอง',cap_en:'Marine absorbs 1.5× better than bovine — certified' },
-    { n:3, tag_th:'Before/After',tag_en:'Before/After', cap_th:'ลูกค้าตัวจริง · 14 วัน เห็นความเปลี่ยนแปลง',cap_en:'Real customer · 14-day transformation' },
-    { n:4, tag_th:'How to use',tag_en:'How to use', cap_th:'1 ช้อนต่อวัน ผสมกาแฟหรือน้ำเปล่า — ดื่มง่าย ไม่คาว',cap_en:'1 scoop daily in coffee or water — easy, no taste' },
-    { n:5, tag_th:'Promo',tag_en:'Promo', cap_th:'🎁 11.11 ลด 50% เหลือ ฿275 ส่งฟรีทั่วประเทศ',cap_en:'🎁 11.11 50% off — just ฿275 + free shipping' },
-    { n:6, tag_th:'CTA',tag_en:'CTA', cap_th:'สั่งทักแชทเลย หรือกดลิงก์ Shopee ใต้โพสต์',cap_en:'DM us or tap the Shopee link below' },
-  ];
+  const genImages = state.genImages || [];
 
   return `${head('CREATE',T('สร้าง Creative · รูป + อัลบั้ม','Generate creative · image + album'),
     T('สร้างรูปเดี่ยวหรืออัลบั้ม 6 ภาพพร้อมแคปชั่นต่อสไลด์','Single image or 6-slide album with per-slide caption'),
@@ -1928,77 +2067,56 @@ function pageCreative() {
           <h3 class="cardTitle">${T('รูปแบบ','Format')}</h3>
           <span class="pill blue">${T('AI คิดเลย์เอาท์ให้','AI auto-layout')}</span>
         </div>
-        <div class="grid g3" style="gap:10px">
+        <div class="grid g2" style="gap:10px">
           ${[
             {id:'single',th:'รูปเดี่ยว',en:'Single', sub_th:'1 ภาพ · เน้น hero shot', sub_en:'1 image · hero shot', icon:'image'},
-            {id:'album',th:'อัลบั้ม',en:'Album', sub_th:'6 สไลด์ · per-slide caption', sub_en:'6 slides · per-slide caption', icon:'layers', on:true},
-            {id:'reels',th:'Reels/Vertical',en:'Reels/Vertical', sub_th:'9:16 · พร้อมโพสต์ Reels', sub_en:'9:16 · Reels-ready', icon:'video'},
-          ].map(f=>`<button class="toneTile ${f.on?'active':''}" style="flex-direction:column;gap:6px;text-align:center;padding:14px">
+            {id:'album',th:'อัลบั้ม',en:'Album', sub_th:'หลายสไลด์ · 1 รูปต่อสไลด์', sub_en:'multi-slide · 1 image each', icon:'layers'},
+          ].map(f=>`<button class="toneTile ${(state.creativeFormat||'album')===f.id?'active':''}" data-set="creativeFormat=${f.id}" style="flex-direction:column;gap:6px;text-align:center;padding:14px">
             <div class="toneEmoji" style="width:38px;height:38px">${I(f.icon,18)}</div>
             <b style="font-size:13px;color:var(--purple)">${T(f.th,f.en)}</b>
             <span class="micro">${t({th:f.sub_th,en:f.sub_en})}</span>
           </button>`).join('')}
         </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:12px;padding-top:12px;border-top:1px dashed var(--line);flex-wrap:wrap">
+          <span class="micro" style="font-weight:700">${T('โมเดล AI สร้างรูป:','Image AI model:')}</span>
+          <select class="select" id="ppImageModel" style="height:32px;width:auto;padding:0 28px 0 10px;font-size:12px">
+            <option value="gemini" ${(state.imageModel||'gemini')==='gemini'?'selected':''}>${T('Gemini · เร็ว','Gemini · fast')}</option>
+            <option value="gpt" ${state.imageModel==='gpt'?'selected':''}>${T('GPT · gpt-5.4 (ช้า/คมชัด)','GPT · gpt-5.4 (slow/sharp)')}</option>
+          </select>
+          <span class="micro" style="font-weight:700;margin-left:6px">${T('จำนวนรูป:','Images:')}</span>
+          <select class="select" id="ppImageCount" style="height:32px;width:auto;padding:0 28px 0 10px;font-size:12px">
+            ${[1,2,3,4,5,6,7,8,9,10].map(n=>`<option value="${n}" ${(state.imageCount||4)===n?'selected':''}>${n} ${T('รูป','imgs')}</option>`).join('')}
+          </select>
+        </div>
       </div>
 
-      <!-- Album slides -->
+      <!-- AI-generated images -->
       <div class="card">
         <div class="cardHeader">
           <div>
-            <h3 class="cardTitle">${T('สไลด์อัลบั้ม','Album slides')} <span class="pill orange">6</span></h3>
-            <p class="cardSub">${T('AI สร้างแคปชั่นต่อสไลด์ คุณปรับแก้ได้','AI generates per-slide caption · editable')}</p>
-          </div>
-          <div style="display:flex;gap:8px">
-            <button class="btn ghost sm">${I('refresh',13)} ${T('สลับลำดับ','Reshuffle')}</button>
-            <button class="btn outline sm">${I('plus',13)} ${T('เพิ่มสไลด์','Add slide')}</button>
+            <h3 class="cardTitle">${T('รูปที่ AI สร้าง','AI-generated images')} <span class="pill orange">${genImages.length}</span></h3>
+            <p class="cardSub">${T('AI คิด prompt + สร้างรูปอัตโนมัติเมื่อกด "สร้างทั้งหมด"','AI writes prompts + generates images on "Generate All"')}</p>
           </div>
         </div>
-        <div class="grid g2" style="gap:14px">
-          ${slides.map(s=>`<div class="productCard" style="padding:12px">
-            <div style="position:absolute;top:8px;left:8px;z-index:2;background:var(--purple);color:#fff;width:24px;height:24px;border-radius:7px;display:grid;place-items:center;font-weight:800;font-size:12px">${s.n}</div>
-            <div style="position:absolute;top:8px;right:8px;z-index:2"><span class="pill orange" style="height:20px;font-size:9.5px">${T(s.tag_th,s.tag_en)}</span></div>
-            <div class="productImg" style="aspect-ratio:1;background:linear-gradient(135deg,${['#FFEDD5,#FED7AA','#FED7AA,#FECDD3','#FFE4E6,#FECACA','#FBCFE8,#FED7AA','#FFEDD5,#FFE4E6','#FCD9A8,#FECACA'][s.n-1]})">
-              <div style="position:absolute;top:6px;right:6px;width:24px;height:24px;border-radius:50%;background:rgba(255,255,255,.5)"></div>
-              <div style="position:absolute;bottom:-10px;left:-10px;width:50px;height:50px;border-radius:50%;background:rgba(249,115,22,.18)"></div>
-              <div class="pLabel" style="font-size:9px">SLIDE ${s.n}</div>
+        ${genImages.length ? `<div class="grid g2" style="gap:14px">
+          ${genImages.map((img,i)=>`<div class="productCard" style="padding:12px">
+            <div style="position:absolute;top:8px;left:8px;z-index:2;background:var(--purple);color:#fff;width:24px;height:24px;border-radius:7px;display:grid;place-items:center;font-weight:800;font-size:12px">${i+1}</div>
+            <div class="productImg" style="aspect-ratio:1;background:#f3f0ea;overflow:hidden">
+              ${img
+                ? `<img src="${img}" alt="" style="width:100%;height:100%;object-fit:cover"/>`
+                : `<div style="display:grid;place-items:center;height:100%;color:var(--muted);font-size:11px;text-align:center;padding:8px">${T('สร้างรูปไม่สำเร็จ','Image failed')}</div>`}
             </div>
-            <textarea class="textarea" rows="2" style="font-size:11.5px;margin-top:6px;min-height:auto">${T(s.cap_th,s.cap_en)}</textarea>
-            <div style="display:flex;gap:4px;justify-content:flex-end">
-              <button class="btn ghost sm iconOnly">${I('edit',12)}</button>
-              <button class="btn ghost sm iconOnly">${I('refresh',12)}</button>
-              <button class="btn ghost sm iconOnly">${I('x',12)}</button>
-            </div>
+            <div style="font-size:11px;color:var(--muted);margin-top:6px;line-height:1.45;max-height:50px;overflow:hidden">${escText((state.genImagePrompts||[])[i]||'')}</div>
           </div>`).join('')}
-        </div>
+        </div>` : `<div style="padding:32px 20px;text-align:center;color:var(--muted)">
+          <div style="font-size:28px;margin-bottom:8px">🖼️</div>
+          <div style="font-size:13px;line-height:1.6">${state.genLoading?T('AI กำลังคิด prompt และสร้างรูป…','AI is writing prompts and generating images…'):T('กด "สร้างทั้งหมด" ด้านบน — AI จะคิด prompt แต่ละสไลด์แล้วสร้างรูปอัตโนมัติ','Hit "Generate All" — AI writes a prompt per slide and generates images')}</div>
+        </div>`}
       </div>
     </div>
 
     <div style="display:flex;flex-direction:column;gap:18px">
-      <!-- Live preview canvas -->
-      <div class="card">
-        <div class="cardHeader">
-          <h3 class="cardTitle">${T('Live Canvas','Live canvas')}</h3>
-          <div class="tabs" style="padding:3px">
-            <button class="tab" style="padding:5px 10px">1:1</button>
-            <button class="tab active" style="padding:5px 10px">4:5</button>
-            <button class="tab" style="padding:5px 10px">9:16</button>
-          </div>
-        </div>
-        <div style="border-radius:18px;background:linear-gradient(135deg,#FFF4E6,#FED7AA 50%,#FECDD3);aspect-ratio:4/5;display:grid;place-items:center;padding:24px;text-align:center;border:1px solid var(--line);position:relative;overflow:hidden">
-          <div style="position:absolute;top:20px;right:20px"><span class="pill orange" style="background:rgba(255,255,255,.85);backdrop-filter:blur(6px)">SLIDE 1</span></div>
-          <div>
-            <div class="heroLogo" style="font-size:32px;margin:0 auto 14px;justify-content:center"><span>Post</span><span>Post</span></div>
-            <h2 style="font-size:36px;color:var(--purple);line-height:1.05;font-weight:800;letter-spacing:-.03em;margin:0">${T('Marine Collagen','Marine Collagen')}<br><span style="color:var(--orange)">${T('11.11 ลด 50%','11.11 · 50% off')}</span></h2>
-            <div style="width:140px;height:170px;margin:24px auto;border-radius:18px;background:linear-gradient(180deg,#FFFBEB,#FED7AA);box-shadow:0 14px 30px -10px rgba(124,45,18,.35);display:flex;flex-direction:column;align-items:center;justify-content:center;color:#7C2D12"><div style="font-size:9px;letter-spacing:.2em;font-weight:700">HAPPYPRICE</div><b style="font-size:18px;margin-top:6px">COLLAGEN</b><div style="font-size:10px;margin-top:2px">100g</div></div>
-            <button class="btn primary">${T('สั่งซื้อเลย','Order now')}</button>
-          </div>
-        </div>
-        <div style="display:flex;gap:8px;margin-top:12px">
-          <button class="btn outline" style="flex:1">${I('download',14)} PNG</button>
-          <button class="btn outline" style="flex:1">${I('refresh',14)} ${T('สร้างใหม่','Regenerate')}</button>
-          <button class="btn primary" style="flex:1.2">${I('check',14)} ${T('ยืนยัน','Approve')}</button>
-        </div>
-      </div>
+      ${postPreviewHTML()}
 
       ${publishCardHTML()}
     </div>
@@ -2051,24 +2169,30 @@ function pageAvatar() {
         <div class="eyebrow" style="margin-bottom:8px">${T('ขั้นที่ 2 · เลือกผู้บรรยาย','Step 2 · Pick presenter')}</div>
         <div class="cardHeader">
           <h3 class="cardTitle">Presenter</h3>
-          <button class="btn ghost sm" style="color:var(--blue)">${I('sparkles',13,'#2563EB')} ${T('สร้างคนใหม่ด้วย AI','Create new with AI')}</button>
+          <button class="btn ghost sm" data-newavatar="1" style="color:var(--blue)" ${state.avatarGenLoading?'disabled':''}>${I('sparkles',13,'#2563EB')} ${state.avatarGenLoading?T('AI กำลังสร้าง…','Generating…'):T('สร้างคนใหม่ด้วย AI','Create new with AI')}</button>
         </div>
         <div class="grid g4" style="gap:10px">
-          ${AVATARS.map(a => {
+          ${(AVATARS.concat(state.customAvatars||[])).map(a => {
             const on = a.id === state.avatar;
+            const bg = a.bg || 'linear-gradient(180deg,#E0E7FF,#818CF8)';
             return `<button class="brandTile ${on?'active':''}" data-set="avatar=${a.id}" style="padding:8px;gap:4px">
-              <div style="aspect-ratio:3/4;border-radius:10px;background:${a.bg};display:flex;align-items:flex-end;justify-content:center;position:relative;overflow:hidden">
-                <div style="width:42px;height:42px;border-radius:99px;background:rgba(255,255,255,.85);margin-bottom:8px;display:grid;place-items:center;color:var(--purple);font-weight:800;font-size:20px">${T(a.initial_th,a.initial_en)}</div>
-                ${on?`<span style="position:absolute;top:6px;right:6px;width:20px;height:20px;border-radius:99px;background:var(--orange);color:#fff;display:grid;place-items:center;font-size:11px;font-weight:900">✓</span>`:''}
+              <div style="aspect-ratio:3/4;border-radius:10px;background:${bg};position:relative;overflow:hidden;display:flex;align-items:flex-end;justify-content:center">
+                ${a.image
+                  ? `<img src="${a.image}" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover"/>`
+                  : `<div style="width:42px;height:42px;border-radius:99px;background:rgba(255,255,255,.85);margin-bottom:8px;display:grid;place-items:center;color:var(--purple);font-weight:800;font-size:20px;position:relative;z-index:1">${T(a.initial_th||'?',a.initial_en||'?')}</div>`}
+                ${on?`<span style="position:absolute;top:6px;right:6px;width:20px;height:20px;border-radius:99px;background:var(--orange);color:#fff;display:grid;place-items:center;font-size:11px;font-weight:900;z-index:2">✓</span>`:''}
+                ${a.isCustom?`<span style="position:absolute;top:6px;left:6px;background:rgba(0,0,0,.55);color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:5px;z-index:2">${a.sub_th==='อัปโหลดเอง'||a.sub_en==='Uploaded'?T('UPLOAD','UPLOAD'):T('AI','AI')}</span>`:''}
+                ${a.isCustom?`<span data-delavatar="${a.id}" title="${T('ลบ','Delete')}" style="position:absolute;bottom:6px;right:6px;width:22px;height:22px;border-radius:99px;background:rgba(0,0,0,.55);color:#fff;display:grid;place-items:center;cursor:pointer;z-index:3;font-size:14px;line-height:1">×</span>`:''}
               </div>
               <b style="font-size:12px;color:var(--purple);margin-top:6px">${t({th:a.name_th,en:a.name_en})}</b>
               <div style="font-size:10px;color:var(--muted)">${t({th:a.sub_th,en:a.sub_en})}</div>
             </button>`;
           }).join('')}
-          <button class="brandTile add" style="aspect-ratio:auto;min-height:0;align-self:stretch;flex-direction:column">
+          <button class="brandTile add" data-uploadavatar="1" style="aspect-ratio:auto;min-height:0;align-self:stretch;flex-direction:column">
             ${I('upload',20)}
             <span style="font-size:11px;font-weight:700;margin-top:6px;text-align:center">${T('อัปโหลด<br>รูปคน','Upload<br>photo')}</span>
           </button>
+          <input type="file" accept="image/*" id="ppUploadAvatarInput" style="display:none"/>
         </div>
       </div>
 
@@ -2076,14 +2200,23 @@ function pageAvatar() {
       <div class="card">
         <div class="eyebrow" style="margin-bottom:8px">${T('ขั้นที่ 3 · เสียง','Step 3 · Voice')}</div>
         <h3 class="cardTitle" style="margin-bottom:12px">${T('เสียงพากย์ (TTS ภาษาไทย)','Voice (Thai TTS)')}</h3>
-        <button class="input" style="display:flex;align-items:center;gap:12px;padding:10px 12px;height:auto;text-align:left">
-          <div style="width:32px;height:32px;border-radius:99px;background:linear-gradient(135deg,#FCD9A8,#F97316);display:grid;place-items:center;color:#fff">${I('play',11)}</div>
-          <div style="flex:1">
-            <div style="font-size:13px;font-weight:700;color:var(--purple)">${T('Premwadee — หญิง · อบอุ่น','Premwadee — F · warm')}</div>
-            <div style="font-size:11px;color:var(--muted)">${T('Azure Thai · เหมาะกับสกินแคร์, ความงาม','Azure Thai · for skincare & beauty')}</div>
-          </div>
-          ${I('chev_down',14)}
-        </button>
+        ${(function(){
+          var voices = [
+            {id:'premwadee', name:'Premwadee', g:'หญิง', tone:'อบอุ่น', desc:'สกินแคร์ · ความงาม', az:'th-TH-PremwadeeNeural'},
+            {id:'achara',    name:'Achara',    g:'หญิง', tone:'เป็นมิตร', desc:'lifestyle · แม่และเด็ก', az:'th-TH-AcharaNeural'},
+            {id:'niwat',     name:'Niwat',     g:'ชาย',  tone:'มืออาชีพ', desc:'ธุรกิจ · การเงิน', az:'th-TH-NiwatNeural'},
+            {id:'tony',      name:'Tony',      g:'ชาย',  tone:'เป็นกันเอง', desc:'casual · บันเทิง', az:'th-TH-TonyNeural'},
+            {id:'guru',      name:'อาจารย์เทพ', g:'ชาย',  tone:'ขรึม น่าเชื่อถือ', desc:'สายมู · ดูดวง', az:'th-TH-NiwatNeural'},
+          ];
+          state.avatarVoices = voices;
+          var sel = state.avatarVoice || 'premwadee';
+          return '<select class="select" id="ppAvatarVoice" style="width:100%;font-size:13px;padding:10px 36px 10px 12px">'
+            + voices.map(function(v){
+                return '<option value="'+v.id+'"'+(v.id===sel?' selected':'')+'>'+v.name+' — '+v.g+' · '+v.tone+' ('+v.desc+')</option>';
+              }).join('')
+            + '</select>'
+            + '<div style="margin-top:6px;font-size:11px;color:var(--muted)">Azure TTS · '+(voices.filter(function(v){return v.id===sel;})[0]||{}).az+'</div>';
+        })()}
         <div class="grid g2" style="margin-top:12px;gap:12px">
           ${[
             {l_th:'ความเร็ว',l_en:'Speed',opts:[{th:'ช้า',en:'Slow'},{th:'ปกติ',en:'Normal'},{th:'เร็ว',en:'Fast'}]},
@@ -2102,12 +2235,19 @@ function pageAvatar() {
         <div class="eyebrow" style="margin-bottom:8px">${T('ขั้นที่ 4 · สคริปต์','Step 4 · Script')}</div>
         <div class="cardHeader">
           <h3 class="cardTitle">${T('สคริปต์พูด (Thai)','Speaking script')}</h3>
-          <button class="btn ghost sm" style="color:var(--blue)">${I('sparkles',13,'#2563EB')} ${T('ให้ AI เขียนให้','AI write for me')}</button>
+          <button class="btn ghost sm" data-avatarscript="1" style="color:var(--blue)" ${state.avatarScriptLoading?'disabled':''}>${I('sparkles',13,'#2563EB')} ${state.avatarScriptLoading?T('AI กำลังเขียน…','AI is writing…'):T('ให้ AI เขียนให้','AI write for me')}</button>
         </div>
-        <textarea class="textarea" rows="5" style="font-size:14px;line-height:1.65">${T('สวัสดีค่ะคุณลูกค้า วันนี้พีร์มี Marine Collagen สูตรเข้มข้นมาแนะนำ\n\nเหมาะมากกับคุณแม่วัย 30+ ที่อยากเริ่มดูแลผิวอย่างจริงจัง วันที่ 11 พ.ย. นี้ลดเหลือเพียง 275 บาท ส่งฟรีถึงบ้านเลยค่ะ','Hi! Today I want to introduce Marine Collagen, our concentrated formula.\n\nPerfect for moms 30+ ready to take skincare seriously. On Nov 11, just ฿275 with free shipping nationwide.')}</textarea>
+        <textarea class="textarea" rows="5" id="ppAvatarScript" placeholder="${T('สคริปต์ที่จะให้ผู้บรรยายพูด — กด \'ให้ AI เขียนให้\' หรือพิมพ์เอง','Script for the presenter — hit AI write, or type it yourself')}" style="font-size:14px;line-height:1.65">${state.avatarScript||''}</textarea>
         <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:11px;color:var(--muted)">
-          <span>${T('96 คำ · เรนเดอร์ประมาณ <b style="color:var(--purple)">27 วินาที</b>','96 words · render ~<b style="color:var(--purple)">27 sec</b>')}</span>
+          <span>${(state.avatarScript||'').length} ${T('ตัวอักษร · ประมาณ ','chars · ~')}<b style="color:var(--purple)">${Math.max(1,Math.round((state.avatarScript||'').length/15))}${T(' วินาที',' sec')}</b></span>
           <span>${T('เหมาะกับ Reels (≤ 60 วินาที)','Fits Reels (≤ 60 sec)')}</span>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:14px;align-items:center;flex-wrap:wrap">
+          <button class="btn primary sm" data-tts="1" ${state.ttsLoading?'disabled':''} style="flex:0 0 auto">
+            ${state.ttsLoading?I('refresh',13):I('play',13)} ${state.ttsLoading?T('กำลังสังเคราะห์เสียง…','Synthesizing…'):T('ฟังเสียง (Azure TTS)','Listen (Azure TTS)')}
+          </button>
+          ${state.ttsAudio?`<audio id="ppTtsAudio" controls autoplay style="height:36px;flex:1;min-width:200px"><source src="${state.ttsAudio}" type="audio/mp3"/></audio>
+          <a class="btn ghost sm" href="${state.ttsAudio}" download="postpost-tts.mp3" style="flex:0 0 auto;color:var(--blue)">${I('download',12)} MP3</a>`:''}
         </div>
       </div>
     </div>
@@ -2148,16 +2288,19 @@ function pageAvatar() {
 // ====================================================================
 function pageTextVideo() {
   const styles = [
-    { th:'Cinematic',en:'Cinematic',sub_th:'ภาพยนตร์',sub_en:'Filmic',bg:'linear-gradient(135deg,#1F2937,#6B7280)' },
-    { th:'Lifestyle',en:'Lifestyle',sub_th:'ใช้จริง',sub_en:'Real-use',bg:'linear-gradient(135deg,#FED7AA,#FB923C)' },
-    { th:'Anime/3D',en:'Anime/3D',sub_th:'การ์ตูน',sub_en:'Animated',bg:'linear-gradient(135deg,#C7D2FE,#818CF8)' },
-    { th:'Product',en:'Product',sub_th:'เน้นสินค้า',sub_en:'Product-focus',bg:'linear-gradient(135deg,#FBCFE8,#DB2777)' },
+    { id:'creator',  th:'Creator/UGC', en:'Creator/UGC', sub_th:'คนถือสินค้าทำคอนเทนต์', sub_en:'Person holds product', bg:'linear-gradient(135deg,#FDE68A,#F59E0B)' },
+    { id:'cinematic',th:'Cinematic',  en:'Cinematic',  sub_th:'ภาพยนตร์', sub_en:'Filmic',             bg:'linear-gradient(135deg,#1F2937,#6B7280)' },
+    { id:'lifestyle',th:'Lifestyle',  en:'Lifestyle',  sub_th:'ใช้จริงในชีวิต', sub_en:'Real-use',     bg:'linear-gradient(135deg,#FED7AA,#FB923C)' },
+    { id:'product',  th:'Product',    en:'Product',    sub_th:'เน้นสินค้า', sub_en:'Product-focus',    bg:'linear-gradient(135deg,#FBCFE8,#DB2777)' },
+    { id:'anime',    th:'Anime/3D',   en:'Anime/3D',   sub_th:'การ์ตูน', sub_en:'Animated',            bg:'linear-gradient(135deg,#C7D2FE,#818CF8)' },
   ];
 
+  // The user's Gemini API key has all 6 Veo variants. We expose the most useful four.
   const models = [
-    { id:'sora',name:'Sora 2',sub_th:'คุณภาพสูงสุด · งานโปรโมท',sub_en:'Highest quality · for promos',time_th:'~3 นาที',time_en:'~3 min'},
-    { id:'veo',name:'Veo 3',sub_th:'ปานกลาง · เร็วกว่า',sub_en:'Balanced · faster',time_th:'~1.5 นาที',time_en:'~1.5 min'},
-    { id:'kling',name:'Kling 2.0',sub_th:'ถูกสุด · เหมาะกับ test',sub_en:'Cheapest · good for tests',time_th:'~50 วินาที',time_en:'~50 sec'},
+    { id:'veo-3.0-fast-generate-001', name:'Veo 3 Fast',  sub_th:'เร็ว · ใช้บ่อย · 8 วินาที',         sub_en:'Fast · default · 8s',        time_th:'~1-2 นาที',  time_en:'~1-2 min' },
+    { id:'veo-3.0-generate-001',      name:'Veo 3 Pro',   sub_th:'คุณภาพสูง · ช้ากว่า',                 sub_en:'High quality · slower',      time_th:'~2-3 นาที',  time_en:'~2-3 min' },
+    { id:'veo-3.1-fast-generate-preview', name:'Veo 3.1 Fast (preview)', sub_th:'รุ่นใหม่ · ลื่นไหลกว่า', sub_en:'Newer · smoother motion', time_th:'~1-2 นาที', time_en:'~1-2 min' },
+    { id:'veo-3.1-generate-preview',  name:'Veo 3.1 Pro (preview)', sub_th:'ใหม่สุด · พรีเมียม', sub_en:'Newest · premium quality', time_th:'~3 นาที', time_en:'~3 min' },
   ];
 
   return `${head('CREATE',T('สร้างวิดีโอจากข้อความ','Text to Video'),
@@ -2172,9 +2315,9 @@ function pageTextVideo() {
         <div class="eyebrow" style="margin-bottom:8px">${T('ขั้นที่ 1 · คำสั่ง','Step 1 · Prompt')}</div>
         <div class="cardHeader">
           <h3 class="cardTitle">${T('บรรยายวิดีโอที่คุณต้องการ','Describe the video')}</h3>
-          <button class="btn ghost sm" style="color:var(--blue)">${I('sparkles',13,'#2563EB')} ${T('ให้ AI ปั้น Prompt','AI write prompt')}</button>
+          <button class="btn ghost sm" data-genvideoprompt="1" style="color:var(--blue)" ${state.ttvPromptLoading?'disabled':''}>${I('sparkles',13,'#2563EB')} ${state.ttvPromptLoading?T('AI กำลังเขียน…','Writing…'):T('ให้ AI ปั้น Prompt','AI write prompt')}</button>
         </div>
-        <textarea class="textarea" rows="5" style="font-size:14px;line-height:1.65">${T('กล้องเลื่อนช้า ๆ ผ่านสวนกุหลาบเขาใหญ่ตอนเช้า แสงทองเล็ดลอด หยดน้ำค้างเกาะกลีบกุหลาบ ขวด Marine Collagen วางอยู่กลางกอกุหลาบ ดูพรีเมียม โทนอบอุ่น สโลโมชั่น','Slow camera pan through a Khao Yai rose garden at sunrise, golden light flickering through petals, dew drops on rose petals, Marine Collagen bottle resting among roses, premium feel, warm tones, slow motion')}</textarea>
+        <textarea class="textarea" rows="5" id="ppTtvPrompt" placeholder="${T('บรรยายวิดีโอ — เช่น \'กล้องเลื่อนช้า ๆ ผ่านสวนกุหลาบ แสงทอง สโลโมชั่น\'','Describe the video — e.g. \'slow camera through rose garden, golden light, slow motion\'')}" style="font-size:14px;line-height:1.65">${state.ttvPrompt||''}</textarea>
         <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:6px">
           <span class="micro" style="width:100%;font-weight:700">${T('ไอเดียด่วน:','Quick ideas:')}</span>
           ${[
@@ -2192,16 +2335,17 @@ function pageTextVideo() {
         <div class="eyebrow" style="margin-bottom:8px">${T('ขั้นที่ 2 · รูปอ้างอิง','Step 2 · Reference image')}</div>
         <h3 class="cardTitle" style="margin-bottom:10px">${T('รูปสินค้า (ไม่จำเป็น)','Product photo (optional)')}</h3>
         <div class="grid" style="grid-template-columns:140px 1fr;gap:14px">
-          <div class="productImg" style="background:linear-gradient(135deg,#FFEDD5,#FECDD3)">
-            <div class="pBlob1"></div>
-            <div class="pBlob2"></div>
-            <div class="pLabel">SERUM</div>
-            <div style="position:absolute;bottom:6px;left:6px;right:6px;font-size:9px;padding:2px 6px;border-radius:99px;background:rgba(0,0,0,.55);color:#fff;text-align:center">Marine Collagen · Shopee</div>
+          <div class="productImg" style="${state.ttvReference?'background:#f3f0ea':'background:linear-gradient(135deg,#FFEDD5,#FECDD3)'};overflow:hidden;display:grid;place-items:center;color:var(--muted);text-align:center;padding:8px">
+            ${state.ttvReference
+              ? `<img src="${state.ttvReference}" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover"/>`
+              : `<div style="position:relative;z-index:1">${I('image',26,'#9C8BB8')}<div style="font-size:10px;font-weight:600;margin-top:6px">${T('ยังไม่ได้เลือกรูป','No reference yet')}</div></div>`}
           </div>
           <div style="display:flex;flex-direction:column;gap:8px">
-            <button class="btn outline sm" style="width:fit-content">${I('package',13)} ${T('เลือกจากสินค้า','Pick from products')}</button>
-            <button class="btn outline sm" style="width:fit-content">${I('upload',13)} ${T('อัปโหลดรูปอื่น','Upload other')}</button>
-            <div class="micro" style="margin-top:auto;line-height:1.5">${T('ใส่รูปอ้างอิงเพื่อให้ AI รักษาตัวสินค้าให้คงเดิม','Add a reference so AI keeps the product consistent')}</div>
+            <button class="btn outline sm" data-pickrefproduct="1" style="width:fit-content">${I('package',13)} ${T('เลือกจากสินค้า','Pick from products')}</button>
+            <button class="btn outline sm" data-uploadref="1" style="width:fit-content">${I('upload',13)} ${T('อัปโหลดรูปอื่น','Upload other')}</button>
+            <input type="file" accept="image/*" id="ppTtvRefInput" style="display:none"/>
+            ${state.ttvReference?`<button class="btn ghost sm" data-clearref="1" style="width:fit-content;color:var(--red)">${I('x',12,'#DC2626')} ${T('ลบรูป','Remove')}</button>`:''}
+            <div class="micro" style="margin-top:auto;line-height:1.5">${T('ใส่รูปอ้างอิงเพื่อช่วยให้ AI เขียน prompt ตรงสินค้า','Add a reference so AI writes a prompt matching the product')}</div>
           </div>
         </div>
       </div>
@@ -2226,13 +2370,13 @@ function pageTextVideo() {
           <div>
             <label class="label">${T('ความยาว','Duration')}</label>
             <div style="display:flex;gap:4px">
-              ${['5s','10s','15s','30s'].map(d=>`<button class="pill ${d===state.ttvDuration?'orange':''}" data-set="ttvDuration=${d}" style="flex:1;justify-content:center;height:32px;font-size:11.5px;cursor:pointer">${d}</button>`).join('')}
+              ${['8s','10s','15s'].map(d=>`<button class="pill ${(state.ttvDuration||'8s')===d?'orange':''}" data-set="ttvDuration=${d}" style="flex:1;justify-content:center;height:32px;font-size:11.5px;cursor:pointer">${d}${d==='8s'?' · '+T('Veo','Veo'):''}</button>`).join('')}
             </div>
           </div>
           <div>
             <label class="label">${T('สัดส่วน','Aspect')}</label>
             <div style="display:flex;gap:4px">
-              ${[{r:'9:16',sub:'Reels'},{r:'1:1',sub:'Feed'},{r:'16:9',sub:'YT'}].map(a=>{
+              ${[{r:'9:16',sub:'Reels/TikTok'},{r:'16:9',sub:'YouTube'}].map(a=>{
                 const on = a.r===state.ttvAspect;
                 return `<button class="pill ${on?'orange':''}" data-set="ttvAspect=${a.r}" style="flex:1;flex-direction:column;height:auto;padding:4px;font-size:11px;cursor:pointer">${a.r}<span style="font-size:9px;opacity:.8">${a.sub}</span></button>`;
               }).join('')}
@@ -2266,31 +2410,27 @@ function pageTextVideo() {
       <div class="card">
         <div class="cardHeader">
           <h3 class="cardTitle">${T('ตัวอย่างวิดีโอ','Video preview')}</h3>
-          <span class="pill blue">${I('sparkles',11)} ${state.ttvModel === 'sora' ? 'Sora 2' : state.ttvModel === 'veo' ? 'Veo 3' : 'Kling 2.0'} · ${state.ttvAspect} · ${state.ttvDuration}</span>
+          <span class="pill blue">${I('sparkles',11)} ${(models.filter(function(m){return m.id===state.ttvModel;})[0]||models[0]).name} · ${state.ttvAspect} · ${state.ttvDuration}</span>
         </div>
-        <div style="aspect-ratio:1;border-radius:14px;position:relative;overflow:hidden;background:linear-gradient(135deg,#FFEDD5 0%,#FED7AA 40%,#FB923C 100%);border:1px solid var(--line);box-shadow:var(--shadow2)">
-          <div style="position:absolute;top:-40px;right:-40px;width:200px;height:200px;border-radius:99px;background:radial-gradient(circle,rgba(255,255,255,.8) 0%,transparent 70%)"></div>
-          <div style="position:absolute;top:30px;left:60px;width:20px;height:14px;background:#F472B6;border-radius:50% 0;transform:rotate(-25deg);opacity:.85"></div>
-          <div style="position:absolute;top:80px;left:110px;width:16px;height:11px;background:#FB7185;border-radius:50% 0;transform:rotate(15deg);opacity:.7"></div>
-          <div style="position:absolute;top:200px;right:60px;width:18px;height:13px;background:#DC2626;border-radius:50% 0;transform:rotate(45deg);opacity:.7"></div>
-          <div style="position:absolute;bottom:120px;left:40px;width:22px;height:15px;background:#F472B6;border-radius:50% 0;transform:rotate(-60deg);opacity:.6"></div>
-          <div style="position:absolute;bottom:0;left:0;right:0;height:120px;background:linear-gradient(180deg,transparent 0%,rgba(124,45,18,.45) 100%)"></div>
-          <div style="position:absolute;left:50%;top:55%;transform:translate(-50%,-50%);width:90px;height:140px;border-radius:14px;background:linear-gradient(180deg,#FFFBEB,#FED7AA 60%,#C2410C);box-shadow:0 18px 36px -8px rgba(124,45,18,.5),inset 4px 0 6px rgba(255,255,255,.4);display:flex;flex-direction:column;align-items:center;justify-content:center;color:#7C2D12;text-align:center">
-            <div style="font-size:9px;letter-spacing:.18em;font-weight:700">HAPPYPRICE</div>
-            <div style="font-size:12px;font-weight:800;margin-top:4px">Marine Collagen</div>
-            <div style="font-size:8px;margin-top:2px">100G · 11.11</div>
-          </div>
-          <div style="position:absolute;top:12px;left:12px;background:rgba(255,255,255,.85);backdrop-filter:blur(6px);padding:4px 8px;border-radius:99px;font-size:9px;font-weight:800;letter-spacing:.12em;color:#9A3412">AI GENERATED · ${state.ttvModel === 'sora' ? 'SORA 2' : state.ttvModel.toUpperCase()}</div>
-          <div class="phonePlay" style="background:rgba(255,255,255,.92);width:64px;height:64px">${I('play',28)}</div>
-          <div style="position:absolute;bottom:14px;left:14px;right:14px">
-            <div style="height:3px;border-radius:99px;background:rgba(255,255,255,.35)"><div style="width:45%;height:100%;border-radius:99px;background:#fff"></div></div>
-            <div style="margin-top:6px;display:flex;justify-content:space-between;font-size:10px;color:#fff;font-weight:700"><span>0:04</span><span>${state.ttvDuration}</span></div>
-          </div>
-        </div>
-        <div style="display:flex;gap:8px;margin-top:16px">
-          <button class="btn outline" style="flex:1">${I('download',14)} MP4</button>
-          <button class="btn outline" style="flex:1">${I('refresh',14)} ${T('สร้างใหม่','Re-generate')}</button>
-          <button class="btn primary" style="flex:1.5">${I('send',14)} ${T('ใช้เป็นโพสต์','Use as post')}</button>
+        ${state.ttvVideo
+          ? `<div style="aspect-ratio:${(state.ttvAspect||'9:16').replace(':','/')};border-radius:14px;overflow:hidden;background:#000;border:1px solid var(--line)"><video controls autoplay loop muted playsinline src="${state.ttvVideo}" style="width:100%;height:100%;object-fit:contain;display:block"></video></div>`
+          : state.ttvGenLoading
+            ? `<div style="aspect-ratio:${(state.ttvAspect||'9:16').replace(':','/')};border-radius:14px;background:linear-gradient(135deg,#1F2937,#4F46E5);display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;text-align:center;padding:24px;border:1px solid var(--line)">
+              <div style="width:48px;height:48px;border-radius:99px;border:3px solid rgba(255,255,255,.25);border-top-color:#fff;animation:spin 1s linear infinite"></div>
+              <div style="margin-top:14px;font-size:14px;font-weight:700">${T('AI กำลังสร้างวิดีโอ…','AI is generating video…')}</div>
+              <div style="margin-top:4px;font-size:12px;opacity:.85">${T('Veo ใช้เวลาประมาณ 1-3 นาที','Veo takes ~1-3 minutes')}</div>
+              ${state.ttvGenStatus?`<div style="margin-top:8px;font-size:11px;opacity:.7">${escText(state.ttvGenStatus)}</div>`:''}
+              <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+            </div>`
+            : `<div style="aspect-ratio:${(state.ttvAspect||'9:16').replace(':','/')};border-radius:14px;background:linear-gradient(135deg,#FFEDD5,#FED7AA 40%,#FB923C);display:flex;flex-direction:column;align-items:center;justify-content:center;color:#7C2D12;text-align:center;padding:24px;border:1px solid var(--line)">
+              ${I('video',36,'#9A3412')}
+              <div style="margin-top:10px;font-size:14px;font-weight:700">${T('วิดีโอจะแสดงที่นี่','Your video appears here')}</div>
+              <div style="margin-top:4px;font-size:12px;opacity:.85">${T('ใส่คำสั่ง แล้วกด "สร้างวิดีโอด้วย Veo"','Type a prompt and hit "Generate with Veo"')}</div>
+            </div>`}
+        <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap">
+          ${state.ttvVideo?`<a class="btn outline" style="flex:1;min-width:90px;text-decoration:none;justify-content:center" href="${state.ttvVideo}" download="postpost-veo.mp4">${I('download',14)} MP4</a>`:`<button class="btn outline" style="flex:1;min-width:90px" disabled>${I('download',14)} MP4</button>`}
+          ${state.ttvVideo?`<button class="btn outline" data-savevideodraft="1" style="flex:1;min-width:140px" ${state.ttvSavingDraft?'disabled':''}>${I('library',14)} ${state.ttvSavingDraft?T('กำลังบันทึก…','Saving…'):T('บันทึกดราฟ','Save draft')}</button>`:''}
+          <button class="btn primary" data-veogen="1" style="flex:2;min-width:170px" ${state.ttvGenLoading?'disabled':''}>${I('sparkles',14)} ${state.ttvGenLoading?T('AI กำลังสร้าง…','Generating…'):(state.ttvVideo?T('สร้างใหม่ด้วย Veo','Regenerate with Veo'):T('สร้างวิดีโอด้วย Veo','Generate with Veo'))}</button>
         </div>
       </div>
 
@@ -2545,37 +2685,8 @@ function pageAnalytics() {
 // ====================================================================
 // PAGE: CALENDAR
 // ====================================================================
-const CAL_EVENTS = {
-  1:[{ch:'facebook',topic_th:'เปิดเดือนใหม่',topic_en:'Hello November',time:'10:00',status:'published'}],
-  2:[{ch:'instagram',topic_th:'IG Story โพรโมท',topic_en:'IG Story promo',time:'09:00',status:'published'},{ch:'facebook',topic_th:'Tip ดูแลผิวยามฝน',topic_en:'Rainy-day skin tip',time:'17:00',status:'published'}],
-  4:[{ch:'tiktok',topic_th:'Reels · Avatar น้องโรส',topic_en:'Reels · Avatar Rose',time:'19:00',status:'published'}],
-  5:[{ch:'facebook',topic_th:'รีวิวจริง — 10 ปีผิวบอบบาง',topic_en:'Real review',time:'12:00',status:'published'},{ch:'instagram',topic_th:'Carousel Before/After',topic_en:'Before/After carousel',time:'18:30',status:'published'}],
-  7:[{ch:'facebook',topic_th:'โปรพิเศษวันศุกร์',topic_en:'Friday special',time:'15:00',status:'published'}],
-  8:[{ch:'instagram',topic_th:'Sheet Mask Sunday',topic_en:'Sheet Mask Sunday',time:'20:00',status:'published'}],
-  9:[{ch:'facebook',topic_th:'Tip ดูแลผิวก่อนนอน',topic_en:'Bedtime tip',time:'21:00',status:'published'},{ch:'tiktok',topic_th:'Reels ส่วนผสมลับ',topic_en:'Reels secret ingredient',time:'12:30',status:'published'}],
-  10:[{ch:'instagram',topic_th:'Pre-launch 11.11 teaser',topic_en:'Pre-launch 11.11 teaser',time:'11:00',status:'published'},{ch:'facebook',topic_th:'Countdown 11.11',topic_en:'Countdown 11.11',time:'20:00',status:'published'}],
-  11:[
-    {ch:'facebook',topic_th:'11.11 Big Sale — Marine Collagen 50% off',topic_en:'11.11 Big Sale — Marine Collagen 50% off',time:'00:01',status:'published',hot:true},
-    {ch:'instagram',topic_th:'11.11 Reels — Avatar น้องโรส',topic_en:'11.11 Reels — Rose avatar',time:'10:00',status:'published',hot:true},
-    {ch:'facebook',topic_th:'Live 11.11 ตอบคำถาม',topic_en:'Live 11.11 Q&A',time:'15:00',status:'published'},
-    {ch:'instagram',topic_th:'Toner Pad รีวิวจริง',topic_en:'Real Toner Pad review',time:'17:30',status:'failed'},
-    {ch:'facebook',topic_th:'Bundle Beauty Trio ลด 50%',topic_en:'Bundle Beauty Trio 50% off',time:'19:00',status:'published'},
-    {ch:'facebook',topic_th:'ปิดท้ายวัน 11.11',topic_en:'Closing 11.11 day',time:'21:00',status:'scheduled'},
-  ],
-  12:[{ch:'facebook',topic_th:'After-sale follow-up',topic_en:'After-sale follow-up',time:'10:00',status:'scheduled'},{ch:'instagram',topic_th:'Story — ขอบคุณลูกค้า',topic_en:'Story — thank you',time:'14:00',status:'scheduled'}],
-  13:[{ch:'tiktok',topic_th:'Reels weekend mood',topic_en:'Reels · weekend mood',time:'19:00',status:'scheduled'}],
-  14:[{ch:'facebook',topic_th:'Weekend tip',topic_en:'Weekend tip',time:'11:00',status:'scheduled'}],
-  15:[{ch:'instagram',topic_th:'Carousel skin layering',topic_en:'Carousel · skin layering',time:'18:00',status:'scheduled'}],
-  17:[{ch:'facebook',topic_th:'รีวิวลูกค้า',topic_en:'Customer review',time:'12:00',status:'scheduled'},{ch:'instagram',topic_th:'IG Reel highlight',topic_en:'IG Reel highlight',time:'20:00',status:'scheduled'}],
-  18:[{ch:'tiktok',topic_th:'TikTok behind-the-scenes',topic_en:'TikTok BTS',time:'17:00',status:'scheduled'}],
-  19:[{ch:'facebook',topic_th:'Live Q&A',topic_en:'Live Q&A',time:'20:00',status:'scheduled'}],
-  21:[{ch:'facebook',topic_th:'Tip ผิวแห้ง',topic_en:'Dry skin tip',time:'11:00',status:'scheduled'},{ch:'instagram',topic_th:'IG carousel routine',topic_en:'IG carousel · routine',time:'18:00',status:'scheduled'}],
-  22:[{ch:'instagram',topic_th:'IG Story poll',topic_en:'IG Story poll',time:'15:00',status:'scheduled'}],
-  24:[{ch:'facebook',topic_th:'Storytelling แบรนด์เรา',topic_en:'Brand storytelling',time:'19:00',status:'scheduled'}],
-  25:[{ch:'tiktok',topic_th:'Reels ตลก ๆ',topic_en:'Funny Reels',time:'17:00',status:'scheduled'}],
-  27:[{ch:'facebook',topic_th:'Black Friday Sale',topic_en:'Black Friday Sale',time:'08:00',status:'scheduled',hot:true},{ch:'instagram',topic_th:'BF carousel',topic_en:'BF carousel',time:'10:00',status:'scheduled',hot:true},{ch:'tiktok',topic_th:'BF Reels',topic_en:'BF Reels',time:'12:00',status:'scheduled',hot:true}],
-  28:[{ch:'facebook',topic_th:'Weekend wrap-up',topic_en:'Weekend wrap-up',time:'20:00',status:'scheduled'}],
-};
+// Calendar events — populated from real scheduled posts (empty until a post is scheduled)
+const CAL_EVENTS = {};
 
 const CAL_DRAFTS = [
   {id:'d1',topic_th:'ทำไมต้องเลือก Organic? — ส่วนผสมจากใจ',topic_en:'Why organic? Ingredients with heart',kind:'album',ch:['facebook','instagram']},
@@ -2603,7 +2714,7 @@ function pageCalendar() {
   return `${head('OPERATIONS',T('ปฏิทินคอนเทนต์','Content Calendar'),
     T('ภาพรวมทั้งเดือน · คลิกวันเพื่อดูรายละเอียดและตั้งเวลา Draft','Whole-month overview · click a day to see details and schedule drafts'),
     `<button class="btn outline sm">${I('filter',14)} ${T('กรอง','Filter')}</button>
-     <button class="btn primary sm">${I('plus',14)} ${T('สร้างโพสต์ใหม่','New post')}</button>`
+     <button class="btn primary sm" data-go="creative">${I('plus',14)} ${T('สร้างโพสต์ใหม่','New post')}</button>`
   )}
 
   <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px">
@@ -2627,10 +2738,13 @@ function pageCalendar() {
         const isToday = d===today;
         const isSelected = d===state.calDay;
         const evs = CAL_EVENTS[d] || [];
+        const dDrafts = (state.drafts||[]).filter(function(x){ return x.scheduledDay===d; });
+        const total = evs.length + dDrafts.length;
         return `<button class="calDay ${isToday?'today':''} ${isSelected?'selected':''}" data-set="calDay=${d}">
-          <div class="dateNum"><span>${d}</span>${evs.length?`<span style="font-size:10px;color:var(--muted)">${evs.length}</span>`:''}</div>
+          <div class="dateNum"><span>${d}</span>${total?`<span style="font-size:10px;color:var(--muted)">${total}</span>`:''}</div>
           ${evs.slice(0,2).map(e=>`<span class="calEvent ${e.ch==='instagram'?'ig':e.ch==='tiktok'?'tt':''} ${e.hot?'hot':''}">${e.time}</span>`).join('')}
-          ${evs.length>2?`<span style="font-size:9px;color:var(--muted);padding:0 5px">+${evs.length-2} ${T('อื่นๆ','more')}</span>`:''}
+          ${dDrafts.slice(0,2).map(dr=>`<span class="calEvent" style="background:var(--orange-soft);color:var(--orange3);border:1px solid var(--orange);padding:0 5px">${I('type',9,'#9A3412')} ${escText((dr.topic||'').slice(0,14))}</span>`).join('')}
+          ${total>4?`<span style="font-size:9px;color:var(--muted);padding:0 5px">+${total-4} ${T('อื่นๆ','more')}</span>`:''}
         </button>`;
       }).join('')}
     </div>
@@ -2644,7 +2758,7 @@ function pageCalendar() {
             <h3 class="cardTitle" style="font-size:22px;margin:0">${state.calDay} ${T('พ.ย.','Nov')} 2026</h3>
             ${state.calDay===today?`<span style="font-size:12px;color:var(--orange);font-weight:700">${T('วันนี้','Today')}</span>`:''}
           </div>
-          <button class="btn primary sm">${I('plus',13)} ${T('เพิ่มโพสต์','Add')}</button>
+          <button class="btn primary sm" data-addtoday="1">${I('plus',13)} ${T('เพิ่มโพสต์','Add')}</button>
         </div>
         <div style="display:flex;gap:14px;padding-top:12px;border-top:1px dashed var(--line)">
           <div style="flex:1"><div style="font-size:22px;font-weight:800;color:var(--green)">${published}</div><div style="font-size:11px;color:var(--muted)">${T('โพสต์แล้ว','Posted')}</div></div>
@@ -2678,27 +2792,25 @@ function pageCalendar() {
 
       <div class="card" style="background:linear-gradient(180deg,var(--surface) 0%,#FFFBEB 100%)">
         <div class="split" style="align-items:baseline;margin-bottom:4px">
-          <h3 class="cardTitle">${T('คอนเทนต์ Draft','Drafts')} <span class="pill orange">${CAL_DRAFTS.length}</span></h3>
-          <button class="btn ghost sm">${T('ดูทั้งหมด','See all')} ${I('chev_right',12)}</button>
+          <h3 class="cardTitle">${T('คอนเทนต์ Draft','Drafts')} <span class="pill orange">${(state.drafts||[]).length}</span></h3>
+          <button class="btn ghost sm" data-go="library">${T('ดูทั้งหมด','See all')} ${I('chev_right',12)}</button>
         </div>
         <p class="cardSub" style="margin-bottom:12px">${T('ตั้งเวลาให้โพสต์ในวันที่เลือกได้เลย','Schedule any draft into the selected day')}</p>
         <div style="display:flex;flex-direction:column;gap:8px">
-          ${CAL_DRAFTS.map(d=>`<div style="padding:10px;border-radius:10px;background:#fff;border:1px solid var(--line)">
+          ${(state.drafts||[]).length ? state.drafts.map(d=>`<div style="padding:10px;border-radius:10px;background:#fff;border:1px solid var(--line)">
             <div style="display:flex;gap:10px;align-items:flex-start">
-              <div style="width:28px;height:28px;border-radius:7px;background:var(--cream2);display:grid;place-items:center;color:var(--orange);flex-shrink:0">${I(d.kind==='album'?'layers':d.kind==='avatar'?'video':'image',14)}</div>
+              <div style="width:28px;height:28px;border-radius:7px;background:var(--cream2);display:grid;place-items:center;color:var(--orange);flex-shrink:0">${I('type',14)}</div>
               <div style="flex:1;min-width:0">
-                <div style="font-size:12.5px;font-weight:600;color:var(--purple);line-height:1.4">${t({th:d.topic_th,en:d.topic_en})}</div>
-                <div style="margin-top:4px;display:flex;gap:4px;align-items:center">
-                  ${d.ch.map(c=>I(c,12,c==='facebook'?'#1877F2':c==='instagram'?'#E1306C':'#0F172A')).join('')}
-                  <span style="font-size:10px;color:var(--muted);margin-left:4px">${d.kind==='album'?T('อัลบั้ม','Album'):d.kind==='avatar'?'Reels':T('รูปเดี่ยว','Single')}</span>
-                </div>
+                <div style="font-size:12.5px;font-weight:600;color:var(--purple);line-height:1.4">${escText(d.topic||'')}</div>
+                <div style="margin-top:4px;font-size:10px;color:var(--muted)">${escText(d.brandName||'')}${d.scheduledDay?' · '+T('ตั้งเวลาวันที่ ','day ')+d.scheduledDay:''}</div>
               </div>
+              <button class="btn ghost sm iconOnly" data-deletedraft="${d.id}" title="${T('ลบดราฟ','Delete draft')}" style="color:var(--red);width:24px;height:24px">${I('x',12,'#DC2626')}</button>
             </div>
             <div style="display:flex;gap:6px;margin-top:8px">
-              <button class="btn primary sm" style="flex:1;height:28px;font-size:11.5px">${I('calendar',12)} ${T('ตั้งเวลาวันนี้','Schedule today')}</button>
-              <button class="btn outline sm" style="height:28px;font-size:11.5px">${T('พรุ่งนี้','Tomorrow')}</button>
+              <button class="btn primary sm" data-schedule="${d.id}:${state.calDay||today}" style="flex:1;height:28px;font-size:11.5px">${I('calendar',12)} ${T('ตั้งวันที่เลือก','To selected day')}</button>
+              <button class="btn outline sm" data-schedule="${d.id}:${(state.calDay||today)+1}" style="height:28px;font-size:11.5px">${T('พรุ่งนี้','Day +1')}</button>
             </div>
-          </div>`).join('')}
+          </div>`).join('') : `<div style="padding:22px;text-align:center;color:var(--muted);font-size:12px">${T('ยังไม่มีดราฟ — สร้างคอนเทนต์แล้วกดปุ่ม Draft','No drafts yet — generate content, then hit Draft')}</div>`}
         </div>
       </div>
     </div>
@@ -2716,20 +2828,31 @@ function pageCalendar() {
 // PAGE: LIBRARY
 // ====================================================================
 function pageLibrary() {
-  const ASSETS = [
-    { kind:'image',title_th:'Marine Collagen Hero',title_en:'Marine Collagen Hero',date:'11 Nov',status:'published',bg:'linear-gradient(135deg,#FFEDD5,#FB923C)',label:'COLLAGEN'},
-    { kind:'album',title_th:'Beauty Trio · อัลบั้ม 6 ภาพ',title_en:'Beauty Trio · 6-slide album',date:'11 Nov',status:'scheduled',bg:'linear-gradient(135deg,#FED7AA,#FECDD3)',label:'ALBUM'},
-    { kind:'video',title_th:'Rose Avatar · Reels',title_en:'Rose Avatar · Reels',date:'10 Nov',status:'published',bg:'linear-gradient(135deg,#FBCFE8,#DB2777)',label:'REELS'},
-    { kind:'image',title_th:'Toner Pad Review',title_en:'Toner Pad Review',date:'09 Nov',status:'draft',bg:'linear-gradient(135deg,#FFE4E6,#FECACA)',label:'POST'},
-    { kind:'caption',title_th:'Caption: ผิวบอบบาง 5 step',title_en:'Caption: Sensitive skin 5-step',date:'09 Nov',status:'draft',bg:'linear-gradient(135deg,#EDE9FE,#C7D2FE)',label:'TEXT'},
-    { kind:'video',title_th:'Cinematic ส่วนผสมลับ',title_en:'Cinematic secret ingredient',date:'08 Nov',status:'published',bg:'linear-gradient(135deg,#FEF3C7,#FB923C)',label:'VIDEO'},
-    { kind:'album',title_th:'How-to · 4 ขั้นตอน',title_en:'How-to · 4 steps',date:'07 Nov',status:'published',bg:'linear-gradient(135deg,#E0E7FF,#FECDD3)',label:'ALBUM'},
-    { kind:'image',title_th:'Behind the scenes · เขาใหญ่',title_en:'BTS · Khao Yai',date:'06 Nov',status:'published',bg:'linear-gradient(135deg,#FED7AA,#FFFBEB)',label:'BTS'},
-    { kind:'caption',title_th:'Caption: รีวิวลูกค้า',title_en:'Caption: Customer review',date:'06 Nov',status:'published',bg:'linear-gradient(135deg,#CFFAFE,#E0E7FF)',label:'TEXT'},
-    { kind:'video',title_th:'Talking Avatar Mintra',title_en:'Talking Avatar Mintra',date:'05 Nov',status:'published',bg:'linear-gradient(135deg,#FCD9A8,#F97316)',label:'AVATAR'},
-    { kind:'album',title_th:'Toner Pad x Sheet Mask',title_en:'Toner Pad x Sheet Mask',date:'05 Nov',status:'scheduled',bg:'linear-gradient(135deg,#FFE4E6,#FED7AA)',label:'ALBUM'},
-    { kind:'image',title_th:'Sale 11.11 Hero',title_en:'Sale 11.11 Hero',date:'04 Nov',status:'published',bg:'linear-gradient(135deg,#FFE4CA,#FB923C)',label:'PROMO'},
-  ];
+  const draftCards = (state.drafts||[]).map(function(d){
+    var dt = ''; try { dt = new Date(d.createdAt).toLocaleDateString(state.lang==='th'?'th-TH':'en-US',{day:'2-digit',month:'short'}); } catch(e){}
+    var isVideo = d.kind === 'video';
+    // Count images BEFORE deriving kind — legacy drafts may not have `imageCount` field
+    var imgCount = isVideo ? 0
+      : (typeof d.imageCount === 'number' ? d.imageCount
+         : Array.isArray(d.imageIds) ? d.imageIds.filter(Boolean).length
+         : Array.isArray(d.images) ? d.images.filter(Boolean).length
+         : 0);
+    var kind = isVideo ? 'video' : (imgCount > 1 ? 'album' : imgCount === 1 ? 'image' : 'caption');
+    return {
+      kind: kind,
+      title_th: d.topic || (isVideo ? 'วิดีโอ Veo' : 'คอนเทนต์ดราฟ'),
+      title_en: d.topic || (isVideo ? 'Veo video' : 'Content draft'),
+      date: dt,
+      status: 'draft',
+      bg: isVideo ? 'linear-gradient(135deg,#1F2937,#4F46E5)' : 'linear-gradient(135deg,#FFE4E6,#FED7AA)',
+      label: isVideo ? (state.lang==='th'?'วิดีโอ':'VIDEO') : 'DRAFT',
+      isDraft: true,
+      draftId: d.id,
+      image: d.thumb || (isVideo ? (d.referenceImage||'') : ''),
+      imageCount: imgCount,
+    };
+  });
+  const ASSETS = draftCards;
 
   const KINDS = [
     { id:'all', th:'ทั้งหมด', en:'All', n:ASSETS.length, icon:'library' },
@@ -2776,28 +2899,32 @@ function pageLibrary() {
   </div>
 
   <!-- Grid -->
-  <div class="grid g4">
+  ${filtered.length === 0 ? `<div style="padding:48px 24px;text-align:center;background:var(--cream2);border-radius:16px;border:1px dashed var(--line3)">
+    ${I('library',36,'#A39BAE')}
+    <div style="font-size:14px;font-weight:700;color:var(--ink);margin:10px 0 4px">${T('ยังไม่มีคอนเทนต์','No content yet')}</div>
+    <div class="micro">${T('สร้างคอนเทนต์แล้วกด "Draft" — จะมาแสดงที่นี่','Generate content and hit "Draft" — it shows up here')}</div>
+  </div>` : `<div class="grid g4">
     ${filtered.map(a=>{
       const statusPill = a.status==='published'?'green':a.status==='scheduled'?'blue':'orange';
       const statusLabel = a.status==='published'?T('เผยแพร่แล้ว','Published'):a.status==='scheduled'?T('รอเวลา','Scheduled'):'Draft';
-      return `<div class="productCard" style="padding:12px">
+      return `<div class="productCard" ${a.isDraft?`data-editdraft="${a.draftId}"`:''} style="padding:12px;${a.isDraft?'cursor:pointer':''}">
         <div style="aspect-ratio:4/3;border-radius:10px;background:${a.bg};position:relative;overflow:hidden;display:grid;place-items:center">
-          ${a.kind==='video'||a.kind==='avatar'?`<div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:42px;height:42px;border-radius:99px;background:rgba(255,255,255,.9);display:grid;place-items:center;color:var(--purple);box-shadow:0 6px 18px rgba(0,0,0,.20)">${I('play',18)}</div>`:''}
-          ${a.kind==='album'?`<div style="position:absolute;top:8px;right:8px;display:flex;gap:3px"><div style="width:14px;height:14px;border-radius:3px;background:rgba(255,255,255,.5)"></div><div style="width:14px;height:14px;border-radius:3px;background:rgba(255,255,255,.7)"></div></div>`:''}
-          <div style="background:rgba(255,255,255,.85);backdrop-filter:blur(6px);padding:4px 10px;border-radius:99px;font-size:10px;font-weight:800;color:#7C2D12;letter-spacing:.08em">${a.label}</div>
+          ${a.image?`<img src="${a.image}" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover"/>`:''}
+          ${a.imageCount&&a.imageCount>1?`<div style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,.6);color:#fff;font-size:10px;font-weight:700;padding:3px 7px;border-radius:6px;z-index:1">${I('layers',10,'#fff')} ${a.imageCount}</div>`:''}
+          ${a.kind==='video'||a.kind==='avatar'?`<div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:42px;height:42px;border-radius:99px;background:rgba(255,255,255,.9);display:grid;place-items:center;color:var(--purple);box-shadow:0 6px 18px rgba(0,0,0,.20);z-index:1">${I('play',18)}</div>`:''}
+          <div style="position:relative;z-index:1;background:rgba(255,255,255,.85);backdrop-filter:blur(6px);padding:4px 10px;border-radius:99px;font-size:10px;font-weight:800;color:#7C2D12;letter-spacing:.08em">${a.label}</div>
         </div>
         <b style="display:block;margin-top:10px;font-size:13px;color:var(--purple);line-height:1.35;min-height:36px;overflow:hidden">${t({th:a.title_th,en:a.title_en})}</b>
         <div class="split">
           <span class="pill ${statusPill}" style="font-size:10.5px;height:20px">${statusLabel}</span>
-          <span style="font-size:11px;color:var(--muted)">${a.date}</span>
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="font-size:11px;color:var(--muted)">${a.date}</span>
+            ${a.isDraft?`<button data-deletedraft="${a.draftId}" title="${T('ลบดราฟ','Delete draft')}" style="background:none;border:none;cursor:pointer;color:var(--red);width:22px;height:22px;padding:0;display:grid;place-items:center;border-radius:6px">${I('x',13,'#DC2626')}</button>`:''}
+          </div>
         </div>
       </div>`;
     }).join('')}
-  </div>
-
-  <div style="display:flex;justify-content:center;margin-top:24px">
-    <button class="btn outline">${T('โหลดเพิ่ม','Load more')} ${I('chev_down',14)}</button>
-  </div>`;
+  </div>`}`;
 }
 
 // ====================================================================
@@ -2812,17 +2939,23 @@ const PAGES = {
 
 const PUBLIC_PAGES = new Set(['landing','login','onboarding']);
 
+let _ppLastPage = null;
 function render() {
   const root = document.getElementById('root');
   const isPublic = PUBLIC_PAGES.has(state.page);
   root.className = 'app' + (isPublic ? ' no-shell' : '');
   const pageFn = PAGES[state.page] || PAGES.landing;
+  // Same-page re-renders (button clicks) must keep the scroll position;
+  // only a real page change scrolls back to the top.
+  const _samePage = (state.page === _ppLastPage);
+  const _keepY = _samePage ? (window.scrollY || document.documentElement.scrollTop || 0) : 0;
   if (isPublic) {
     root.innerHTML = `<main class="main"><div class="page">${pageFn()}</div></main>`;
   } else {
     root.innerHTML = `${sidebarHTML()}<main class="main"><div class="mainInner">${topbarHTML()}<div class="page">${pageFn()}</div></div></main>`;
   }
-  window.scrollTo({ top: 0, behavior: 'instant' });
+  window.scrollTo({ top: _keepY, behavior: 'instant' });
+  _ppLastPage = state.page;
 }
 
 // ====================================================================
@@ -2865,13 +2998,30 @@ document.addEventListener('click', (e) => {
   if (brandEl) {
     e.preventDefault();
     state.brand = brandEl.dataset.brand;
+    try { localStorage.setItem('postpost_active_brand', state.brand); } catch(e){}
+    const nb = BRANDS.find(b => b.id === state.brand);
+    if (nb) {
+      state.brandDesc = nb.desc || '';
+      state.voice = Array.isArray(nb.voice) ? nb.voice.slice() : [];
+      state.archetype = nb.archetype || '';
+      TOPICS = (Array.isArray(nb.topics) && nb.topics.length) ? nb.topics : DEMO_TOPICS;
+      PRODUCTS = (Array.isArray(nb.products) && nb.products.length) ? nb.products : DEMO_PRODUCTS;
+      state.selectedProducts = PRODUCTS.map(function(p){ return p.id; });
+      state.shopStats = nb.shopStats || null;
+      state.shopUrl = nb.shopUrl || '';
+      state.productsExpanded = false;
+    }
     render();
     return;
   }
   const prodEl = e.target.closest('[data-product]');
-  if (prodEl) {
+  if (prodEl && !e.target.closest('[data-prodview]')) {
     e.preventDefault();
-    state.product = prodEl.dataset.product;
+    const pid = prodEl.dataset.product;
+    if (!Array.isArray(state.selectedProducts)) state.selectedProducts = [];
+    const si = state.selectedProducts.indexOf(pid);
+    if (si >= 0) state.selectedProducts.splice(si, 1);
+    else state.selectedProducts.push(pid);
     render();
     return;
   }
@@ -3116,6 +3266,1349 @@ render();
     if (e.target.closest('[data-shopguide]')) shopGuideModal();
   });
 
+  // Product detail modal — opened from a product card's "View details" button
+  function productDetailModal(id){
+    var p = PRODUCTS.filter(function(x){ return x.id===id; })[0];
+    if (!p) return;
+    var L = function(th,en){ return state.lang==='th'?th:en; };
+    var name = state.lang==='th' ? (p.name_th||p.name_en) : (p.name_en||p.name_th);
+    var imgs = (p.images && p.images.length) ? p.images : (p.thumbnail ? [p.thumbnail] : []);
+    var hasBefore = p.priceBefore && p.priceBefore > p.price;
+    var disc = hasBefore ? Math.round((1 - p.price/p.priceBefore)*100) : 0;
+    var gallery;
+    if (imgs.length){
+      gallery = '<div style="border-radius:14px;overflow:hidden;background:#f3f0ea;aspect-ratio:1/1">'
+        + '<img id="ppPdMain" src="'+imgs[0]+'" alt="" style="width:100%;height:100%;object-fit:cover"/></div>'
+        + (imgs.length>1 ? '<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">'
+            + imgs.map(function(u){ return '<img src="'+u+'" alt="" '
+              + 'onclick="document.getElementById(\'ppPdMain\').src=this.src" '
+              + 'style="width:44px;height:44px;border-radius:8px;object-fit:cover;cursor:pointer;border:1px solid var(--line)"/>'; }).join('')
+            + '</div>' : '');
+    } else {
+      gallery = '<div style="border-radius:14px;aspect-ratio:1/1;background:linear-gradient(135deg,#FFE4E6,#FECACA);display:grid;place-items:center;font-size:34px">📦</div>';
+    }
+    var chip = function(label,val){ return '<div style="flex:1;background:#faf6ef;border:1px solid var(--line);border-radius:10px;padding:8px 6px;text-align:center">'
+      + '<div style="font-size:15px;font-weight:800;color:var(--purple)">'+val+'</div>'
+      + '<div style="font-size:10px;color:var(--muted)">'+label+'</div></div>'; };
+    var escHtml = function(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
+    var ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(16,8,30,.6);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:28px;font-family:Prompt,sans-serif';
+    ov.innerHTML = '<div style="background:#fff;border-radius:24px;max-width:580px;width:100%;max-height:88vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 70px rgba(38,20,71,.4)">'
+      + '<div style="padding:18px 22px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px">'
+      + '<div style="width:36px;height:36px;border-radius:10px;background:#FFEDD5;color:#9A3412;display:grid;place-items:center;font-size:16px">🛍️</div>'
+      + '<div style="flex:1;font-size:16px;font-weight:800;color:var(--purple)">'+L('รายละเอียดสินค้า','Product details')+'</div>'
+      + '<button class="btn outline sm" data-pdclose="1">'+L('ปิด','Close')+'</button></div>'
+      + '<div style="overflow-y:auto;padding:20px">'
+      + '<div style="display:grid;grid-template-columns:210px 1fr;gap:18px">'
+      + '<div>'+gallery+'</div>'
+      + '<div>'
+      +   '<div style="font-size:14.5px;font-weight:700;color:var(--ink);line-height:1.5;margin-bottom:10px">'+name+'</div>'
+      +   '<div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">'
+      +     '<span style="font-size:24px;font-weight:800;color:var(--orange3)">฿'+(p.price||0).toLocaleString()+'</span>'
+      +     (hasBefore
+            ? ('<span style="font-size:13px;color:var(--muted);text-decoration:line-through">฿'+p.priceBefore.toLocaleString()+'</span><span style="font-size:11px;font-weight:800;color:#fff;background:var(--orange);border-radius:6px;padding:2px 6px">-'+disc+'%</span>')
+            : '')
+      +   '</div>'
+      +   '<div style="display:flex;gap:8px;margin:14px 0">'
+      +     chip(L('ขายแล้ว','Sold'), (p.sold!=null?p.sold:(p.sales||'—')))
+      +     chip(L('เรทติ้ง','Rating'), (p.rating? '⭐'+p.rating : '—'))
+      +     chip(L('สต็อก','Stock'), (p.stock!=null?p.stock:'—'))
+      +   '</div>'
+      +   (p.url
+            ? ('<a href="'+p.url+'" target="_blank" rel="noopener" class="btn primary" style="width:100%;text-decoration:none;justify-content:center">'+I('external',14)+' '+L('เปิดดูบน Shopee','Open on Shopee')+'</a>')
+            : ('<div style="font-size:11px;color:var(--muted);background:#faf6ef;border:1px solid var(--line);border-radius:10px;padding:10px">'+L('สินค้าตัวอย่าง — กด "ดึงข้อมูลใหม่" เพื่อดึงสินค้าจริงจาก Shopee พร้อมลิงก์','Demo product — hit "Re-sync" to pull live products with links')+'</div>'))
+      + '</div></div>'
+      + (p.description
+          ? ('<div style="margin-top:16px">'
+            + '<div style="font-size:12.5px;font-weight:800;color:var(--purple);margin-bottom:7px;display:flex;align-items:center;gap:5px">'+I('info',13)+' '+L('รายละเอียดสินค้าจากร้าน','Description from the shop')+'</div>'
+            + '<div style="font-size:12px;color:var(--ink2);line-height:1.7;white-space:pre-wrap;background:#faf6ef;border:1px solid var(--line);border-radius:12px;padding:13px 14px;max-height:260px;overflow-y:auto">'+escHtml(p.description)+'</div></div>')
+          : '')
+      + '</div>'
+      + '<div style="padding:12px 20px;border-top:1px solid var(--line);display:flex;justify-content:flex-end">'
+      +   '<button class="btn ghost sm" data-proddelete="'+p.id+'" style="color:var(--red)">'+I('x',12,'#DC2626')+' '+L('ลบสินค้านี้','Delete this product')+'</button>'
+      + '</div>'
+      + '</div>';
+    ov.addEventListener('click', function(e){
+      if (e.target===ov || e.target.closest('[data-pdclose]')) { ov.remove(); return; }
+      var del = e.target.closest('[data-proddelete]');
+      if (del) { ov.remove(); deleteProduct(del.dataset.proddelete); }
+    });
+    document.addEventListener('keydown', function esc(e){ if (e.key==='Escape'){ ov.remove(); document.removeEventListener('keydown', esc); } });
+    document.body.appendChild(ov);
+  }
+  document.addEventListener('click', function(e){
+    var v = e.target.closest('[data-prodview]');
+    if (v) { e.preventDefault(); productDetailModal(v.dataset.prodview); }
+  });
+
+  // Manual product — add / delete, persisted to the active brand
+  function deleteProduct(id){
+    PRODUCTS = PRODUCTS.filter(function(p){ return p.id !== id; });
+    state.selectedProducts = (state.selectedProducts||[]).filter(function(x){ return x !== id; });
+    var ab = BRANDS.filter(function(b){ return b.id===state.brand; })[0];
+    if (ab) { ab.products = PRODUCTS; saveBrands(); }
+    render();
+    toast(state.lang==='th'?'ลบสินค้าแล้ว':'Product deleted','success');
+  }
+  function addManualProduct(mode){
+    var nameEl = document.getElementById('ppNewName');
+    var priceEl = document.getElementById('ppNewPrice');
+    var beforeEl = document.getElementById('ppNewBefore');
+    var catEl = document.getElementById('ppNewCat');
+    var descEl = document.getElementById('ppNewDesc');
+    var name = nameEl ? nameEl.value.trim() : '';
+    if (!name) { toast(state.lang==='th'?'กรอกชื่อสินค้าก่อน':'Enter a product name','error'); return; }
+    var price = Math.round(parseFloat(priceEl && priceEl.value) || 0);
+    if (!price) { toast(state.lang==='th'?'กรอกราคาก่อน':'Enter a price','error'); return; }
+    var before = Math.round(parseFloat(beforeEl && beforeEl.value) || 0);
+    var img = state.newProductImg || '';
+    var prod = {
+      id: 'mp' + Date.now(),
+      name_th: name, name_en: name, short: name.slice(0,30),
+      price: price, priceBefore: before,
+      sales: '0', sold: 0, rating: 0, stock: 0,
+      thumbnail: img, images: img ? [img] : [], url: '',
+      description: descEl ? descEl.value.trim() : '',
+      category: catEl ? catEl.value : '', label: '', manual: true,
+    };
+    PRODUCTS = PRODUCTS.concat([prod]);
+    state.selectedProducts = (state.selectedProducts||[]).concat([prod.id]);
+    var ab = BRANDS.filter(function(b){ return b.id===state.brand; })[0];
+    if (ab) { ab.products = PRODUCTS; saveBrands(); }
+    state.newProductImg = null;
+    if (mode === 'close') state.manualOpen = false;
+    render();
+    toast((state.lang==='th'?'เพิ่มสินค้า "':'Added "') + name + (state.lang==='th'?'" แล้ว':'"'),'success');
+  }
+  document.addEventListener('click', function(e){
+    var sp = e.target.closest('[data-saveproduct]');
+    if (sp) { e.preventDefault(); addManualProduct(sp.dataset.saveproduct); return; }
+    if (e.target.closest('[data-newimgclear]')) { e.preventDefault(); state.newProductImg = null; render(); return; }
+    if (e.target.closest('[data-newimg]')) {
+      var inp = document.getElementById('ppNewImgInput');
+      if (inp) inp.click();
+    }
+  });
+  document.addEventListener('change', function(e){
+    if (e.target && e.target.id === 'ppNewImgInput' && e.target.files && e.target.files[0]) {
+      var file = e.target.files[0];
+      if (file.size > 5 * 1024 * 1024) { toast(state.lang==='th'?'รูปต้องไม่เกิน 5MB':'Image must be under 5MB','error'); return; }
+      var reader = new FileReader();
+      reader.onload = function(){
+        state.newProductImg = reader.result;
+        var box = document.getElementById('ppNewImgBox');
+        if (box) box.innerHTML = '<img src="'+reader.result+'" alt="" style="width:100%;height:100%;object-fit:cover"/>';
+      };
+      reader.readAsDataURL(file);
+    }
+  });
+
+  // Save the brand-profile form into the active brand + persist to localStorage
+  function saveBrandProfile(){
+    var ab = BRANDS.filter(function(b){ return b.id===state.brand; })[0] || BRANDS[0];
+    if (!ab) return;
+    var nameEl = document.getElementById('ppBrandNameEdit');
+    var bizEl  = document.getElementById('ppBizType');
+    var descEl = document.getElementById('ppBrandDesc');
+    var name = nameEl ? nameEl.value.trim() : ab.name;
+    if (!name) { toast(state.lang==='th'?'กรอกชื่อแบรนด์ก่อน':'Enter a brand name first','error'); return; }
+    ab.name = name;
+    if (!ab.logo) ab.mark = name.replace(/\s+/g,'').slice(0,2).toUpperCase();
+    if (bizEl)  ab.bizType = bizEl.value;
+    // reflect the business type in the brand tile / header subtitle
+    var bt = BUSINESS_TYPES.filter(function(x){ return x.th===ab.bizType || x.en===ab.bizType; })[0];
+    if (bt) { ab.sub_th = bt.th; ab.sub_en = bt.en; }
+    if (descEl) ab.desc = descEl.value.trim();
+    ab.voice = Array.isArray(state.voice) ? state.voice.slice() : [];
+    ab.archetype = state.archetype || '';
+    state.brandDesc = ab.desc || '';
+    saveBrands();
+    toast(state.lang==='th'?'บันทึกโปรไฟล์แบรนด์แล้ว ✓':'Brand profile saved ✓','success');
+    render();
+  }
+  document.addEventListener('click', function(e){
+    if (e.target.closest('[data-savebrand]')) { e.preventDefault(); saveBrandProfile(); }
+  });
+
+  // Keep the brand-profile form in sync as the user types/selects, so a
+  // re-render (e.g. clicking "AI write") never wipes unsaved field values.
+  // In-memory only — localStorage is written by the Save button.
+  function liveBrand(){ return BRANDS.filter(function(b){ return b.id===state.brand; })[0]; }
+  document.addEventListener('input', function(e){
+    var t = e.target; if (!t || !t.id) return;
+    if (t.id==='ppTopicTheme') { state.topicTheme = t.value; return; }
+    if (t.id==='ppTopicCount') { state.topicCount = t.value; return; }
+    if (t.id==='ppGenTopic') { state.selectedTopic = t.value; return; }
+    if (t.id==='ppAvatarScript') { state.avatarScript = t.value; return; }
+    if (t.id==='ppTtvPrompt') { state.ttvPrompt = t.value; return; }
+    var ab = liveBrand(); if (!ab) return;
+    if (t.id==='ppBrandNameEdit') ab.name = t.value;
+    else if (t.id==='ppBrandDesc') { ab.desc = t.value; state.brandDesc = t.value; }
+  });
+  document.addEventListener('change', function(e){
+    var t = e.target;
+    if (t && t.id==='ppBizType') { var ab = liveBrand(); if (ab) ab.bizType = t.value; return; }
+    if (t && t.id==='ppGenTone') { state.genTone = t.value; return; }
+    if (t && t.id==='ppGenLang') { state.genLang = t.value; return; }
+    if (t && t.id==='ppGenLength') { state.genLength = t.value; return; }
+    if (t && t.id==='ppImageModel') { state.imageModel = t.value; return; }
+    if (t && t.id==='ppImageCount') { state.imageCount = parseInt(t.value,10)||4; return; }
+    if (t && t.id==='ppAvatarVoice') { state.avatarVoice = t.value; return; }
+    if (t && t.id==='ppTopicBrand') {
+      state.brand = t.value;
+      try { localStorage.setItem('postpost_active_brand', state.brand); } catch(_){}
+      var nb = BRANDS.filter(function(b){ return b.id===state.brand; })[0];
+      if (nb) {
+        state.brandDesc = nb.desc || '';
+        state.voice = Array.isArray(nb.voice) ? nb.voice.slice() : [];
+        state.archetype = nb.archetype || '';
+        TOPICS = (Array.isArray(nb.topics) && nb.topics.length) ? nb.topics : DEMO_TOPICS;
+        PRODUCTS = (Array.isArray(nb.products) && nb.products.length) ? nb.products : DEMO_PRODUCTS;
+        state.selectedProducts = PRODUCTS.map(function(p){ return p.id; });
+        state.shopStats = nb.shopStats || null;
+        state.shopUrl = nb.shopUrl || '';
+      }
+      render();
+    }
+  });
+
+  // Boot — restore the last-active brand + its last-scraped catalog (survives reloads)
+  (function(){
+    try {
+      var sb = localStorage.getItem('postpost_active_brand');
+      if (sb && BRANDS.some(function(b){ return b.id===sb; })) state.brand = sb;
+    } catch(e){}
+    try {
+      var _dr = localStorage.getItem('postpost_drafts');
+      if (_dr) state.drafts = JSON.parse(_dr) || [];
+    } catch(e){}
+    try {
+      // Custom presenters (AI-generated portraits + uploaded photos) survive across sessions
+      var _ca = localStorage.getItem('postpost_custom_avatars');
+      if (_ca) state.customAvatars = JSON.parse(_ca) || [];
+    } catch(e){}
+    var ab = BRANDS.filter(function(b){ return b.id===state.brand; })[0];
+    if (ab){
+      state.voice = Array.isArray(ab.voice) ? ab.voice.slice() : [];
+      state.brandDesc = ab.desc || '';
+      state.archetype = ab.archetype || '';
+      if (Array.isArray(ab.topics) && ab.topics.length) TOPICS = ab.topics;
+    }
+    if (ab && Array.isArray(ab.products) && ab.products.length){
+      PRODUCTS = ab.products;
+      state.selectedProducts = PRODUCTS.map(function(p){ return p.id; });
+      state.shopStats = ab.shopStats || null;
+      if (ab.shopUrl) state.shopUrl = ab.shopUrl;
+    }
+  })();
+
+  // Per-brand channel connection — Facebook / Instagram / TikTok
+  // OAuth popup launcher — opens the real provider login dialog in a child window,
+  // listens for postMessage from our /api/.../oauth/callback page, then saves the
+  // returned page/account into the active brand's channelInfo.
+  // Facebook OAuth grants both pages_* and instagram_* scopes, so connecting "facebook"
+  // auto-detects + connects the linked Instagram Business account too.
+  function connectChannelOAuth(key){
+    var L = function(th,en){ return state.lang==='th'?th:en; };
+    var ab = BRANDS.filter(function(b){ return b.id===state.brand; })[0];
+    if (!ab) return;
+    var providerLabel = ({ facebook:'Facebook', instagram:'Instagram', tiktok:'TikTok' })[key] || key;
+
+    // Open the OAuth start URL in a popup. The popup itself drives the user through
+    // login → consent → callback → postMessage back to this window.
+    var url;
+    if (key === 'tiktok') {
+      // state suffix .POPUP makes the backend callback postMessage instead of showing the success page
+      url = '/api/tiktok/oauth/start?state_suffix=POPUP&brand=' + encodeURIComponent(ab.id);
+    } else {
+      // facebook + instagram share the same FB OAuth (IG Business attaches to FB Page)
+      url = '/api/facebook/oauth/start?brand=' + encodeURIComponent(ab.id);
+    }
+    var w = 600, h = 720;
+    var left = (window.outerWidth - w) / 2 + (window.screenX || 0);
+    var top  = (window.outerHeight - h) / 2 + (window.screenY || 0);
+    var popup = window.open(url, 'pp-oauth-' + key, 'width='+w+',height='+h+',left='+Math.max(0,left)+',top='+Math.max(0,top)+',scrollbars=yes');
+    if (!popup) { toast(L('Browser block popup — เปิด popup ของเว็บนี้ก่อน','Popup blocked — allow popups'),'error'); return; }
+
+    toast(L('กำลังเปิดหน้าต่าง '+providerLabel+'…','Opening '+providerLabel+'…'));
+
+    function onMsg(ev){
+      // Same-origin check — Facebook/TikTok's redirect lands on our domain
+      if (ev.origin !== location.origin) return;
+      var d = ev.data || {};
+      if (d.type === 'pp-fb-oauth')       handleFbOAuth(d.payload, key, ab);
+      else if (d.type === 'pp-fb-oauth-error') { toast(L('เชื่อมต่อไม่สำเร็จ: ','Failed: ')+(d.message||''),'error'); }
+      else if (d.type === 'pp-tt-oauth')  handleTikTokOAuth(d.payload, ab);
+      else return;
+      window.removeEventListener('message', onMsg);
+    }
+    window.addEventListener('message', onMsg);
+
+    // Safety net — if the user just closes the popup without finishing, stop listening after 5 min
+    setTimeout(function(){ window.removeEventListener('message', onMsg); }, 5 * 60 * 1000);
+  }
+
+  // After Facebook OAuth — pick which FB Page to connect (auto-pick if only one)
+  function handleFbOAuth(payload, key, ab){
+    var L = function(th,en){ return state.lang==='th'?th:en; };
+    var pages = (payload && Array.isArray(payload.pages)) ? payload.pages : [];
+    if (!pages.length) { toast(L('ไม่พบเพจ Facebook ใน account นี้','No Facebook pages on this account'),'error'); return; }
+    var apply = function(page){
+      if (!ab.channelInfo || typeof ab.channelInfo!=='object') ab.channelInfo = {};
+      // Save the FB Page connection
+      if (ab.ch.indexOf('facebook') < 0) ab.ch.push('facebook');
+      ab.channelInfo.facebook = {
+        handle: page.name,
+        page_id: page.id,
+        page_token: page.access_token,
+        category: page.category || '',
+        fan_count: page.fan_count || 0,
+        long_lived_user_token: payload.userToken || '',
+        connected_at: Date.now(),
+      };
+      // Auto-connect linked Instagram Business account if Facebook returned one
+      var ig = page.instagram_business_account;
+      if (ig && ig.id) {
+        if (ab.ch.indexOf('instagram') < 0) ab.ch.push('instagram');
+        ab.channelInfo.instagram = {
+          handle: '@' + (ig.username || ''),
+          ig_business_id: ig.id,
+          via_page_id: page.id,
+          via_page_token: page.access_token,
+          connected_at: Date.now(),
+        };
+      }
+      saveBrands();
+      render();
+      var msg = ig && ig.id
+        ? L('เชื่อม Facebook + Instagram กับ '+ab.name+' แล้ว ✓','Connected Facebook + Instagram to '+ab.name+' ✓')
+        : L('เชื่อม Facebook กับ '+ab.name+' แล้ว ✓ (เพจนี้ไม่มี IG Business ผูกอยู่)','Connected Facebook to '+ab.name+' ✓ (no IG Business linked)');
+      toast(msg,'success');
+    };
+    if (pages.length === 1) { apply(pages[0]); return; }
+    // Multiple pages → show picker
+    var ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(16,8,30,.6);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:28px;font-family:Prompt,sans-serif';
+    var rows = pages.map(function(p, i){
+      var ig = p.instagram_business_account;
+      return '<button class="productCard" data-pickfbpage="'+i+'" style="display:flex;align-items:center;gap:12px;padding:12px;cursor:pointer;text-align:left;width:100%">'
+        + '<div style="width:42px;height:42px;border-radius:10px;background:#1877F21a;color:#1877F2;display:grid;place-items:center;flex-shrink:0;font-weight:900;font-size:18px">f</div>'
+        + '<div style="flex:1;min-width:0">'
+        +   '<div style="font-size:14px;font-weight:700;color:var(--purple)">'+escText(p.name||'')+'</div>'
+        +   '<div style="font-size:11px;color:var(--muted)">'+(p.category||'Page')+(p.fan_count?' · '+p.fan_count.toLocaleString()+' likes':'')+(ig?' · IG: @'+(ig.username||''):'')+'</div>'
+        + '</div>'
+        + '<span style="color:var(--blue);flex-shrink:0">'+I('chev_right',16,'#2563EB')+'</span>'
+        + '</button>';
+    }).join('');
+    ov.innerHTML = '<div style="background:#fff;border-radius:24px;max-width:520px;width:100%;max-height:88vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 70px rgba(38,20,71,.4)">'
+      + '<div style="padding:18px 22px;border-bottom:1px solid var(--line)"><div style="font-size:16px;font-weight:800;color:var(--purple)">'+L('เลือกเพจ Facebook','Pick a Facebook Page')+'</div><div class="micro" style="margin-top:2px">'+L('account ของคุณมี '+pages.length+' เพจ — เลือกอันที่จะผูกกับ '+ab.name,pages.length+' pages — pick one for '+ab.name)+'</div></div>'
+      + '<div style="overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:8px">'+rows+'</div></div>';
+    ov.addEventListener('click', function(e){
+      if (e.target===ov) { ov.remove(); return; }
+      var pick = e.target.closest('[data-pickfbpage]');
+      if (pick) {
+        var idx = parseInt(pick.getAttribute('data-pickfbpage'), 10) || 0;
+        apply(pages[idx]);
+        ov.remove();
+      }
+    });
+    document.body.appendChild(ov);
+  }
+
+  function handleTikTokOAuth(payload, ab){
+    var L = function(th,en){ return state.lang==='th'?th:en; };
+    if (!ab.channelInfo || typeof ab.channelInfo!=='object') ab.channelInfo = {};
+    if (ab.ch.indexOf('tiktok') < 0) ab.ch.push('tiktok');
+    ab.channelInfo.tiktok = {
+      handle: payload.open_id || '',
+      open_id: payload.open_id || '',
+      expires_at: payload.expires_at || null,
+      connected_at: Date.now(),
+    };
+    saveBrands();
+    render();
+    toast(L('เชื่อม TikTok กับ '+ab.name+' แล้ว ✓','Connected TikTok to '+ab.name+' ✓'),'success');
+  }
+  document.addEventListener('click', function(e){
+    var c = e.target.closest('[data-chconnect]');
+    if (c) { e.preventDefault(); connectChannelOAuth(c.dataset.chconnect); return; }
+    var d = e.target.closest('[data-chdisconnect]');
+    if (d) {
+      e.preventDefault();
+      var key = d.dataset.chdisconnect;
+      var ab = BRANDS.filter(function(b){ return b.id===state.brand; })[0];
+      if (!ab) return;
+      var i = ab.ch.indexOf(key);
+      if (i >= 0) ab.ch.splice(i,1);
+      if (ab.channelInfo) delete ab.channelInfo[key];
+      saveBrands();
+      render();
+      toast(state.lang==='th'?'ยกเลิกการเชื่อมแล้ว':'Disconnected','success');
+    }
+  });
+
+  // Filter / sort the product carousel
+  function filterModal(){
+    var L = function(th,en){ return state.lang==='th'?th:en; };
+    var ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(16,8,30,.6);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:28px;font-family:Prompt,sans-serif';
+    function body(){
+      var sorts = [
+        ['', L('ค่าเริ่มต้น (ตามที่ดึงมา)','Default (as scraped)')],
+        ['sold', L('ขายดีที่สุด','Best selling')],
+        ['price_asc', L('ราคา น้อย → มาก','Price: low → high')],
+        ['price_desc', L('ราคา มาก → น้อย','Price: high → low')],
+        ['rating', L('เรทติ้งสูงสุด','Top rated')]
+      ];
+      var rows = sorts.map(function(s){
+        var on = (state.productSort||'') === s[0];
+        return '<button data-sortby="'+s[0]+'" style="width:100%;text-align:left;display:flex;align-items:center;gap:10px;padding:11px 13px;border-radius:11px;border:1px solid '+(on?'var(--orange)':'var(--line)')+';background:'+(on?'var(--orange-soft)':'#fff')+';cursor:pointer;margin-bottom:7px;font-size:13px;font-weight:'+(on?'700':'500')+';color:var(--ink)">'
+          + '<span style="width:18px;height:18px;border-radius:99px;border:'+(on?'6px solid var(--orange)':'2px solid var(--line3)')+';box-sizing:border-box;flex-shrink:0"></span>'
+          + s[1] + '</button>';
+      }).join('');
+      var stockOn = !!state.productInStockOnly;
+      var stockRow = '<button data-instocktoggle="1" style="width:100%;display:flex;align-items:center;gap:10px;padding:11px 13px;border-radius:11px;border:1px solid '+(stockOn?'var(--orange)':'var(--line)')+';background:'+(stockOn?'var(--orange-soft)':'#fff')+';cursor:pointer;font-size:13px;font-weight:'+(stockOn?'700':'500')+';color:var(--ink)">'
+        + '<span style="width:18px;height:18px;border-radius:6px;box-sizing:border-box;border:2px solid '+(stockOn?'var(--orange)':'var(--line3)')+';background:'+(stockOn?'var(--orange)':'transparent')+';display:grid;place-items:center;color:#fff;font-size:11px;font-weight:900;flex-shrink:0">'+(stockOn?'✓':'')+'</span>'
+        + L('แสดงเฉพาะสินค้าที่มีสต็อก','In-stock products only')+'</button>';
+      return '<div style="font-size:11px;font-weight:800;color:var(--muted);margin-bottom:8px;letter-spacing:.04em">'+L('เรียงตาม','SORT BY')+'</div>'
+        + rows
+        + '<div style="font-size:11px;font-weight:800;color:var(--muted);margin:14px 0 8px;letter-spacing:.04em">'+L('ตัวกรอง','FILTER')+'</div>'
+        + stockRow;
+    }
+    ov.innerHTML = '<div style="background:#fff;border-radius:22px;max-width:380px;width:100%;box-shadow:0 24px 70px rgba(38,20,71,.4);overflow:hidden">'
+      + '<div style="padding:18px 22px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px">'
+      +   '<div style="width:34px;height:34px;border-radius:9px;background:var(--orange-soft);display:grid;place-items:center">'+I('filter',16,'#9A3412')+'</div>'
+      +   '<div style="flex:1;font-size:15px;font-weight:800;color:var(--purple)">'+L('กรอง / เรียงสินค้า','Filter / sort products')+'</div>'
+      +   '<button class="btn outline sm" data-filterclose="1">'+L('เสร็จ','Done')+'</button></div>'
+      + '<div style="padding:18px 20px" id="ppFilterBody">'+body()+'</div></div>';
+    function refresh(){ render(); var b=ov.querySelector('#ppFilterBody'); if(b) b.innerHTML = body(); }
+    ov.addEventListener('click', function(e){
+      if (e.target===ov || e.target.closest('[data-filterclose]')) { ov.remove(); return; }
+      var sb = e.target.closest('[data-sortby]');
+      if (sb) { state.productSort = sb.dataset.sortby; refresh(); return; }
+      if (e.target.closest('[data-instocktoggle]')) { state.productInStockOnly = !state.productInStockOnly; refresh(); return; }
+    });
+    document.addEventListener('keydown', function esc(e){ if (e.key==='Escape'){ ov.remove(); document.removeEventListener('keydown', esc); } });
+    document.body.appendChild(ov);
+  }
+  document.addEventListener('click', function(e){
+    if (e.target.closest('[data-filter]')) { e.preventDefault(); filterModal(); }
+  });
+
+  // Topic Bank — AI generates a month of topics from the brand profile
+  async function genTopics(){
+    if (state.topicGenLoading) return;
+    var ab = BRANDS.filter(function(b){ return b.id===state.brand; })[0];
+    if (!ab) return;
+    var voiceLabels = (state.voice||[]).map(function(id){
+      var v = (typeof VOICES!=='undefined' ? VOICES : []).filter(function(x){ return x.id===id; })[0];
+      return v ? (state.lang==='th'?v.th:v.en) : id;
+    });
+    var arch = (typeof ARCHETYPES!=='undefined' ? ARCHETYPES : []).filter(function(a){ return a.id===state.archetype; })[0];
+    var archLabel = arch ? (state.lang==='th'?arch.th:arch.en) : '';
+    var sel = state.selectedProducts || [];
+    var prods = PRODUCTS.filter(function(p){ return sel.indexOf(p.id)>=0; })
+      .map(function(p){ return { name: p.name_th||p.name_en||p.name||'', price: p.price||0 }; });
+    var goalMap = { sales:'เพิ่มยอดขาย', awareness:'สร้าง Awareness', educate:'ให้ความรู้', community:'สร้าง Community', feedback:'รับ Feedback' };
+    var goals = (state.topicGoals||['sales','awareness']).map(function(k){ return goalMap[k]||k; });
+    var theme = (state.topicTheme||'').trim();
+    var count = parseInt(state.topicCount,10) || 30;
+    state.topicGenLoading = true; render();
+    toast(state.lang==='th'?'AI กำลังวางแผนหัวข้อจากโปรไฟล์แบรนด์…':'AI is planning topics…');
+    try {
+      var j = await api('/api/ai/topics-brand', { method:'POST', body:{
+        brandName: ab.name, businessType: ab.bizType||'', brandDesc: ab.desc||state.brandDesc||'',
+        voices: voiceLabels, archetype: archLabel, products: prods,
+        theme: theme, goals: goals, count: count
+      }});
+      if (j && j.topics && j.topics.length) {
+        TOPICS = j.topics;
+        state.topicFilter = 'all';
+        var _tb = BRANDS.filter(function(b){ return b.id===state.brand; })[0];
+        if (_tb) { _tb.topics = TOPICS; saveBrands(); }
+        toast((state.lang==='th'?'สร้าง ':'Generated ')+j.topics.length+(state.lang==='th'?' หัวข้อใหม่แล้ว':' topics'),'success');
+      } else {
+        toast(state.lang==='th'?'สร้างหัวข้อไม่สำเร็จ — ลองอีกครั้ง':'No topics generated — try again','error');
+      }
+    } catch(e){
+      toast((state.lang==='th'?'สร้างหัวข้อไม่สำเร็จ: ':'Failed: ')+(e.message||''),'error');
+    } finally {
+      state.topicGenLoading = false; render();
+    }
+  }
+  document.addEventListener('click', function(e){
+    var ut = e.target.closest('[data-usetopic]');
+    if (ut) {
+      e.preventDefault();
+      var tp = TOPICS[parseInt(ut.dataset.usetopic,10)];
+      if (tp) state.selectedTopic = (state.lang==='th' ? tp.th : tp.en);
+      state.page = 'caption';
+      render();
+      toast(state.lang==='th'?'นำหัวข้อมาที่หน้าสร้างคอนเทนต์แล้ว':'Topic loaded into the content page','success');
+      return;
+    }
+    if (e.target.closest('[data-gentopics]')) { e.preventDefault(); genTopics(); return; }
+    var gp = e.target.closest('[data-topicgoal]');
+    if (gp) {
+      e.preventDefault();
+      if (!Array.isArray(state.topicGoals)) state.topicGoals = ['sales','awareness'];
+      var k = gp.dataset.topicgoal, gi = state.topicGoals.indexOf(k);
+      if (gi >= 0) state.topicGoals.splice(gi,1); else state.topicGoals.push(k);
+      render();
+    }
+  });
+
+  // Caption page — AI generates hook / caption / hashtags / article for the topic
+  async function genAll(){
+    if (state.genLoading) return;
+    var ab = BRANDS.filter(function(b){ return b.id===state.brand; })[0];
+    if (!ab) return;
+    var topicEl = document.getElementById('ppGenTopic');
+    var topic = ((topicEl ? topicEl.value : (state.selectedTopic||'')) || '').trim();
+    if (!topic) { toast(state.lang==='th'?'ใส่หัวข้อที่จะโพสต์ก่อน':'Enter a topic first','error'); return; }
+    var voiceLabels = (state.voice||[]).map(function(id){
+      var v = (typeof VOICES!=='undefined'?VOICES:[]).filter(function(x){ return x.id===id; })[0];
+      return v ? (state.lang==='th'?v.th:v.en) : id;
+    });
+    var arch = (typeof ARCHETYPES!=='undefined'?ARCHETYPES:[]).filter(function(a){ return a.id===state.archetype; })[0];
+    var sel = state.selectedProducts || [];
+    var prods = PRODUCTS.filter(function(p){ return sel.indexOf(p.id)>=0; })
+      .map(function(p){ return { name:p.name_th||p.name_en||p.name||'', price:p.price||0 }; });
+    var toneV = (typeof VOICES!=='undefined'?VOICES:[]).filter(function(x){ return x.id===state.genTone; })[0];
+    var toneLabel = toneV ? (state.lang==='th'?toneV.th:toneV.en) : (voiceLabels.join(', ') || '');
+    var lenMap = { short:'สั้น ~80 คำ', medium:'ปานกลาง ~150 คำ', long:'ยาว ~250 คำ' };
+    var lenLabel = lenMap[state.genLength||'medium'] || lenMap.medium;
+    state.genLoading = true; render();
+    toast(state.lang==='th'?'AI กำลังสร้าง Hook / Caption / Hashtag…':'AI is generating content…');
+    try {
+      var j = await api('/api/ai/content-brand', { method:'POST', body:{
+        brandName: ab.name, businessType: ab.bizType||'', brandDesc: ab.desc||state.brandDesc||'',
+        voices: voiceLabels, archetype: arch?(state.lang==='th'?arch.th:arch.en):'',
+        products: prods, topic: topic, tone: toneLabel, length: lenLabel, lang: state.genLang||'th',
+        imageCount: state.imageCount || 4
+      }});
+      if (j && (j.hooks || j.caption)) {
+        state.genHooks = j.hooks || [];
+        state.genCaption = j.caption || '';
+        state.genHashtags = j.hashtags || [];
+        state.genArticle = j.article || '';
+        state.genImagePrompts = j.imagePrompts || [];
+        state.selectedHook = 1;
+        if (state.page === 'creative' && state.genImagePrompts.length) {
+          state.genImages = [];
+          state.previewIndex = 0;
+          toast(state.lang==='th'?'เขียนคอนเทนต์เสร็จ — AI กำลังสร้างรูป…':'Text done — generating images…','success');
+          render();
+          await genImagesForSlides();
+          toast(state.lang==='th'?'สร้าง Hook/Caption/Hashtag + รูป เสร็จแล้ว ✓':'Content + images done ✓','success');
+        } else {
+          toast(state.lang==='th'?'สร้างคอนเทนต์เสร็จแล้ว ✓':'Content generated ✓','success');
+        }
+      } else {
+        toast(state.lang==='th'?'สร้างไม่สำเร็จ — ลองอีกครั้ง':'Generation failed — try again','error');
+      }
+    } catch(e){
+      toast((state.lang==='th'?'สร้างไม่สำเร็จ: ':'Failed: ')+(e.message||''),'error');
+    } finally {
+      state.genLoading = false; render();
+    }
+  }
+  // Sequential image generation — one /gen-image call per slide prompt
+  async function genImagesForSlides(){
+    var prompts = state.genImagePrompts || [];
+    var count = Math.min(state.imageCount || 4, prompts.length);
+    var provider = state.imageModel || 'gemini';
+    state.genImages = [];
+    state.previewIndex = 0;
+    for (var i = 0; i < count; i++) {
+      toast(state.lang==='th' ? ('กำลังสร้างรูป '+(i+1)+'/'+count+'…') : ('Generating image '+(i+1)+'/'+count+'…'));
+      try {
+        var r = await api('/api/ai/gen-image', { method:'POST', body:{ prompt: prompts[i], provider: provider } });
+        if (r && r.image_base64) state.genImages.push('data:image/png;base64,' + r.image_base64);
+        else if (r && r.image_url) state.genImages.push(r.image_url);
+        else state.genImages.push(null);
+      } catch(e){
+        state.genImages.push(null);
+        toast((state.lang==='th'?'รูปที่ ':'Image ')+(i+1)+(state.lang==='th'?' ไม่สำเร็จ: ':' failed: ')+(e.message||''),'error');
+      }
+      render();
+    }
+  }
+  document.addEventListener('click', function(e){
+    if (e.target.closest('[data-genall]')) { e.preventDefault(); genAll(); }
+  });
+
+  // Talking Avatar — AI script generator (Phase 1: script only, no TTS/lipsync yet)
+  async function genAvatarScript(){
+    if (state.avatarScriptLoading) return;
+    var ab = BRANDS.filter(function(b){ return b.id===state.brand; })[0];
+    if (!ab) return;
+    var topic = (state.selectedTopic||'').trim();
+    if (!topic) {
+      topic = (window.prompt(state.lang==='th'?'อยากให้ผู้บรรยายพูดเรื่องอะไร?':'What should the presenter talk about?')||'').trim();
+      if (!topic) { toast(state.lang==='th'?'ใส่หัวข้อก่อน':'Topic required','error'); return; }
+      state.selectedTopic = topic;
+    }
+    var voiceLabels = (state.voice||[]).map(function(id){
+      var v = (typeof VOICES!=='undefined'?VOICES:[]).filter(function(x){ return x.id===id; })[0];
+      return v ? (state.lang==='th'?v.th:v.en) : id;
+    });
+    var arch = (typeof ARCHETYPES!=='undefined'?ARCHETYPES:[]).filter(function(a){ return a.id===state.archetype; })[0];
+    // Look up the picked TTS voice so we can pass its gender + persona to the AI —
+    // without this the script comes out with the wrong ending particles (ค่ะ vs ครับ)
+    // and ignores the persona ("Niwat — professional · business · finance" etc.)
+    var picked = (state.avatarVoices||[]).filter(function(x){ return x.id===(state.avatarVoice||'premwadee'); })[0];
+    var voiceGender = picked ? (picked.g==='ชาย' ? 'male' : 'female') : 'female';
+    var voicePersona = picked ? (picked.name + ' — ' + picked.tone + ' (' + picked.desc + ')') : '';
+    state.avatarScriptLoading = true; render();
+    toast(state.lang==='th'?'AI กำลังเขียนสคริปต์…':'AI is writing the script…');
+    try {
+      var j = await api('/api/ai/avatar-script-brand', { method:'POST', body:{
+        brandName: ab.name, businessType: ab.bizType||'', brandDesc: ab.desc||state.brandDesc||'',
+        voices: voiceLabels, archetype: arch?(state.lang==='th'?arch.th:arch.en):'',
+        topic: topic, duration_sec: 30,
+        voice_gender: voiceGender,
+        voice_persona: voicePersona,
+      }});
+      if (j && j.script) {
+        state.avatarScript = j.script;
+        toast(state.lang==='th'?('สคริปต์พร้อมแล้ว — '+(j.char_count||j.script.length)+' ตัวอักษร'):('Script ready — '+(j.char_count||j.script.length)+' chars'),'success');
+      } else {
+        toast(state.lang==='th'?'เขียนสคริปต์ไม่สำเร็จ — ลองอีกครั้ง':'Script generation failed','error');
+      }
+    } catch(e){
+      toast((state.lang==='th'?'เขียนสคริปต์ไม่สำเร็จ: ':'Failed: ')+(e.message||''),'error');
+    } finally {
+      state.avatarScriptLoading = false; render();
+    }
+  }
+  document.addEventListener('click', function(e){
+    if (e.target.closest('[data-avatarscript]')) { e.preventDefault(); genAvatarScript(); }
+  });
+
+  // Create a new presenter portrait with AI (Gemini image gen)
+  // Compress an avatar image down to a smaller JPEG so a handful fit in localStorage's 5 MB quota.
+  // 480 px is plenty for the small tiles + future TTS preview frame.
+  async function compressAvatarImage(src){
+    try { return await compressImageDataUrl(src, 480, 0.82); }
+    catch(_) { return src; }
+  }
+  function saveCustomAvatars(){
+    try { localStorage.setItem('postpost_custom_avatars', JSON.stringify(state.customAvatars||[])); }
+    catch(e){
+      // If quota was hit, drop the oldest and try again. Compression usually keeps us well under,
+      // but a user with many uploads might still fill up — surface a friendly error.
+      try {
+        var arr = (state.customAvatars||[]).slice();
+        if (arr.length > 1) { arr.shift(); state.customAvatars = arr; localStorage.setItem('postpost_custom_avatars', JSON.stringify(arr)); }
+      } catch(_){
+        toast(state.lang==='th'?'พื้นที่เก็บใกล้เต็ม — บันทึกผู้บรรยายไม่สำเร็จ':'Storage full — could not save presenter','error');
+      }
+    }
+  }
+  async function addCustomAvatar(av){
+    av.image = await compressAvatarImage(av.image);
+    state.customAvatars = (state.customAvatars||[]).concat([av]);
+    state.avatar = av.id;
+    saveCustomAvatars();
+  }
+  function deleteCustomAvatar(id){
+    if (!confirm(state.lang==='th'?'ลบผู้บรรยายนี้?':'Delete this presenter?')) return;
+    state.customAvatars = (state.customAvatars||[]).filter(function(x){ return x.id!==id; });
+    // If the deleted avatar was the active one, fall back to a built-in
+    if (state.avatar===id) state.avatar = (typeof AVATARS!=='undefined' && AVATARS[0]) ? AVATARS[0].id : '';
+    saveCustomAvatars();
+    render();
+    toast(state.lang==='th'?'ลบผู้บรรยายแล้ว':'Presenter deleted','success');
+  }
+
+  // 🔊 Synthesize the avatar script with Azure TTS — picks the right Thai voice from the
+  // dropdown above (Niwat/Premwadee/etc) and the speed/pitch pills if the user touched them.
+  async function genTts(){
+    if (state.ttsLoading) return;
+    var scriptEl = document.getElementById('ppAvatarScript');
+    var text = ((scriptEl ? scriptEl.value : (state.avatarScript||'')) || '').trim();
+    if (!text) { toast(state.lang==='th'?'ใส่สคริปต์ก่อน':'Add a script first','error'); return; }
+    var picked = (state.avatarVoices||[]).filter(function(x){ return x.id===(state.avatarVoice||'premwadee'); })[0];
+    var voice = picked && picked.az ? picked.az : 'th-TH-PremwadeeNeural';
+    state.ttsLoading = true; render();
+    toast(state.lang==='th'?'Azure กำลังสังเคราะห์เสียง…':'Azure synthesizing…');
+    try {
+      var j = await api('/api/ai/tts', { method:'POST', body:{ text: text, voice: voice } });
+      if (!j || !j.audio_base64) throw new Error((j&&j.error) || 'no audio returned');
+      state.ttsAudio = 'data:'+(j.mime||'audio/mp3')+';base64,'+j.audio_base64;
+      toast(state.lang==='th'?('เสียงพร้อม — ~'+(j.duration_estimate_sec||0)+' วินาที ✓'):('Audio ready ✓'),'success');
+    } catch(e){
+      var msg = (e&&e.message)||'';
+      // Azure-specific hints surfaced through to the user
+      if (/AZURE_SPEECH_KEY/i.test(msg)) {
+        toast(state.lang==='th'?'ยังไม่ได้ตั้ง AZURE_SPEECH_KEY — ไปที่ Vercel → Settings → Environment Variables':'Set AZURE_SPEECH_KEY in Vercel env','error');
+      } else {
+        toast((state.lang==='th'?'สังเคราะห์เสียงไม่สำเร็จ: ':'Failed: ')+msg, 'error');
+      }
+    } finally {
+      state.ttsLoading = false; render();
+    }
+  }
+  document.addEventListener('click', function(e){
+    if (e.target.closest('[data-tts]')) { e.preventDefault(); genTts(); }
+  });
+
+  async function createAvatarWithAI(){
+    if (state.avatarGenLoading) return;
+    var name = (window.prompt(state.lang==='th'?'ชื่อผู้บรรยาย (เช่น คุณบีม)':'Presenter name (e.g. Beam)')||'').trim();
+    if (!name) return;
+    var desc = (window.prompt(state.lang==='th'?'บรรยายลักษณะ (เช่น "หญิงไทย 30 ปี ผู้เชี่ยวชาญสกินแคร์")':'Describe the look (e.g. "Thai woman, 30, skincare expert")')||'').trim();
+    if (!desc) return;
+    state.avatarGenLoading = true; render();
+    toast(state.lang==='th'?'AI กำลังสร้างรูปผู้บรรยาย… (~15 วิ)':'AI is generating presenter portrait…');
+    try {
+      var imagePrompt = 'Vertical 3:4 portrait photo of '+desc+', friendly expression, frontal face looking at camera, professional studio lighting, clean neutral background, photorealistic, high detail';
+      var r = await api('/api/ai/gen-image', { method:'POST', body:{ prompt:imagePrompt, provider:'gemini' } });
+      if (!r || (!r.image_base64 && !r.image_url)) throw new Error((r&&r.error) || 'no image returned');
+      var imgSrc = r.image_base64 ? ('data:image/png;base64,'+r.image_base64) : r.image_url;
+      var avatar = {
+        id: 'custom_' + Date.now(),
+        name_th: name, name_en: name,
+        sub_th: desc.length>30 ? desc.slice(0,30)+'…' : desc,
+        sub_en: desc.length>30 ? desc.slice(0,30)+'…' : desc,
+        initial_th: name.slice(0,1), initial_en: name.slice(0,1),
+        image: imgSrc, isCustom: true,
+      };
+      await addCustomAvatar(avatar);
+      toast(state.lang==='th'?('สร้างผู้บรรยาย "'+name+'" แล้ว ✓ (เก็บไว้ใช้ครั้งหน้าแล้ว)'):('Created "'+name+'" ✓ (saved for next time)'),'success');
+    } catch(e){
+      toast((state.lang==='th'?'สร้างไม่สำเร็จ: ':'Failed: ')+(e.message||''),'error');
+    } finally {
+      state.avatarGenLoading = false; render();
+    }
+  }
+  document.addEventListener('click', function(e){
+    if (e.target.closest('[data-newavatar]')) { e.preventDefault(); createAvatarWithAI(); }
+  });
+
+  // AI-generated Veo prompt from brand + topic + optional reference product
+  async function genVideoPrompt(){
+    if (state.ttvPromptLoading) return;
+    var ab = BRANDS.filter(function(b){ return b.id===state.brand; })[0];
+    if (!ab) return;
+    var topic = (state.selectedTopic||'').trim();
+    if (!topic) {
+      topic = (window.prompt(state.lang==='th'?'บอกแนวคิดวิดีโอ (เช่น "Slow-motion กินคอลลาเจน")':'Describe the video idea')||'').trim();
+      if (!topic) { toast(state.lang==='th'?'ใส่หัวข้อก่อน':'Topic required','error'); return; }
+    }
+    state.ttvPromptLoading = true; render();
+    toast(state.lang==='th'?'AI กำลังเขียน prompt วิดีโอ…':'AI is writing the prompt…');
+    // If we have a reference product, pull its description so the AI knows what we're selling
+    var prodDesc = '';
+    try {
+      if (state.ttvReferenceProductName) {
+        var hit = (PRODUCTS||[]).filter(function(p){ return (p.name_th||p.name_en)===state.ttvReferenceProductName; })[0];
+        if (hit) prodDesc = String(hit.desc_th || hit.desc_en || hit.description || '').slice(0,400);
+      }
+    } catch(_){}
+    // Map the picked style tile to a short style ID the backend understands
+    var styleIds = ['creator','cinematic','lifestyle','product','anime'];
+    var styleId = styleIds[state.ttvStyle||0] || 'creator';
+    try {
+      var j = await api('/api/ai/video-prompt', { method:'POST', body:{
+        brandName: ab.name, businessType: ab.bizType||'', brandDesc: ab.desc||state.brandDesc||'',
+        topic: topic,
+        productName: state.ttvReferenceProductName||'',
+        productDesc: prodDesc,
+        hasReferenceImage: !!state.ttvReference,
+        style: styleId,                                    // creator | cinematic | lifestyle | product | anime
+        duration_sec: parseInt((state.ttvDuration||'8s'),10) || 8,
+      }});
+      if (j && j.prompt) {
+        state.ttvPrompt = j.prompt;
+        toast(state.lang==='th'?'Prompt พร้อมแล้ว ✓':'Prompt ready ✓','success');
+      } else {
+        toast(state.lang==='th'?'สร้าง prompt ไม่สำเร็จ':'Failed','error');
+      }
+    } catch(e){
+      toast((state.lang==='th'?'ล้มเหลว: ':'Failed: ')+(e.message||''),'error');
+    } finally {
+      state.ttvPromptLoading = false; render();
+    }
+  }
+  // Pick a reference image from the active brand's products
+  function pickRefProductModal(){
+    var L = function(th,en){ return state.lang==='th'?th:en; };
+    var ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(16,8,30,.6);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:28px;font-family:Prompt,sans-serif';
+    var grid = (PRODUCTS||[]).map(function(p){
+      var img = p.thumbnail || (p.images && p.images[0]) || '';
+      return '<button class="productCard" data-refpick="'+p.id+'" style="padding:8px;cursor:pointer;text-align:left">'
+        + (img
+          ? '<div style="aspect-ratio:1;border-radius:8px;overflow:hidden;background:#f3f0ea"><img src="'+img+'" alt="" style="width:100%;height:100%;object-fit:cover"/></div>'
+          : '<div style="aspect-ratio:1;border-radius:8px;background:linear-gradient(135deg,#FFE4E6,#FECACA);display:grid;place-items:center;color:#9A3412">'+I('image',24,'#9A3412')+'</div>')
+        + '<div style="font-size:11px;color:var(--purple);font-weight:700;margin-top:6px;line-height:1.3;height:30px;overflow:hidden">'+escText(((p.name_th||p.name_en||'')+'').slice(0,40))+'</div>'
+        + '</button>';
+    }).join('');
+    ov.innerHTML = '<div style="background:#fff;border-radius:24px;max-width:720px;width:100%;max-height:88vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 70px rgba(38,20,71,.4)">'
+      + '<div style="padding:18px 22px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px">'
+      +   '<div style="width:36px;height:36px;border-radius:10px;background:var(--orange-soft);color:var(--orange3);display:grid;place-items:center">'+I('package',16,'#9A3412')+'</div>'
+      +   '<div style="flex:1;font-size:16px;font-weight:800;color:var(--purple)">'+L('เลือกรูปจากสินค้า','Pick from products')+'</div>'
+      +   '<button class="btn outline sm" data-refclose="1">'+L('ปิด','Close')+'</button></div>'
+      + '<div style="overflow-y:auto;padding:18px">'
+      +   (grid ? '<div class="grid g4" style="gap:10px">'+grid+'</div>'
+                : '<div style="padding:30px;text-align:center;color:var(--muted)">'+L('แบรนด์นี้ยังไม่มีสินค้า — ดึงข้อมูลจาก Shopee ที่หน้า Profile ก่อน','No products yet — sync from Shopee on the Profile page first')+'</div>')
+      + '</div></div>';
+    ov.addEventListener('click', function(e){
+      if (e.target===ov || e.target.closest('[data-refclose]')) { ov.remove(); return; }
+      var pk = e.target.closest('[data-refpick]');
+      if (pk) {
+        var p = PRODUCTS.filter(function(x){ return x.id===pk.dataset.refpick; })[0];
+        if (p) {
+          state.ttvReference = p.thumbnail || (p.images&&p.images[0]) || '';
+          state.ttvReferenceProductName = p.name_th || p.name_en || '';
+        }
+        ov.remove();
+        render();
+        toast(L('ตั้งรูปอ้างอิงแล้ว','Reference set'),'success');
+      }
+    });
+    document.addEventListener('keydown', function esc(e){ if (e.key==='Escape'){ ov.remove(); document.removeEventListener('keydown', esc); } });
+    document.body.appendChild(ov);
+  }
+
+  // Open a modal listing existing drafts the user can schedule onto the currently-selected calendar day.
+  // If they have no drafts yet, the modal nudges them to the Creative page.
+  function openDraftPickerForDay(day){
+    var L = function(th,en){ return state.lang==='th'?th:en; };
+    day = parseInt(day,10) || (state.calDay||1);
+    var unscheduled = (state.drafts||[]).filter(function(d){ return !d.scheduledDay; });
+    var scheduled   = (state.drafts||[]).filter(function(d){ return d.scheduledDay; });
+    var ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(16,8,30,.6);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:28px;font-family:Prompt,sans-serif';
+    function row(d){
+      var thumb = d.thumb
+        ? '<img src="'+d.thumb+'" alt="" style="width:56px;height:56px;border-radius:10px;object-fit:cover;flex-shrink:0"/>'
+        : '<div style="width:56px;height:56px;border-radius:10px;background:linear-gradient(135deg,#FFE4E6,#FED7AA);display:grid;place-items:center;flex-shrink:0;color:#9A3412">'+I(d.kind==='video'?'video':'type',20,'#9A3412')+'</div>';
+      var topic = escText((d.topic||'(ไม่มีหัวข้อ)').slice(0,80));
+      var meta = d.kind==='video'
+        ? (L('วิดีโอ Veo','Veo video') + (d.aspect?' · '+d.aspect:'') + (d.duration?' · '+d.duration:''))
+        : ((d.imageCount||(Array.isArray(d.imageIds)?d.imageIds.filter(Boolean).length:0)) + ' ' + L('รูป','imgs'));
+      var schPill = d.scheduledDay
+        ? '<span class="pill blue" style="font-size:10px;height:18px;flex-shrink:0">'+L('ตั้ง','D')+ d.scheduledDay+'</span>'
+        : '';
+      return '<button class="productCard" data-pickdraft="'+d.id+'" style="display:flex;gap:12px;align-items:center;padding:10px 12px;cursor:pointer;text-align:left;width:100%">'
+        + thumb
+        + '<div style="flex:1;min-width:0">'
+        +   '<div style="font-size:13px;font-weight:700;color:var(--purple);line-height:1.35;margin-bottom:3px">'+topic+'</div>'
+        +   '<div style="font-size:11px;color:var(--muted)">'+meta+'</div>'
+        + '</div>'
+        + schPill
+        + '<span style="color:var(--blue);flex-shrink:0">'+I('chev_right',16,'#2563EB')+'</span>'
+        + '</button>';
+    }
+    var unschedHtml = unscheduled.length
+      ? '<div style="display:flex;flex-direction:column;gap:8px">' + unscheduled.map(row).join('') + '</div>'
+      : '<div style="padding:18px;text-align:center;color:var(--muted);background:var(--cream2);border-radius:12px;font-size:13px">' + L('ไม่มี Draft ที่ยังไม่ได้ตั้งเวลา','No unscheduled drafts') + '</div>';
+    var schedHtml = scheduled.length
+      ? '<div style="margin-top:14px"><div class="micro" style="font-weight:700;margin-bottom:6px">'+L('ที่ตั้งไว้แล้ว (กดเพื่อย้ายวัน)','Already scheduled (tap to move)')+'</div><div style="display:flex;flex-direction:column;gap:6px">' + scheduled.map(row).join('') + '</div></div>'
+      : '';
+    ov.innerHTML = '<div style="background:#fff;border-radius:24px;max-width:560px;width:100%;max-height:88vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 70px rgba(38,20,71,.4)">'
+      + '<div style="padding:18px 22px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px">'
+      +   '<div style="width:36px;height:36px;border-radius:10px;background:var(--orange-soft);color:var(--orange3);display:grid;place-items:center">'+I('calendar',16,'#9A3412')+'</div>'
+      +   '<div style="flex:1"><div style="font-size:16px;font-weight:800;color:var(--purple)">'+L('เพิ่มโพสต์ลงวันที่ ','Add post to day ')+day+'</div><div class="micro">'+L('เลือก Draft ที่จะตั้งเวลาวันนี้','Pick a draft to schedule on this day')+'</div></div>'
+      +   '<button class="btn outline sm" data-pickdraftclose="1">'+L('ปิด','Close')+'</button></div>'
+      + '<div style="overflow-y:auto;padding:18px">'
+      +   ((state.drafts||[]).length === 0
+          ? '<div style="padding:32px 20px;text-align:center;background:var(--cream2);border-radius:14px;border:1px dashed var(--line3)">'+I('library',32,'#A39BAE')+'<div style="font-size:13.5px;font-weight:700;color:var(--ink);margin:10px 0 4px">'+L('ยังไม่มี Draft','No drafts yet')+'</div><div class="micro" style="margin-bottom:14px">'+L('ไปสร้างที่หน้า "สร้าง Creative" ก่อน','Create one on the Creative page first')+'</div><button class="btn primary sm" data-pickdraftgo="creative">'+I('plus',13)+' '+L('ไปสร้างคอนเทนต์','Create content')+'</button></div>'
+          : unschedHtml + schedHtml)
+      + '</div></div>';
+    ov.addEventListener('click', function(e){
+      if (e.target===ov || e.target.closest('[data-pickdraftclose]')) { ov.remove(); return; }
+      var go = e.target.closest('[data-pickdraftgo]');
+      if (go) { ov.remove(); state.page = go.getAttribute('data-pickdraftgo'); render(); return; }
+      var pk = e.target.closest('[data-pickdraft]');
+      if (pk) {
+        var id = pk.getAttribute('data-pickdraft');
+        scheduleDraft(id, day);                              // reuses the existing path (saves localStorage + render + toast)
+        ov.remove();
+      }
+    });
+    document.addEventListener('keydown', function esc(e){ if (e.key==='Escape'){ ov.remove(); document.removeEventListener('keydown', esc); } });
+    document.body.appendChild(ov);
+  }
+
+  // Crop a base64/URL image to a target aspect (cover) and return a PNG dataURL
+  function renderImageAtAspect(src, aspect, maxW) {
+    return new Promise(function(resolve, reject){
+      var sizes = { '1:1':[1080,1080], '4:5':[1080,1350], '9:16':[1080,1920] };
+      var dims = sizes[aspect] || sizes['4:5'];
+      var W = maxW || dims[0], H = Math.round(W * dims[1] / dims[0]);
+      var img = new Image(); img.crossOrigin = 'anonymous';
+      img.onload = function(){
+        var sw = img.naturalWidth, sh = img.naturalHeight;
+        var srcRatio = sw / sh, dstRatio = W / H;
+        var cropW, cropH, sx, sy;
+        if (srcRatio > dstRatio) { cropH = sh; cropW = sh * dstRatio; sx = (sw - cropW) / 2; sy = 0; }
+        else { cropW = sw; cropH = sw / dstRatio; sx = 0; sy = (sh - cropH) / 2; }
+        var c = document.createElement('canvas'); c.width = W; c.height = H;
+        var ctx = c.getContext('2d');
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(img, sx, sy, cropW, cropH, 0, 0, W, H);
+        try { resolve(c.toDataURL('image/png')); }
+        catch(err){ reject(err); }
+      };
+      img.onerror = function(){ reject(new Error('image load failed')); };
+      img.src = src;
+    });
+  }
+  function downloadDataUrl(dataUrl, filename){
+    var a = document.createElement('a');
+    a.href = dataUrl; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+  }
+  async function downloadCurrentPng(){
+    var imgs = (state.genImages||[]).filter(Boolean);
+    if (!imgs.length) { toast(state.lang==='th'?'ยังไม่มีรูป':'No image yet','error'); return; }
+    var aspect = state.previewAspect || '4:5';
+    var idx = Math.min(Math.max(0, state.previewIndex||0), imgs.length-1);
+    try {
+      var url = await renderImageAtAspect(imgs[idx], aspect);
+      downloadDataUrl(url, 'postpost-'+aspect.replace(':','x')+'-'+(idx+1)+'.png');
+      toast(state.lang==='th'?'บันทึก PNG แล้ว':'Saved PNG','success');
+    } catch(e) { toast('Download failed: '+e.message,'error'); }
+  }
+  async function downloadAllPng(){
+    var imgs = (state.genImages||[]).filter(Boolean);
+    if (!imgs.length) { toast(state.lang==='th'?'ยังไม่มีรูป':'No image yet','error'); return; }
+    var aspect = state.previewAspect || '4:5';
+    toast(state.lang==='th'?('กำลังบันทึก '+imgs.length+' รูป…'):('Saving '+imgs.length+' files…'),'info');
+    for (var i=0;i<imgs.length;i++){
+      try {
+        var url = await renderImageAtAspect(imgs[i], aspect);
+        downloadDataUrl(url, 'postpost-'+aspect.replace(':','x')+'-'+(i+1)+'.png');
+        await new Promise(function(r){ setTimeout(r, 350); }); // give the browser time per file
+      } catch(e) { console.warn('download', i, e); }
+    }
+    toast(state.lang==='th'?'บันทึกครบแล้ว ✓':'Done ✓','success');
+  }
+
+  // Click router — upload avatar / upload ref / clear ref / open picker / gen prompt
+  // + post preview: aspect tabs, carousel nav, PNG download
+  document.addEventListener('click', function(e){
+    var ar = e.target.closest('[data-previewaspect]');
+    if (ar) { e.preventDefault(); state.previewAspect = ar.getAttribute('data-previewaspect'); render(); return; }
+    var pi = e.target.closest('[data-previewidx]');
+    if (pi) { e.preventDefault(); state.previewIndex = parseInt(pi.getAttribute('data-previewidx'),10)||0; render(); return; }
+    var dl = e.target.closest('[data-downloadpng]');
+    if (dl) { e.preventDefault();
+      if (dl.getAttribute('data-downloadpng')==='all') downloadAllPng(); else downloadCurrentPng();
+      return;
+    }
+    var delAv = e.target.closest('[data-delavatar]');
+    if (delAv) { e.preventDefault(); e.stopPropagation(); deleteCustomAvatar(delAv.getAttribute('data-delavatar')); return; }
+    if (e.target.closest('[data-uploadavatar]')) {
+      var inp = document.getElementById('ppUploadAvatarInput'); if (inp) inp.click();
+      return;
+    }
+    if (e.target.closest('[data-uploadref]')) {
+      var inp2 = document.getElementById('ppTtvRefInput'); if (inp2) inp2.click();
+      return;
+    }
+    if (e.target.closest('[data-clearref]')) { e.preventDefault(); state.ttvReference = null; state.ttvReferenceProductName = ''; render(); return; }
+    if (e.target.closest('[data-pickrefproduct]')) { e.preventDefault(); pickRefProductModal(); return; }
+    if (e.target.closest('[data-genvideoprompt]')) { e.preventDefault(); genVideoPrompt(); return; }
+    if (e.target.closest('[data-addtoday]'))     { e.preventDefault(); openDraftPickerForDay(state.calDay || 1); return; }
+  });
+  // File-input change → read base64, store
+  document.addEventListener('change', function(e){
+    var t = e.target;
+    if (t && t.id === 'ppUploadAvatarInput' && t.files && t.files[0]) {
+      var f = t.files[0];
+      if (f.size > 5*1024*1024) { toast(state.lang==='th'?'รูปต้องไม่เกิน 5MB':'≤5MB','error'); return; }
+      var name = (window.prompt(state.lang==='th'?'ตั้งชื่อผู้บรรยาย':'Presenter name')||'').trim() || (state.lang==='th'?'ผู้บรรยาย':'Presenter');
+      var rd = new FileReader();
+      rd.onload = async function(){
+        var avatar = {
+          id:'custom_'+Date.now(),
+          name_th:name, name_en:name,
+          sub_th:state.lang==='th'?'อัปโหลดเอง':'Uploaded',
+          sub_en:'Uploaded',
+          initial_th:name.slice(0,1), initial_en:name.slice(0,1),
+          image:rd.result, isCustom:true,
+        };
+        await addCustomAvatar(avatar);
+        render();
+        toast(state.lang==='th'?('เพิ่มผู้บรรยาย "'+name+'" แล้ว ✓ (เก็บไว้ใช้ครั้งหน้าแล้ว)'):('Added "'+name+'" ✓ (saved for next time)'),'success');
+      };
+      rd.readAsDataURL(f);
+      t.value = '';  // allow re-uploading the same file
+      return;
+    }
+    if (t && t.id === 'ppTtvRefInput' && t.files && t.files[0]) {
+      var f2 = t.files[0];
+      if (f2.size > 5*1024*1024) { toast(state.lang==='th'?'รูปต้องไม่เกิน 5MB':'≤5MB','error'); return; }
+      var rd2 = new FileReader();
+      rd2.onload = function(){
+        state.ttvReference = rd2.result;
+        state.ttvReferenceProductName = '';
+        render();
+        toast(state.lang==='th'?'ตั้งรูปอ้างอิงแล้ว':'Reference set','success');
+      };
+      rd2.readAsDataURL(f2);
+      t.value = '';
+    }
+  });
+
+  // Text-to-Video — Gemini Veo (async: submit → poll → display)
+  async function genVeoVideo(){
+    if (state.ttvGenLoading) return;
+    var promptEl = document.getElementById('ppTtvPrompt');
+    var prompt = ((promptEl ? promptEl.value : (state.ttvPrompt||'')) || '').trim();
+    if (!prompt) { toast(state.lang==='th'?'ใส่คำสั่งบรรยายวิดีโอก่อน':'Enter a video prompt first','error'); return; }
+    state.ttvGenLoading = true;
+    state.ttvGenStatus = state.lang==='th'?'ส่งคำขอไป Veo…':'Submitting to Veo…';
+    state.ttvVideo = null;
+    render();
+    toast(state.lang==='th'?'Veo เริ่มเรนเดอร์ (~1-3 นาที)':'Veo started (~1-3 min)');
+    try {
+      var sub = await api('/api/ai/veo-generate', { method:'POST', body:{
+        prompt: prompt,
+        aspect: state.ttvAspect||'9:16',
+        referenceImage: state.ttvReference || null,    // base64 / dataURL — Veo conditions video on this if present
+        model: state.ttvModel || 'veo-3.0-fast-generate-001',
+      } });
+      if (!sub || !sub.operation) throw new Error((sub && sub.error) || 'submit failed');
+      var op = sub.operation;
+      state.ttvGenStatus = state.lang==='th'?'Veo กำลังเรนเดอร์…':'Veo rendering…';
+      render();
+      var ok = false;
+      for (var i = 0; i < 40; i++) {
+        await new Promise(function(r){ setTimeout(r, 10000); });
+        try {
+          var st = await api('/api/ai/veo-status?op=' + encodeURIComponent(op));
+          if (st && st.done) {
+            if (st.failed) throw new Error(st.error || 'render failed');
+            if (st.video_url) state.ttvVideo = st.video_url;
+            else if (st.video_base64) state.ttvVideo = 'data:video/mp4;base64,' + st.video_base64;
+            else throw new Error('no video in response');
+            ok = true;
+            toast(state.lang==='th'?'สร้างวิดีโอเสร็จแล้ว ✓':'Video ready ✓','success');
+            break;
+          } else {
+            state.ttvGenStatus = state.lang==='th'?('รอ '+((i+1)*10)+' วินาที…'):('Waited '+((i+1)*10)+'s…');
+            render();
+          }
+        } catch(_){ /* keep polling on transient errors */ }
+      }
+      if (!ok) toast(state.lang==='th'?'หมดเวลารอ (~7 นาที) — ลองใหม่':'Timed out — try again','error');
+    } catch(e){
+      toast((state.lang==='th'?'สร้างวิดีโอไม่สำเร็จ: ':'Failed: ')+(e.message||''),'error');
+    } finally {
+      state.ttvGenLoading = false;
+      state.ttvGenStatus = '';
+      render();
+    }
+  }
+  document.addEventListener('click', function(e){
+    if (e.target.closest('[data-veogen]')) { e.preventDefault(); genVeoVideo(); }
+  });
+
+  // Compress a base64 image to ~thumbnail size so it fits in localStorage
+  // IndexedDB store for full-size draft images (localStorage is too small for many full-quality images)
+  var _ppIdbPromise = null;
+  function _ppIdb(){
+    if (_ppIdbPromise) return _ppIdbPromise;
+    _ppIdbPromise = new Promise(function(resolve, reject){
+      var req = indexedDB.open('postpost-images', 1);
+      req.onupgradeneeded = function(){ req.result.createObjectStore('images'); };
+      req.onsuccess = function(){ resolve(req.result); };
+      req.onerror = function(){ reject(req.error); };
+    });
+    return _ppIdbPromise;
+  }
+  async function idbPutImage(key, val){
+    var db = await _ppIdb();
+    return new Promise(function(resolve, reject){
+      var tx = db.transaction('images', 'readwrite');
+      tx.objectStore('images').put(val, key);
+      tx.oncomplete = function(){ resolve(); };
+      tx.onerror = function(){ reject(tx.error); };
+    });
+  }
+  async function idbGetImage(key){
+    var db = await _ppIdb();
+    return new Promise(function(resolve, reject){
+      var tx = db.transaction('images', 'readonly');
+      var req = tx.objectStore('images').get(key);
+      req.onsuccess = function(){ resolve(req.result); };
+      req.onerror = function(){ reject(req.error); };
+    });
+  }
+  async function idbDeleteImage(key){
+    var db = await _ppIdb();
+    return new Promise(function(resolve, reject){
+      var tx = db.transaction('images', 'readwrite');
+      tx.objectStore('images').delete(key);
+      tx.oncomplete = function(){ resolve(); };
+      tx.onerror = function(){ reject(tx.error); };
+    });
+  }
+
+  function compressImageDataUrl(dataUrl, maxDim, quality){
+    maxDim = maxDim || 360; quality = quality || 0.7;
+    return new Promise(function(resolve){
+      if (!dataUrl || dataUrl.indexOf('data:') !== 0) return resolve(dataUrl);
+      var img = new Image();
+      img.onload = function(){
+        var w = img.width || maxDim, h = img.height || maxDim;
+        var s = Math.min(1, maxDim / Math.max(w, h));
+        w = Math.max(1, Math.round(w * s)); h = Math.max(1, Math.round(h * s));
+        try {
+          var c = document.createElement('canvas'); c.width = w; c.height = h;
+          c.getContext('2d').drawImage(img, 0, 0, w, h);
+          resolve(c.toDataURL('image/jpeg', quality));
+        } catch(e){ resolve(dataUrl); }
+      };
+      img.onerror = function(){ resolve(dataUrl); };
+      img.src = dataUrl;
+    });
+  }
+  // Save the current generated content as a Draft.
+  // Full-size images go to IndexedDB (like oem-content-factory storage); a small
+  // thumbnail of the cover image is kept in the draft for the Library card.
+  async function saveDraft(){
+    var ab = BRANDS.filter(function(b){ return b.id===state.brand; })[0];
+    var topicEl = document.getElementById('ppGenTopic');
+    var topic = ((topicEl ? topicEl.value : (state.selectedTopic||'')) || '').trim();
+    var hookObj = (state.genHooks||[])[((state.selectedHook||1)-1)];
+    var imgs = state.genImages || [];
+    var draftId = 'dr' + Date.now();
+    var imageIds = [];
+    for (var i = 0; i < imgs.length; i++){
+      if (!imgs[i]) { imageIds.push(null); continue; }
+      var iid = 'img_' + draftId + '_' + i;
+      try { await idbPutImage(iid, imgs[i]); imageIds.push(iid); }
+      catch(e){ imageIds.push(null); }
+    }
+    var thumb = imgs[0] ? await compressImageDataUrl(imgs[0], 360, 0.7) : '';
+    var imageCount = imageIds.filter(Boolean).length;
+    var draft = {
+      id: draftId,
+      brandId: state.brand,
+      brandName: ab ? ab.name : '',
+      topic: topic || (state.lang==='th'?'(ไม่มีหัวข้อ)':'(no topic)'),
+      hook: hookObj ? hookObj.text : '',
+      caption: state.genCaption || '',
+      hashtags: state.genHashtags || [],
+      article: state.genArticle || '',
+      imageIds: imageIds,
+      imageCount: imageCount,
+      thumb: thumb,
+      createdAt: Date.now(),
+    };
+    state.drafts = state.drafts || [];
+    state.drafts.unshift(draft);
+    try {
+      localStorage.setItem('postpost_drafts', JSON.stringify(state.drafts));
+    } catch(e){
+      draft.thumb = '';
+      try { localStorage.setItem('postpost_drafts', JSON.stringify(state.drafts)); } catch(_){}
+      toast(state.lang==='th'?'พื้นที่ใกล้เต็ม — ภาพปกหายไป (รูปฉบับเต็มยังอยู่)':'Storage tight — cover thumbnail dropped (full images still saved)','error');
+    }
+    render();
+    var msg = state.lang==='th'
+      ? ('บันทึกดราฟแล้ว — '+imageCount+' รูป (ดูได้ที่ "คลังคอนเทนต์")')
+      : ('Saved as Draft — '+imageCount+' images (see Library)');
+    toast(msg,'success');
+  }
+  document.addEventListener('click', function(e){
+    if (e.target.closest('[data-savedraft]')) { e.preventDefault(); saveDraft(); }
+    if (e.target.closest('[data-savevideodraft]')) { e.preventDefault(); saveVideoDraft(); }
+  });
+
+  // Pull the first frame of a video (URL or data URL) as a JPEG poster. Best-effort —
+  // returns '' if the video can't be loaded (CORS, codec, …) so the caller falls back
+  // to the reference image or no thumbnail at all.
+  function videoPosterDataUrl(src, maxDim){
+    maxDim = maxDim || 360;
+    return new Promise(function(resolve){
+      try {
+        var v = document.createElement('video');
+        v.crossOrigin = 'anonymous';
+        v.muted = true; v.playsInline = true; v.preload = 'auto';
+        v.src = src;
+        var done = false;
+        var bail = function(){ if (!done) { done = true; resolve(''); } };
+        var grab = function(){
+          if (done) return;
+          try {
+            var w = v.videoWidth || maxDim, h = v.videoHeight || maxDim;
+            var s = Math.min(1, maxDim / Math.max(w, h));
+            w = Math.max(1, Math.round(w * s)); h = Math.max(1, Math.round(h * s));
+            var c = document.createElement('canvas'); c.width = w; c.height = h;
+            c.getContext('2d').drawImage(v, 0, 0, w, h);
+            done = true; resolve(c.toDataURL('image/jpeg', 0.7));
+          } catch(e){ bail(); }
+        };
+        v.onloadeddata = function(){ try { v.currentTime = Math.min(0.1, (v.duration||0.1)/2); } catch(_){ grab(); } };
+        v.onseeked = grab;
+        v.onerror = bail;
+        setTimeout(bail, 6000);  // hard timeout
+      } catch(e) { resolve(''); }
+    });
+  }
+
+  // Save the generated Veo video as a draft. Remote video_url drafts keep just the URL
+  // in localStorage; base64 fallbacks go straight to IndexedDB so the 5MB cap doesn't
+  // blow up. A poster (first frame, or the reference image) is kept for the Library card.
+  async function saveVideoDraft(){
+    if (!state.ttvVideo) { toast(state.lang==='th'?'ยังไม่มีวิดีโอ':'No video yet','error'); return; }
+    if (state.ttvSavingDraft) return;
+    state.ttvSavingDraft = true; render();
+    try {
+      var ab = BRANDS.filter(function(b){ return b.id===state.brand; })[0];
+      var promptEl = document.getElementById('ppTtvPrompt');
+      var promptText = ((promptEl ? promptEl.value : (state.ttvPrompt||'')) || '').trim();
+      var topic = state.selectedTopic || promptText.slice(0, 80) || (state.lang==='th'?'วิดีโอ Veo':'Veo video');
+      var draftId = 'dv' + Date.now();
+
+      // Poster — try first frame; fall back to the reference image; else empty
+      var poster = '';
+      try { poster = await videoPosterDataUrl(state.ttvVideo, 360); } catch(_){}
+      if (!poster && state.ttvReference) {
+        try { poster = await compressImageDataUrl(state.ttvReference, 360, 0.7); } catch(_){}
+      }
+
+      // Video bytes — data: URLs go to IDB so localStorage stays small; http URLs ride along in the draft
+      var videoId = null;
+      var videoUrl = '';
+      if (typeof state.ttvVideo === 'string' && state.ttvVideo.indexOf('data:') === 0) {
+        videoId = 'vid_' + draftId;
+        try { await idbPutImage(videoId, state.ttvVideo); }
+        catch(e) { videoId = null; toast(state.lang==='th'?'พื้นที่เก็บไม่พอ — บันทึกแค่ลิงก์':'Storage low — saved link only','error'); }
+      } else {
+        videoUrl = state.ttvVideo;
+      }
+
+      var draft = {
+        id: draftId,
+        kind: 'video',                                    // tells Library + editDraft this is a Veo draft
+        brandId: state.brand,
+        brandName: ab ? ab.name : '',
+        topic: topic,
+        prompt: promptText,
+        aspect: state.ttvAspect || '9:16',
+        duration: state.ttvDuration || '8s',
+        videoUrl: videoUrl,                               // populated when Veo returned a Supabase URL
+        videoId: videoId,                                 // populated when video lives in IDB
+        referenceImage: state.ttvReference || '',         // small; OK in localStorage
+        referenceProductName: state.ttvReferenceProductName || '',
+        thumb: poster,
+        createdAt: Date.now(),
+      };
+      state.drafts = state.drafts || [];
+      state.drafts.unshift(draft);
+      try { localStorage.setItem('postpost_drafts', JSON.stringify(state.drafts)); }
+      catch(e) {
+        draft.thumb = '';
+        try { localStorage.setItem('postpost_drafts', JSON.stringify(state.drafts)); } catch(_){}
+      }
+      toast(state.lang==='th'?'บันทึกดราฟวิดีโอแล้ว ✓ (ดูได้ที่ "คลังคอนเทนต์")':'Video draft saved ✓ (see Library)','success');
+    } finally {
+      state.ttvSavingDraft = false; render();
+    }
+  }
+
+  // Open a saved draft for editing — loads text from localStorage, full images from IndexedDB
+  async function editDraft(id){
+    var d = (state.drafts||[]).filter(function(x){ return x.id===id; })[0];
+    if (!d) return;
+    if (d.brandId && BRANDS.some(function(b){ return b.id===d.brandId; })) state.brand = d.brandId;
+
+    // Video draft — restore the Veo state and jump to the Text-to-Video page
+    if (d.kind === 'video') {
+      state.selectedTopic = d.topic || '';
+      state.ttvPrompt = d.prompt || '';
+      state.ttvAspect = d.aspect || '9:16';
+      state.ttvDuration = d.duration || '8s';
+      state.ttvReference = d.referenceImage || null;
+      state.ttvReferenceProductName = d.referenceProductName || '';
+      state.ttvVideo = null;
+      // Prefer the URL; fall back to IDB-stored video bytes
+      if (d.videoUrl) state.ttvVideo = d.videoUrl;
+      else if (d.videoId) {
+        try { var vBlob = await idbGetImage(d.videoId); if (vBlob) state.ttvVideo = vBlob; }
+        catch(_){}
+      }
+      state.page = 'textvideo';
+      render();
+      toast(state.lang==='th'?'เปิดดราฟวิดีโอแล้ว':'Video draft opened','success');
+      return;
+    }
+
+    state.selectedTopic = d.topic || '';
+    state.genCaption = d.caption || '';
+    state.genHashtags = Array.isArray(d.hashtags) ? d.hashtags : [];
+    state.genArticle = d.article || '';
+    state.genHooks = d.hook ? [{ text:d.hook, angle:'' }] : [];
+    state.selectedHook = 1;
+    var imgs = [];
+    if (Array.isArray(d.imageIds)) {
+      for (var i = 0; i < d.imageIds.length; i++){
+        var iid = d.imageIds[i];
+        if (!iid) { imgs.push(null); continue; }
+        try { var v = await idbGetImage(iid); imgs.push(v || null); }
+        catch(e){ imgs.push(null); }
+      }
+    } else if (Array.isArray(d.images)) {
+      imgs = d.images.slice();  // legacy drafts
+    }
+    state.genImages = imgs;
+    state.page = 'caption';
+    render();
+    toast(state.lang==='th'?'เปิดดราฟมาแก้ไขแล้ว':'Draft opened for editing','success');
+  }
+  document.addEventListener('click', function(e){
+    var ed = e.target.closest('[data-editdraft]');
+    if (ed && !e.target.closest('[data-deletedraft]')) { e.preventDefault(); editDraft(ed.dataset.editdraft); }
+  });
+
+  // Delete a saved draft — removes IDB images / video + localStorage entry
+  async function deleteDraft(id){
+    var d = (state.drafts||[]).filter(function(x){ return x.id===id; })[0];
+    if (!d) return;
+    if (!confirm(state.lang==='th'?'ลบดราฟนี้?':'Delete this draft?')) return;
+    if (Array.isArray(d.imageIds)) {
+      for (var i = 0; i < d.imageIds.length; i++){
+        var iid = d.imageIds[i];
+        if (iid) { try { await idbDeleteImage(iid); } catch(e){} }
+      }
+    }
+    if (d.videoId) { try { await idbDeleteImage(d.videoId); } catch(e){} }
+    state.drafts = (state.drafts||[]).filter(function(x){ return x.id!==id; });
+    try { localStorage.setItem('postpost_drafts', JSON.stringify(state.drafts)); } catch(e){}
+    render();
+    toast(state.lang==='th'?'ลบดราฟแล้ว':'Draft deleted','success');
+  }
+  // Schedule a draft to a specific day (1-31 in the current calendar month)
+  function scheduleDraft(id, day){
+    var d = (state.drafts||[]).filter(function(x){ return x.id===id; })[0];
+    if (!d) return;
+    var n = parseInt(day, 10);
+    if (!n || n < 1 || n > 31) return;
+    d.scheduledDay = n;
+    try { localStorage.setItem('postpost_drafts', JSON.stringify(state.drafts)); } catch(e){}
+    render();
+    toast(state.lang==='th'?('ตั้งเวลาวันที่ '+n+' แล้ว ✓'):('Scheduled to day '+n+' ✓'),'success');
+  }
+  document.addEventListener('click', function(e){
+    var del = e.target.closest('[data-deletedraft]');
+    if (del) { e.preventDefault(); e.stopPropagation(); deleteDraft(del.dataset.deletedraft); return; }
+    var sch = e.target.closest('[data-schedule]');
+    if (sch) {
+      e.preventDefault(); e.stopPropagation();
+      var parts = String(sch.dataset.schedule).split(':');
+      scheduleDraft(parts[0], parts[1]);
+    }
+  });
+
   // Add-brand modal — creates a real brand, persists to localStorage
   var BRAND_COLORS = [
     'linear-gradient(135deg,#FB923C,#F97316)','linear-gradient(135deg,#818CF8,#4F46E5)',
@@ -3252,16 +4745,21 @@ render();
       if (!prods.length) { toast(state.lang==='th'?'ไม่พบสินค้าในร้านนี้':'No products found','error'); return; }
       PRODUCTS = prods.slice(0, 24).map(function(p, i){
         return { id:'sp'+i, name_th:p.name, name_en:p.name, short:(p.name||'').slice(0,30),
-          price: Math.round(p.price||0), sales: String(p.sold||0), rating: p.rating||0,
-          thumbnail: p.thumbnail||'', label:'' };
+          price: Math.round(p.price||0), priceBefore: Math.round(p.price_before||0),
+          sales: String(p.sold||0), sold: p.sold||0, rating: p.rating||0,
+          thumbnail: p.thumbnail||'', images: p.images||[], url: p.url||'',
+          description: p.description||'', stock: p.stock||0, label:'' };
       });
-      if (PRODUCTS[0]) state.product = PRODUCTS[0].id;
+      state.selectedProducts = PRODUCTS.map(function(p){ return p.id; });
       var inStock = prods.filter(function(p){ return (p.stock||0) > 0; }).length;
       var priced = prods.filter(function(p){ return p.price > 0; });
       var avg = priced.length ? Math.round(priced.reduce(function(s,p){ return s+p.price; },0)/priced.length) : 0;
       var rated = prods.filter(function(p){ return p.rating > 0; });
       var avgR = rated.length ? (rated.reduce(function(s,p){ return s+p.rating; },0)/rated.length).toFixed(1) : '';
       state.shopStats = { count: j.count || prods.length, inStock: inStock, avgPrice: avg.toLocaleString(), rating: avgR };
+      // persist the scraped catalog onto the active brand so it survives reloads
+      var _ab = BRANDS.filter(function(b){ return b.id===state.brand; })[0];
+      if (_ab) { _ab.products = PRODUCTS; _ab.shopStats = state.shopStats; _ab.shopUrl = url; saveBrands(); }
       toast((state.lang==='th'?'ดึงข้อมูลสำเร็จ — ':'Synced — ') + (j.count||prods.length) + (state.lang==='th'?' สินค้า':' products'),'success');
     } catch(e){
       toast((state.lang==='th'?'ดึงข้อมูลไม่สำเร็จ: ':'Sync failed: ') + (e.message||''),'error');
@@ -3276,18 +4774,22 @@ render();
 
   // AI brand-description writer — based on brand name + business type
   async function aiWriteDesc(){
-    var bizSel = document.getElementById('ppBizType');
-    var bizType = bizSel ? bizSel.value : '';
-    var curEl = document.getElementById('ppBrandDesc');
-    var current = state.brandDesc || (curEl ? curEl.value : '');
+    // Always re-read from the brand object first so the live dropdown selection wins
+    // even if the user just switched it but didn't trigger a re-render.
     var ab = BRANDS.find(function(b){ return b.id === state.brand; }) || BRANDS[0];
+    var bizSel = document.getElementById('ppBizType');
+    var bizType = (bizSel && bizSel.value) || (ab && ab.bizType) || '';
+    if (ab && bizType && ab.bizType !== bizType) ab.bizType = bizType;   // sync any pending change
     state.aiAssistOpen = true;
     state.aiDescLoading = true;
     state.aiDescs = [];
     render();
     try {
       var d = await api('/api/ai/brand-description', { method:'POST',
-        body: { businessType: bizType, brandName: ab ? ab.name : '', current: current } });
+        // NOTE: intentionally NOT passing `current` — the leftover text from a previous
+        // business type (e.g. skincare copy when user switches to "ดูดวง") would bias AI.
+        // User clicks "AI write" specifically because they want a FRESH description.
+        body: { businessType: bizType, brandName: ab ? ab.name : '' } });
       state.aiDescs = (d.descriptions || []).filter(function(x){ return typeof x === 'string' && x.trim(); });
       if (!state.aiDescs.length) toast(state.lang==='th'?'AI ไม่ได้คืนคำอธิบาย ลองใหม่':'No descriptions returned','error');
     } catch(e){
@@ -3318,7 +4820,13 @@ render();
   var HANDLED = '[data-go],[data-lang],[data-set],[data-set-step],[data-toggle],'
     + '[data-voice],[data-brand],[data-product],[data-archetype],[data-archeguide],[data-archeclose],'
     + '[data-addbrand],[data-delbrand],[data-aiwrite],[data-usedesc],[data-usedesc-s],[data-changelogo],[data-shopeesync],'
-    + '[data-shopguide],[data-shopguideclose]';
+    + '[data-shopguide],[data-shopguideclose],[data-prodview],[data-pdclose],[data-savebrand],'
+    + '[data-chconnect],[data-chdisconnect],[data-chsave],[data-chclose],'
+    + '[data-filter],[data-filterclose],[data-sortby],[data-instocktoggle],'
+    + '[data-gentopics],[data-topicgoal],'
+    + '[data-saveproduct],[data-newimgclear],[data-newimg],[data-proddelete],[data-usetopic],[data-genall],[data-savedraft],[data-savevideodraft],[data-editdraft],[data-deletedraft],[data-schedule],[data-avatarscript],[data-veogen],[data-newavatar],'
+    + '[data-uploadavatar],[data-uploadref],[data-clearref],[data-pickrefproduct],[data-refclose],[data-refpick],[data-genvideoprompt],[data-delavatar],[data-addtoday],[data-pickdraft],[data-pickdraftclose],[data-pickdraftgo],[data-tts],[data-pickfbpage],'
+    + '[data-previewaspect],[data-previewidx],[data-downloadpng]';
   document.addEventListener('click', function(e){
     var b = e.target.closest('button, a');
     if (!b) return;
