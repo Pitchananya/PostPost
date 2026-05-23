@@ -2348,6 +2348,7 @@ function pageTextVideo() {
             <input type="file" accept="image/*" id="ppTtvRefInput" style="display:none"/>
             ${state.ttvReference?`<button class="btn ghost sm" data-clearref="1" style="width:fit-content;color:var(--red)">${I('x',12,'#DC2626')} ${T('ลบรูป','Remove')}</button>`:''}
             <div class="micro" style="margin-top:auto;line-height:1.5">${T('ใส่รูปอ้างอิงเพื่อช่วยให้ AI เขียน prompt ตรงสินค้า','Add a reference so AI writes a prompt matching the product')}</div>
+            ${state.ttvReference && (state.ttvModel||'').indexOf('veo-2')===0?`<div class="micro" style="line-height:1.5;color:#92400E;background:#FEF3C7;padding:8px 10px;border-radius:8px;border:1px solid #FDE68A">${I('zap',11,'#92400E')} ${T('Veo 2 จะ "ใกล้เคียง" รูปอ้างอิง — ถ้าอยากให้ตรงเป๊ะ ๆ ใช้ Veo 3 Fast/Pro (ต้องเปิด billing)','Veo 2 approximates the reference — for exact match use Veo 3 Fast/Pro (needs billing)')}</div>`:''}
           </div>
         </div>
       </div>
