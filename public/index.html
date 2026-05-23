@@ -2229,9 +2229,18 @@ function fetchAvatarBg() {
   window.PP.api('/api/ai/pexels-video-search?q=' + encodeURIComponent(query) + '&per_page=3&orientation=portrait')
     .then(function(r){
       var vids = (r && r.videos) || [];
-      if (vids.length && vids[0].url) state.avatarPreviewBgUrl = vids[0].url;
+      if (vids.length && vids[0].url) {
+        state.avatarPreviewBgUrl = vids[0].url;
+      } else {
+        // No Pexels result — use bundled mystical as last-resort universal bg
+        state.avatarPreviewBgUrl = '/assets/avatar-bg/mystical-portrait.mp4';
+      }
     })
-    .catch(function(){ /* PEXELS_API_KEY missing or other failure — gradient fallback */ })
+    .catch(function(){
+      // PEXELS_API_KEY missing or other failure — use bundled mystical video instead of gradient.
+      // Any video bg looks better than a static color gradient for the talking-avatar preview.
+      state.avatarPreviewBgUrl = '/assets/avatar-bg/mystical-portrait.mp4';
+    })
     .then(function(){ state.avatarBgLoading = false; render(); });
 }
 
