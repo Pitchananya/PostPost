@@ -504,6 +504,9 @@ const state = {
   avatarBgCandidates: [],     // full Pexels result set (last fetch) — OEM-style thumbnail picker grid
   avatarBgPickedUrl: '',      // when user clicks a specific thumbnail, that URL is locked (overrides "first result")
   avatarBgSearch: '',         // custom free-text query (overrides scene preset when non-empty)
+  avatarBgInterval: 0,        // bg rotation interval in seconds (0 = no rotation, just loop one clip)
+  avatarBgRotateIdx: 0,       // current index in avatarBgCandidates used by the preview rotation timer
+  avatarClipDuration: 0,      // total output clip length in seconds (0 = match TTS audio duration)
   previewAspect: '4:5',    // 1:1 | 4:5 | 9:16  — aspect for post preview + PNG download
   previewIndex: 0,         // current slide in carousel
 };
@@ -2219,54 +2222,52 @@ function fetchAvatarBg(opts) {
   if (sceneId === 'off' || sceneId === 'upload') return;
   var hasCustom = !!(state.avatarBgSearch || '').trim();
 
-  // ── Step 1: Local bundled file (skip when user typed a custom search) ──
+  // ── Step 1: Set local bundled file as INSTANT first candidate (no flicker) ──
+  // We still fetch Pexels candidates below so the user gets a richer picker grid
+  // + can use rotation. The local clip stays as candidate #0 (LOCAL badge).
+  var localPin = null;
   if (!hasCustom) {
     var sc = AVATAR_BG_SCENES.filter(function(s){ return s.id===sceneId; })[0];
     if (sc && sc.local) {
-      state.avatarPreviewBgUrl = sc.local;
-      state.avatarBgPickedUrl = '';
-      state.avatarBgCandidates = [{
-        url: sc.local, preview: '', user: 'PostPost', page: '',
-        isLocal: true, label_th: sc.th, label_en: sc.en,
-      }];
-      state.avatarBgLoading = false;
-      return;
-    }
-    if (sceneId === 'auto') {
+      localPin = { url: sc.local, preview: '', user: 'PostPost', page: '', isLocal: true,
+        label_th: sc.th, label_en: sc.en, duration: 0 };
+    } else if (sceneId === 'auto') {
       var ab = BRANDS.filter(function(b){ return b.id===state.brand; })[0] || BRANDS[0];
       var biz = (ab && ab.bizType || '').toLowerCase();
       if (/ดูดวง|สายมู|tarot/.test(biz)) {
-        state.avatarPreviewBgUrl = '/assets/avatar-bg/mystical-portrait.mp4';
-        state.avatarBgPickedUrl = '';
-        state.avatarBgCandidates = [{
-          url: '/assets/avatar-bg/mystical-portrait.mp4', preview: '',
-          user: 'PostPost', page: '', isLocal: true, label_th:'สายมู (built-in)', label_en:'Mystical (built-in)',
-        }];
-        state.avatarBgLoading = false;
-        return;
+        localPin = { url:'/assets/avatar-bg/mystical-portrait.mp4', preview:'',
+          user:'PostPost', page:'', isLocal:true,
+          label_th:'สายมู (built-in)', label_en:'Mystical (built-in)', duration:0 };
       }
     }
   }
+  // Set immediately so the preview phone shows something while Pexels fetch runs
+  if (localPin) {
+    state.avatarPreviewBgUrl = localPin.url;
+    if (!opts.keepPicked) state.avatarBgPickedUrl = '';
+    state.avatarBgCandidates = [localPin];
+  }
 
-  // ── Step 2: Fall back to Pexels — fetch 8 so we can show a thumbnail grid ──
+  // ── Step 2: Fetch 8 Pexels candidates (always — even when local pin exists) ──
   state.avatarBgLoading = true;
   var query = resolveAvatarBgQuery();
   window.PP.api('/api/ai/pexels-video-search?q=' + encodeURIComponent(query) + '&per_page=8&orientation=portrait')
     .then(function(r){
       var vids = (r && r.videos) || [];
-      state.avatarBgCandidates = vids;
-      if (vids.length && vids[0].url) {
-        // Only auto-set the preview URL if the user hasn't locked a specific pick
-        if (!opts.keepPicked) state.avatarBgPickedUrl = '';
-        state.avatarPreviewBgUrl = state.avatarBgPickedUrl || vids[0].url;
-      } else {
-        state.avatarBgCandidates = [];
+      // Combine: local pin first (if any), then Pexels results
+      state.avatarBgCandidates = localPin ? [localPin].concat(vids) : vids;
+      if (!state.avatarBgCandidates.length) {
         state.avatarPreviewBgUrl = '/assets/avatar-bg/mystical-portrait.mp4';
+      } else if (!opts.keepPicked && !state.avatarBgPickedUrl) {
+        state.avatarPreviewBgUrl = state.avatarBgCandidates[0].url;
       }
     })
     .catch(function(){
-      state.avatarBgCandidates = [];
-      state.avatarPreviewBgUrl = '/assets/avatar-bg/mystical-portrait.mp4';
+      // Pexels failed — keep just the local pin (or fall back to bundled mystical)
+      if (!state.avatarBgCandidates.length) {
+        state.avatarBgCandidates = localPin ? [localPin] : [];
+        state.avatarPreviewBgUrl = (localPin && localPin.url) || '/assets/avatar-bg/mystical-portrait.mp4';
+      }
     })
     .then(function(){ state.avatarBgLoading = false; render(); });
 }
@@ -2476,12 +2477,17 @@ function pageAvatar() {
             }
             // Background layer — Pexels stock video (looped, muted) or user-uploaded
             // video, else gradient. Driven by state.avatarBgScene (auto | preset | off | upload).
+            // When state.avatarBgInterval > 0, marks the <video> with data-rotate-bg
+            // so a JS timer (set up after render) can cycle the src through avatarBgCandidates.
             function bgLayer(){
               var scene = state.avatarBgScene || 'auto';
               if (scene === 'off') return '';   // gradient base on .phone only
               var src = (scene === 'upload') ? (state.avatarBgUploadUrl||'') : (state.avatarPreviewBgUrl||'');
               if (!src) return '';
-              return '<video src="'+src+'" autoplay loop muted playsinline style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0"></video>'
+              var rotate = (state.avatarBgInterval||0) > 0 && (state.avatarBgCandidates||[]).length > 1 && scene !== 'upload';
+              return '<video src="'+src+'" autoplay loop muted playsinline '
+                + (rotate ? 'data-rotate-bg="1" ' : '')
+                + 'style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0;transition:opacity .35s ease"></video>'
                 + '<div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.55) 0%,rgba(0,0,0,.1) 25%,rgba(0,0,0,.1) 60%,rgba(0,0,0,.75) 100%);z-index:1"></div>';
             }
             if (state.avatarVideoLoading) {
@@ -2575,6 +2581,60 @@ function pageAvatar() {
               + '</div>'
               + '<div style="font-size:9.5px;color:var(--muted);margin-top:6px;text-align:right">' + T('คลิปจาก Pexels (ใช้ฟรี เครดิตที่ pexels.com)','Clips from Pexels (free, credit pexels.com)') + '</div>';
           })()}
+          <!-- Rotation interval — how often the bg cycles through the picker's clips -->
+          <div style="margin-top:12px;padding-top:10px;border-top:1px dashed var(--line)">
+            <div style="font-size:10.5px;font-weight:800;color:var(--purple);letter-spacing:.04em;text-transform:uppercase;margin-bottom:6px;display:flex;align-items:center;gap:5px">
+              ${I('refresh',11,'#5B21B6')} ${T('สลับฉากบ่อยแค่ไหน','Switch scene every')}
+            </div>
+            <div style="display:flex;gap:5px;flex-wrap:wrap">
+              ${[
+                {v:0,  th:'ไม่เปลี่ยน', en:'No switch'},
+                {v:3,  th:'3 วิ',      en:'3 sec'},
+                {v:5,  th:'5 วิ',      en:'5 sec'},
+                {v:8,  th:'8 วิ',      en:'8 sec'},
+                {v:12, th:'12 วิ',     en:'12 sec'},
+                {v:20, th:'20 วิ',     en:'20 sec'},
+              ].map(function(o){
+                var on = (state.avatarBgInterval||0) === o.v;
+                return '<button class="pill '+(on?'orange':'')+'" data-bginterval="'+o.v+'" '
+                  + 'style="height:28px;font-size:11px;padding:0 10px">' + t({th:o.th,en:o.en}) + '</button>';
+              }).join('')}
+            </div>
+            <div style="font-size:10px;color:var(--muted);margin-top:5px;line-height:1.4">
+              ${(state.avatarBgInterval||0) > 0 && (state.avatarBgCandidates||[]).length > 1
+                ? T('จะวนระหว่าง '+(state.avatarBgCandidates.length)+' คลิปทุก '+state.avatarBgInterval+' วินาที','Will cycle through '+(state.avatarBgCandidates.length)+' clips every '+state.avatarBgInterval+'s')
+                : T('ใช้คลิปเดียววนลูป','Loops a single clip')}
+            </div>
+          </div>
+          <!-- Total clip duration — overrides TTS-audio length when set -->
+          <div style="margin-top:10px;padding-top:8px;border-top:1px dashed var(--line)">
+            <div style="font-size:10.5px;font-weight:800;color:var(--purple);letter-spacing:.04em;text-transform:uppercase;margin-bottom:6px;display:flex;align-items:center;gap:5px">
+              ${I('play',11,'#5B21B6')} ${T('ความยาวคลิป','Total clip length')}
+            </div>
+            <div style="display:flex;gap:5px;flex-wrap:wrap">
+              ${[
+                {v:0,   th:'ตามเสียง', en:'Match audio'},
+                {v:15,  th:'15 วิ',    en:'15 sec'},
+                {v:30,  th:'30 วิ',    en:'30 sec'},
+                {v:60,  th:'1 นาที',   en:'1 min'},
+                {v:90,  th:'1:30',     en:'1:30'},
+                {v:120, th:'2 นาที',   en:'2 min'},
+                {v:180, th:'3 นาที',   en:'3 min'},
+                {v:300, th:'5 นาที',   en:'5 min'},
+              ].map(function(o){
+                var on = (state.avatarClipDuration||0) === o.v;
+                return '<button class="pill '+(on?'orange':'')+'" data-clipdur="'+o.v+'" '
+                  + 'style="height:28px;font-size:11px;padding:0 10px">' + t({th:o.th,en:o.en}) + '</button>';
+              }).join('')}
+            </div>
+            <div style="font-size:10px;color:var(--muted);margin-top:5px;line-height:1.4">
+              ${(state.avatarClipDuration||0) > 0
+                ? ((state.avatarClipDuration||0) >= 60
+                    ? T('คลิปยาว '+Math.floor(state.avatarClipDuration/60)+' นาที '+(state.avatarClipDuration%60?state.avatarClipDuration%60+' วิ':'')+' — ถ้าเสียงสั้นกว่า bg จะวนต่อจนครบ','Renders '+Math.floor(state.avatarClipDuration/60)+'m '+(state.avatarClipDuration%60?state.avatarClipDuration%60+'s':'')+' — if audio is shorter, bg loops to fill')
+                    : T('คลิปยาว '+state.avatarClipDuration+' วินาที — ถ้าเสียงสั้นกว่า bg จะวนต่อจนครบ','Renders '+state.avatarClipDuration+'s — if audio is shorter, bg loops to fill'))
+                : T('ใช้ความยาวเสียง TTS เป็นตัวกำหนด','Uses TTS audio length')}
+            </div>
+          </div>
           <input type="file" accept="video/*" id="ppAvatarBgUploadInput" style="display:none"/>
         </div>
         <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
@@ -3293,6 +3353,40 @@ function render() {
   }
   window.scrollTo({ top: _keepY, behavior: 'instant' });
   _ppLastPage = state.page;
+  // Talking Avatar bg rotation — cycle the preview <video src> through avatarBgCandidates
+  // every `avatarBgInterval` seconds. Re-wired on every render so it stays in sync with
+  // state changes (interval picker, candidate list, page leave).
+  setupAvatarBgRotation();
+}
+
+// Module-level so we can clear it across renders.
+let _avatarBgRotateTimer = null;
+function setupAvatarBgRotation() {
+  if (_avatarBgRotateTimer) { clearInterval(_avatarBgRotateTimer); _avatarBgRotateTimer = null; }
+  const interval = state.avatarBgInterval || 0;
+  const cands = (state.avatarBgCandidates || []).filter(c => c && c.url);
+  if (interval <= 0 || cands.length < 2) return;
+  const vid = document.querySelector('video[data-rotate-bg]');
+  if (!vid) return;
+  // Start the cycle at whichever candidate matches the current src — keeps the
+  // visual continuous when the interval was just toggled on.
+  let idx = Math.max(0, cands.findIndex(c => c.url === vid.getAttribute('src')));
+  if (idx < 0) idx = 0;
+  _avatarBgRotateTimer = setInterval(() => {
+    idx = (idx + 1) % cands.length;
+    const next = cands[idx].url;
+    // Fade out, swap src, fade back in
+    vid.style.opacity = '0';
+    setTimeout(() => {
+      try {
+        vid.src = next;
+        vid.load();
+        vid.play().catch(() => {});
+        state.avatarBgRotateIdx = idx;
+      } catch (_) {}
+      vid.style.opacity = '1';
+    }, 220);
+  }, interval * 1000);
 }
 
 // ====================================================================
@@ -4388,37 +4482,69 @@ render();
     // if PEXELS_API_KEY isn't configured.
     toast(state.lang==='th'?'กำลังเรนเดอร์วิดีโอ MP4 พร้อม background… ~30-60 วินาที':'Rendering MP4 with background… ~30-60s');
     try {
-      // 0) Decode TTS audio first so we know total duration → use it to ask AI for scenes
+      // 0) Decode TTS audio first so we know its natural duration
       var audioBuf = await fetch(state.ttsAudio).then(function(r){ return r.arrayBuffer(); });
       var audioCtx = new (window.AudioContext||window.webkitAudioContext)();
       var decoded = await audioCtx.decodeAudioData(audioBuf.slice(0));
-      var duration = decoded.duration;
+      var audioDur = decoded.duration;
+      // ── Total clip length: user override wins, else match the audio ──
+      var duration = (state.avatarClipDuration && state.avatarClipDuration > 0)
+        ? state.avatarClipDuration
+        : audioDur;
 
-      // 1) Ask backend to split the script into N scenes with Pexels keywords
-      // Each scene gets a title_thai + bg_query_en + duration_sec
+      // 1) Build the scene timeline.
+      //    Mode A — user set a rotation interval AND has 2+ Pexels candidates
+      //              → cycle through them at that interval (no AI split needed)
+      //    Mode B — user set a single clip (or only 1 candidate)
+      //              → one scene covering the whole duration
+      //    Mode C — no candidates picked yet → fall back to AI scene-split (legacy)
       var caption = (state.avatarScript||'').trim();
       var scenes = [];
-      try {
-        var sceneR = await api('/api/ai/avatar-scenes', { method:'POST', body:{
-          script: caption,
-          n_scenes: Math.max(2, Math.round(duration / 6)),     // ~6 sec per scene
-        }});
-        scenes = (sceneR && sceneR.scenes) || [];
-      } catch(e){ /* fall back to 1 unsplit scene */ }
-      if (!scenes.length) {
-        scenes = [{ idx:0, title_thai:'', bg_query_en: ((ab.bizType||'')+ ' lifestyle thai').trim() || 'lifestyle', start_at_sec:0, duration_sec: duration }];
-      }
+      var cands = (state.avatarBgCandidates || []).filter(function(c){ return c && c.url; });
+      var rotateSec = state.avatarBgInterval || 0;
+      var lockedUrl = state.avatarBgPickedUrl || (cands[0] && cands[0].url) || '';
 
-      // 2) For each scene, fetch a Pexels portrait video (best-effort)
-      // If PEXELS_API_KEY not set → bg = themed gradient with scene title
-      for (var si = 0; si < scenes.length; si++) {
-        var sc = scenes[si];
+      if (rotateSec > 0 && cands.length > 1) {
+        // Mode A: even slices of `rotateSec`, looping through candidates
+        var nSlices = Math.max(1, Math.ceil(duration / rotateSec));
+        for (var k = 0; k < nSlices; k++) {
+          var startAt = k * rotateSec;
+          var dur = Math.min(rotateSec, duration - startAt);
+          var cand = cands[k % cands.length];
+          scenes.push({
+            idx: k,
+            title_thai: '',
+            bg_query_en: '',
+            bg_video_url: cand.url,
+            start_at_sec: startAt,
+            duration_sec: dur,
+          });
+        }
+      } else if (lockedUrl) {
+        // Mode B: single clip for the entire duration
+        scenes = [{ idx:0, title_thai:'', bg_query_en:'', bg_video_url: lockedUrl, start_at_sec:0, duration_sec: duration }];
+      } else {
+        // Mode C: legacy AI-driven scene split (no candidates picked)
         try {
-          var pr = await api('/api/ai/pexels-video-search?q=' + encodeURIComponent(sc.bg_query_en) + '&per_page=3&orientation=portrait');
-          var vids = (pr && pr.videos) || [];
-          // Pick the first MP4 with a duration close to the scene's needed length
-          if (vids.length) sc.bg_video_url = vids[0].url;
-        } catch(_) { /* leave bg_video_url unset → gradient fallback */ }
+          var sceneR = await api('/api/ai/avatar-scenes', { method:'POST', body:{
+            script: caption,
+            n_scenes: Math.max(2, Math.round(duration / 6)),
+          }});
+          scenes = (sceneR && sceneR.scenes) || [];
+        } catch(e){ /* fall back to 1 unsplit scene */ }
+        if (!scenes.length) {
+          scenes = [{ idx:0, title_thai:'', bg_query_en: ((ab.bizType||'')+ ' lifestyle thai').trim() || 'lifestyle', start_at_sec:0, duration_sec: duration }];
+        }
+        // For each AI-suggested scene, fetch its Pexels video
+        for (var si = 0; si < scenes.length; si++) {
+          var scn = scenes[si];
+          if (scn.bg_video_url) continue;
+          try {
+            var pr = await api('/api/ai/pexels-video-search?q=' + encodeURIComponent(scn.bg_query_en) + '&per_page=3&orientation=portrait');
+            var vids = (pr && pr.videos) || [];
+            if (vids.length) scn.bg_video_url = vids[0].url;
+          } catch(_) { /* gradient fallback */ }
+        }
       }
 
       // 3) Pre-load all scene videos
@@ -4942,6 +5068,23 @@ render();
       state.avatarBgSearch = '';
       state.avatarBgPickedUrl = '';
       fetchAvatarBg();
+      render();
+      return;
+    }
+    // Rotation interval — how often the preview/render cycles bg clips
+    var biBtn = e.target.closest('[data-bginterval]');
+    if (biBtn) {
+      e.preventDefault();
+      state.avatarBgInterval = parseInt(biBtn.getAttribute('data-bginterval'), 10) || 0;
+      state.avatarBgRotateIdx = 0;
+      render();
+      return;
+    }
+    // Total clip duration — 0 = match audio
+    var cdBtn = e.target.closest('[data-clipdur]');
+    if (cdBtn) {
+      e.preventDefault();
+      state.avatarClipDuration = parseInt(cdBtn.getAttribute('data-clipdur'), 10) || 0;
       render();
       return;
     }
@@ -5907,7 +6050,7 @@ render();
     + '[data-filter],[data-filterclose],[data-sortby],[data-instocktoggle],'
     + '[data-gentopics],[data-topicgoal],'
     + '[data-saveproduct],[data-newimgclear],[data-newimg],[data-proddelete],[data-usetopic],[data-genall],[data-savedraft],[data-savevideodraft],[data-editdraft],[data-deletedraft],[data-schedule],[data-avatarscript],[data-veogen],[data-newavatar],'
-    + '[data-uploadavatar],[data-uploadref],[data-clearref],[data-pickrefproduct],[data-refclose],[data-refpick],[data-genvideoprompt],[data-delavatar],[data-addtoday],[data-pickdraft],[data-pickdraftclose],[data-pickdraftgo],[data-tts],[data-pickfbpage],[data-avatarvideo],[data-pastevideourl],[data-locallocaltoggle],[data-bgscene],[data-bgpick],[data-bgsearch],[data-bgsearchclear],'
+    + '[data-uploadavatar],[data-uploadref],[data-clearref],[data-pickrefproduct],[data-refclose],[data-refpick],[data-genvideoprompt],[data-delavatar],[data-addtoday],[data-pickdraft],[data-pickdraftclose],[data-pickdraftgo],[data-tts],[data-pickfbpage],[data-avatarvideo],[data-pastevideourl],[data-locallocaltoggle],[data-bgscene],[data-bgpick],[data-bgsearch],[data-bgsearchclear],[data-bginterval],[data-clipdur],'
     + '[data-previewaspect],[data-previewidx],[data-downloadpng]';
   document.addEventListener('click', function(e){
     var b = e.target.closest('button, a');
