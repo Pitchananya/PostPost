@@ -2623,6 +2623,146 @@ router.get('/veo-status', async (req, res) => {
   }
 });
 
+// ============================================================
+// 🎭 Lip-sync via fal.ai — Vercel-direct path (no worker-render needed)
+//
+//   POST /api/ai/lipsync-submit  body: { image_b64?, image_url?, audio_b64?, audio_url?, model? }
+//     → uploads any base64 inputs to Supabase Storage, submits to fal.ai queue,
+//       returns { request_id, model, status_url, image_url, audio_url }
+//
+//   GET  /api/ai/lipsync-poll?request_id=X&model=Y
+//     → polls fal.ai status. When DONE returns { status:'done', video_url }; else { status:'pending' }
+//
+// Requires FAL_KEY env var. Auto-creates Supabase Storage bucket 'lipsync-input'.
+// ============================================================
+const LIPSYNC_BUCKET = 'lipsync-input';
+const FAL_DEFAULT_MODEL = process.env.FAL_LIPSYNC_MODEL || 'fal-ai/sadtalker';
+
+async function ensureLipsyncBucket() {
+  if (!supabase) throw new Error('Supabase not configured');
+  try { await supabase.storage.createBucket(LIPSYNC_BUCKET, { public: true, fileSizeLimit: 52428800 }); } catch (_) {}
+}
+async function uploadDataUrlToBucket(dataUrl, prefix, fallbackExt) {
+  // Accept either a full data: URL or raw base64
+  const m = String(dataUrl || '').match(/^data:([^;]+);base64,(.+)$/);
+  const b64 = m ? m[2] : String(dataUrl || '');
+  const mime = m ? m[1] : (fallbackExt === 'mp3' ? 'audio/mp3' : 'image/png');
+  if (!b64 || b64.length < 100) throw new Error(prefix + ': base64 payload too small / empty');
+  const buf = Buffer.from(b64, 'base64');
+  const ext = fallbackExt || (mime.includes('audio') ? 'mp3' : 'png');
+  const fname = `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const { error: ue } = await supabase.storage
+    .from(LIPSYNC_BUCKET)
+    .upload(fname, buf, { contentType: mime, upsert: false });
+  if (ue) throw new Error(`Storage upload failed: ${ue.message}`);
+  const { data: pub } = supabase.storage.from(LIPSYNC_BUCKET).getPublicUrl(fname);
+  if (!pub?.publicUrl) throw new Error('Storage publicUrl missing — is the bucket public?');
+  return pub.publicUrl;
+}
+
+router.post('/lipsync-submit', async (req, res) => {
+  const { image_b64, image_url: imageUrlIn, audio_b64, audio_url: audioUrlIn, model: modelIn } = req.body || {};
+  const falKey = process.env.FAL_KEY;
+  if (!falKey) return res.status(400).json({ error: 'FAL_KEY not set — ตั้ง env ที่ Vercel → Settings → Environment Variables' });
+  if (!image_b64 && !imageUrlIn) return res.status(400).json({ error: 'image_b64 or image_url required' });
+  if (!audio_b64 && !audioUrlIn) return res.status(400).json({ error: 'audio_b64 or audio_url required' });
+  const model = String(modelIn || FAL_DEFAULT_MODEL);
+
+  try {
+    // 1) Make sure both inputs are public URLs (fal.ai pulls from URL — no file upload API)
+    let image_url = imageUrlIn || null;
+    let audio_url = audioUrlIn || null;
+    if (!image_url) {
+      await ensureLipsyncBucket();
+      image_url = await uploadDataUrlToBucket(image_b64, 'av-img', 'png');
+    }
+    if (!audio_url) {
+      await ensureLipsyncBucket();
+      audio_url = await uploadDataUrlToBucket(audio_b64, 'av-aud', 'mp3');
+    }
+
+    // 2) Submit to fal.ai queue — input schema per model
+    const FAL_INPUT = {
+      'fal-ai/sadtalker':                       { source_image_url: image_url, driven_audio_url: audio_url },
+      'fal-ai/bytedance/omnihuman/v1.5':        { image_url, audio_url, resolution: '720p' },
+      'fal-ai/bytedance/omnihuman':             { image_url, audio_url, resolution: '720p' },
+      'veed/fabric-1.0':                        { image_url, audio_url, resolution: '720p' },
+      'fal-ai/infinitalk':                      { image_url, audio_url },
+    };
+    const inputBody = FAL_INPUT[model] || { image_url, audio_url };
+    const r = await fetch(`https://queue.fal.run/${model}`, {
+      method: 'POST',
+      headers: { 'Authorization': `Key ${falKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(inputBody),
+    });
+    const submitText = await r.text();
+    if (!r.ok) {
+      return res.status(r.status >= 400 && r.status < 500 ? r.status : 502).json({
+        error: 'fal_submit', status: r.status, detail: submitText.slice(0, 400),
+      });
+    }
+    let submitData;
+    try { submitData = JSON.parse(submitText); }
+    catch { return res.status(502).json({ error: 'fal_submit', detail: 'non-JSON: ' + submitText.slice(0, 200) }); }
+    const request_id = submitData.request_id;
+    if (!request_id) return res.status(502).json({ error: 'fal_submit', detail: 'no request_id', raw: submitData });
+    // fal returns status_url + response_url for the specific submitted job — use them directly,
+    // building paths by hand breaks for models with nested paths like fal-ai/bytedance/omnihuman/v1.5
+    res.json({
+      ok: true,
+      request_id,
+      model,
+      image_url,
+      audio_url,
+      status_url: submitData.status_url || `https://queue.fal.run/${model}/requests/${request_id}/status`,
+      response_url: submitData.response_url || `https://queue.fal.run/${model}/requests/${request_id}`,
+    });
+  } catch (e) {
+    console.error('[lipsync-submit]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.get('/lipsync-poll', async (req, res) => {
+  const request_id = String(req.query.request_id || '');
+  const model = String(req.query.model || FAL_DEFAULT_MODEL);
+  const status_url_q = req.query.status_url ? String(req.query.status_url) : null;
+  const response_url_q = req.query.response_url ? String(req.query.response_url) : null;
+  if (!request_id) return res.status(400).json({ error: 'request_id required' });
+  const falKey = process.env.FAL_KEY;
+  if (!falKey) return res.status(400).json({ error: 'FAL_KEY not set' });
+
+  try {
+    const statusUrl = status_url_q || `https://queue.fal.run/${model}/requests/${request_id}/status`;
+    const sr = await fetch(statusUrl, { headers: { 'Authorization': `Key ${falKey}` } });
+    const stxt = await sr.text();
+    let sdata = {};
+    try { sdata = JSON.parse(stxt); } catch (_) {}
+    if (!sr.ok) return res.status(502).json({ error: 'fal_status', status: sr.status, detail: stxt.slice(0, 300) });
+
+    // fal status values: IN_QUEUE | IN_PROGRESS | COMPLETED | FAILED | CANCELED
+    const status = String(sdata.status || '').toUpperCase();
+    if (status === 'COMPLETED') {
+      // Fetch the actual result from response_url
+      const responseUrl = response_url_q || `https://queue.fal.run/${model}/requests/${request_id}`;
+      const rr = await fetch(responseUrl, { headers: { 'Authorization': `Key ${falKey}` } });
+      const rdata = await rr.json().catch(() => ({}));
+      // Different fal models return video at different paths
+      const video_url = rdata.video?.url || rdata.output?.video?.url || rdata.video_url || rdata.video || rdata.output_url || rdata.url;
+      if (!video_url) return res.json({ status: 'done', error: 'no video_url in fal response', raw: rdata });
+      return res.json({ status: 'done', video_url });
+    }
+    if (status === 'FAILED' || status === 'CANCELED') {
+      return res.json({ status: 'error', error: sdata.error || status });
+    }
+    // IN_QUEUE / IN_PROGRESS / anything else → still working
+    return res.json({ status: 'pending', fal_status: status, queue_position: sdata.queue_position });
+  } catch (e) {
+    console.error('[lipsync-poll]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // 🔮 POST /ai/pick-a-card — สร้างคอนเทนต์ดูดวง "Pick a Card" 3 กองไพ่ สไตล์คุรุเทพ
 router.post('/pick-a-card', async (req, res) => {
   const { theme, num_piles } = req.body || {};

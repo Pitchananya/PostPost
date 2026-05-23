@@ -3969,9 +3969,8 @@ render();
     if (e.target.closest('[data-avatarvideo]')) { e.preventDefault(); genAvatarVideo(); }
   });
 
-  // 🎬 Client-side MP4 renderer — combines the picked avatar image + Azure TTS audio into
-  // a downloadable video (9:16 1080×1920). Uses Canvas + MediaRecorder + Web Audio API,
-  // so no backend video processing is needed. Result is a webm/mp4 dataURL ready to download.
+  // 🎬 Talking Avatar video — tries fal.ai lip-sync first (real mouth movement),
+  // falls back to client-side canvas (static avatar + audio) if FAL_KEY isn't set.
   async function genAvatarVideo(){
     if (state.avatarVideoLoading) return;
     var ab = BRANDS.filter(function(b){ return b.id===state.brand; })[0];
@@ -3984,8 +3983,61 @@ render();
     // Find picked avatar's image
     var all = (typeof AVATARS!=='undefined'?AVATARS:[]).concat(state.customAvatars||[]);
     var picked = all.filter(function(a){ return a.id===state.avatar; })[0];
+    if (!picked || !picked.image) {
+      toast(state.lang==='th'?'เลือก avatar ที่มีรูป (ไม่ใช่ตัวอักษร) หรืออัปโหลด/สร้างใหม่ด้วย AI':'Pick an avatar with an image','error');
+      return;
+    }
     state.avatarVideoLoading = true; state.avatarVideoProgress = 0; render();
-    toast(state.lang==='th'?'กำลังเรนเดอร์วิดีโอ MP4… (~30 วินาที)':'Rendering MP4… (~30 sec)');
+
+    // ── Try fal.ai lip-sync first ──────────────────────────────────────────
+    // Backend uploads image+audio to Supabase Storage → submits to fal.ai queue,
+    // we poll until done. Real mouth movement, ~60-180s. Requires FAL_KEY env var.
+    try {
+      toast(state.lang==='th'?'ส่งงานไป fal.ai สำหรับ lip-sync…':'Submitting to fal.ai…');
+      var sub = await api('/api/ai/lipsync-submit', { method:'POST', body:{
+        image_b64: picked.image,         // dataURL — backend extracts mime + base64
+        audio_b64: state.ttsAudio,
+        // model — left to backend default (FAL_LIPSYNC_MODEL env, defaults to fal-ai/sadtalker)
+      }});
+      if (sub && sub.request_id) {
+        state.avatarVideoProgress = 5; render();
+        var pollMax = 60;                                  // 60 × 5s = 5 min
+        var videoUrl = null;
+        for (var i = 0; i < pollMax; i++) {
+          await new Promise(function(r){ setTimeout(r, 5000); });
+          try {
+            var st = await api('/api/ai/lipsync-poll?request_id=' + encodeURIComponent(sub.request_id)
+              + '&model=' + encodeURIComponent(sub.model)
+              + '&status_url=' + encodeURIComponent(sub.status_url||'')
+              + '&response_url=' + encodeURIComponent(sub.response_url||''));
+            if (st && st.status === 'done' && st.video_url) { videoUrl = st.video_url; break; }
+            if (st && st.status === 'error') throw new Error(st.error || 'fal failed');
+            // pending → update progress estimate
+            state.avatarVideoProgress = Math.min(95, 10 + Math.round((i + 1) / pollMax * 85));
+            render();
+          } catch (pollErr) { /* keep polling on transient errors */ }
+        }
+        if (videoUrl) {
+          state.avatarVideo = videoUrl;
+          toast(state.lang==='th'?'lip-sync เสร็จ ✓ — กด MP4 ดาวน์โหลด':'Lip-sync ready ✓','success');
+          return;                                          // success — skip canvas fallback
+        }
+        // poll timed out → fall through to canvas fallback
+        toast(state.lang==='th'?'fal.ai ใช้เวลานานเกิน — สร้างแบบ static แทน':'fal.ai timed out — using static fallback','error');
+      }
+    } catch (falErr) {
+      var msg = (falErr && falErr.message) || '';
+      // FAL_KEY missing → silently fall back to canvas (no error toast — user might not need fal)
+      if (/FAL_KEY/i.test(msg)) {
+        console.log('[avatar-video] FAL_KEY not set — using client-side canvas fallback');
+      } else {
+        toast((state.lang==='th'?'fal.ai ใช้ไม่ได้ ใช้แบบ static แทน: ':'fal.ai unavailable, using static: ')+msg, 'error');
+      }
+    }
+
+    // ── Client-side canvas fallback ────────────────────────────────────────
+    // No lip-sync (static avatar) but always works without external deps.
+    toast(state.lang==='th'?'กำลังเรนเดอร์วิดีโอ MP4 (static avatar)… ~30 วินาที':'Rendering static MP4… ~30s');
     try {
       // 1) Load avatar image (or render initial as fallback)
       var avImg = null;
