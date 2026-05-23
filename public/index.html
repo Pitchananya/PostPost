@@ -4176,7 +4176,24 @@ render();
         toast(state.lang==='th'?'พื้นที่เก็บใกล้เต็ม — บันทึกผู้บรรยายไม่สำเร็จ':'Storage full — could not save presenter','error');
       }
     }
+    if (typeof schedCloudPush === 'function') schedCloudPush();
   }
+  // Hook all draft localStorage writes to also schedule a cloud push.
+  // Patches localStorage.setItem so any 'postpost_drafts'/'postpost_active_brand' write
+  // also triggers schedCloudPush() — keeps cloud + local mirror in sync without
+  // touching every single setItem call site.
+  (function(){
+    if (typeof localStorage === 'undefined') return;
+    var origSet = localStorage.setItem.bind(localStorage);
+    localStorage.setItem = function(key, val){
+      origSet(key, val);
+      if (typeof schedCloudPush !== 'function') return;
+      if (key === 'postpost_drafts' || key === 'postpost_active_brand'
+          || key === 'postpost_brands' || key === 'postpost_custom_avatars') {
+        schedCloudPush();
+      }
+    };
+  })();
   async function addCustomAvatar(av){
     av.image = await compressAvatarImage(av.image);
     state.customAvatars = (state.customAvatars||[]).concat([av]);
@@ -5317,7 +5334,91 @@ render();
     'linear-gradient(135deg,#34D399,#059669)','linear-gradient(135deg,#F472B6,#DB2777)',
     'linear-gradient(135deg,#38BDF8,#0284C7)','linear-gradient(135deg,#FBBF24,#D97706)',
   ];
-  function saveBrands(){ try { localStorage.setItem('postpost_brands', JSON.stringify(BRANDS)); } catch(e){} }
+  // localStorage = instant write (offline cache) · cloud = debounced 2.5s (per-tenant via team_workspace.state)
+  function saveBrands(){
+    try { localStorage.setItem('postpost_brands', JSON.stringify(BRANDS)); } catch(e){}
+    schedCloudPush();
+  }
+
+  // ── Cloud sync (Supabase via /api/workspace) ───────────────────────────
+  // Saves brands + drafts + customAvatars to team_workspace.state as JSON.
+  // Last-writer-wins via upsert on tenant_id.
+  var _cloudPushTimer = null;
+  var _cloudPushLastBody = '';
+  function schedCloudPush(delay){
+    delay = delay || 2500;
+    if (_cloudPushTimer) clearTimeout(_cloudPushTimer);
+    _cloudPushTimer = setTimeout(cloudPushNow, delay);
+  }
+  async function cloudPushNow(){
+    if (typeof api !== 'function') return;
+    if (!getTok || !getTok()) return;   // not logged in
+    var body = {
+      brands: BRANDS,
+      drafts: state.drafts || [],
+      customAvatars: state.customAvatars || [],
+      activeBrandId: state.brand,
+      updated_at: new Date().toISOString(),
+    };
+    var serialized = JSON.stringify(body);
+    if (serialized === _cloudPushLastBody) return;    // nothing changed
+    try {
+      // Skip huge payloads (>5MB) — likely a draft with full base64 image slipped in
+      if (serialized.length > 5 * 1024 * 1024) {
+        console.warn('[cloud-sync] payload too big ('+Math.round(serialized.length/1024)+'KB) — skipping');
+        return;
+      }
+      await api('/api/workspace', { method:'PUT', body:{ state: body } });
+      _cloudPushLastBody = serialized;
+    } catch (e) {
+      console.warn('[cloud-sync] push failed:', e.message);
+    }
+  }
+  async function cloudPullOnBoot(){
+    if (typeof api !== 'function') return;
+    if (!getTok || !getTok()) return;
+    try {
+      var r = await api('/api/workspace');
+      var ws = r && r.workspace;
+      if (!ws || !ws.state) return;     // no cloud state yet — new user
+      var s = ws.state;
+      var dirty = false;
+      // Merge brands (cloud → BRANDS array)
+      if (Array.isArray(s.brands) && s.brands.length) {
+        // Validate normalize then replace
+        BRANDS.length = 0;
+        s.brands.forEach(function(b){ BRANDS.push(normalizeBrand(b)); });
+        try { localStorage.setItem('postpost_brands', JSON.stringify(BRANDS)); } catch(_){}
+        dirty = true;
+      }
+      // Merge drafts
+      if (Array.isArray(s.drafts) && s.drafts.length) {
+        state.drafts = s.drafts;
+        try { localStorage.setItem('postpost_drafts', JSON.stringify(state.drafts)); } catch(_){}
+        dirty = true;
+      }
+      // Merge customAvatars
+      if (Array.isArray(s.customAvatars) && s.customAvatars.length) {
+        state.customAvatars = s.customAvatars;
+        try { localStorage.setItem('postpost_custom_avatars', JSON.stringify(state.customAvatars)); } catch(_){}
+        dirty = true;
+      }
+      // Active brand
+      if (s.activeBrandId && BRANDS.some(function(b){ return b.id===s.activeBrandId; })) {
+        state.brand = s.activeBrandId;
+      }
+      _cloudPushLastBody = JSON.stringify({
+        brands: BRANDS, drafts: state.drafts||[], customAvatars: state.customAvatars||[],
+        activeBrandId: state.brand, updated_at: s.updated_at,
+      });
+      if (dirty && typeof render === 'function') render();
+      console.log('[cloud-sync] pulled', { brands: (s.brands||[]).length, drafts: (s.drafts||[]).length, avatars: (s.customAvatars||[]).length });
+    } catch (e) {
+      console.warn('[cloud-sync] pull failed (offline or new tenant):', e.message);
+    }
+  }
+  // Expose for boot hook + debugging
+  if (typeof window !== 'undefined') { window.PP_CLOUD = { pull: cloudPullOnBoot, push: cloudPushNow }; }
   function addBrandModal(){
     if (BRANDS.length >= MAX_BRANDS) {
       toast(state.lang==='th'?'แผน Pro เพิ่มได้สูงสุด 5 แบรนด์':'Pro plan allows up to 5 brands','error');
@@ -5626,7 +5727,13 @@ render();
   // boot — a returning user with a valid token lands straight in the app
   (async function(){
     if (getTok()) {
-      try { await api('/api/auth/me'); state.page = 'profile'; render(); }
+      try {
+        await api('/api/auth/me');
+        state.page = 'profile';
+        render();
+        // Pull cloud state in background (silent — merge into local + re-render if changed)
+        if (typeof cloudPullOnBoot === 'function') cloudPullOnBoot();
+      }
       catch(e){ setTok(''); }
     }
   })();
