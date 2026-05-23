@@ -2429,10 +2429,23 @@ function pageAvatar() {
             var prodName = prod ? (prod.name_th||prod.name_en||'').slice(0,30) : (ab ? ab.name : '');
             var prodPrice = prod ? (prod.price ? '฿'+prod.price : '') : '';
 
-            if (state.avatarVideo) {
-              // ── Real generated video ───────────────────────────────
+            // Auto-pick the latest saved video draft to show as preview when no fresh render yet.
+            // This way users see the LAST rendered clip in the phone preview the moment they
+            // open the Talking Avatar page — instead of an empty placeholder.
+            var displayVideo = state.avatarVideo;
+            if (!displayVideo && !state.avatarVideoLoading) {
+              var videoDrafts = (state.drafts||[])
+                .filter(function(d){ return d.kind==='video' && (d.videoUrl || d.video_url); })
+                .sort(function(a,b){ return (b.createdAt||0) - (a.createdAt||0); });
+              if (videoDrafts.length) {
+                displayVideo = videoDrafts[0].videoUrl || videoDrafts[0].video_url;
+              }
+            }
+            if (displayVideo) {
+              // ── Real generated video (current or latest draft) ──────────────────
               return '<div class="phone" style="background:#000;overflow:hidden">'
-                + '<video src="'+state.avatarVideo+'" controls autoplay loop playsinline style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:inherit;z-index:1"></video>'
+                + '<video src="'+displayVideo+'" controls autoplay loop playsinline style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:inherit;z-index:1"></video>'
+                + (state.avatarVideo ? '' : '<div style="position:absolute;top:10px;left:10px;background:rgba(0,0,0,.65);color:#fff;font-size:10px;font-weight:700;padding:4px 8px;border-radius:99px;z-index:2;backdrop-filter:blur(8px)">'+T('คลิปล่าสุด','Latest clip')+'</div>')
                 + '</div>';
             }
             // Background layer — Pexels stock video (looped, muted) or user-uploaded
