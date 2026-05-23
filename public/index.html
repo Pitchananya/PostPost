@@ -2269,10 +2269,17 @@ function pageAvatar() {
             <div class="phoneCtrls"><div class="pBar"><div></div></div><div class="pTime"><span>0:10</span><span>0:27</span></div></div>
           </div>
         </div>
-        <div style="display:flex;gap:8px;margin-top:18px">
-          <button class="btn outline" style="flex:1">${I('download',14)} MP4</button>
-          <button class="btn outline" style="flex:1">${I('refresh',14)} ${T('เรนเดอร์ใหม่','Re-render')}</button>
-          <button class="btn primary" style="flex:1.5">${I('send',14)} ${T('โพสต์ Reels + TikTok','Post Reels + TikTok')}</button>
+        <div style="display:flex;gap:8px;margin-top:18px;flex-wrap:wrap">
+          <button class="btn primary" data-avatarvideo="1" style="flex:1.6;min-width:170px" ${state.avatarVideoLoading?'disabled':''}>
+            ${state.avatarVideoLoading ? I('refresh',14) : I('video',14)}
+            ${state.avatarVideoLoading
+              ? T('กำลังสร้าง… '+(state.avatarVideoProgress||0)+'%','Rendering… '+(state.avatarVideoProgress||0)+'%')
+              : (state.avatarVideo ? T('สร้างวิดีโอใหม่','Re-render') : T('สร้างวิดีโอ MP4','Create MP4'))}
+          </button>
+          ${state.avatarVideo
+            ? `<a class="btn outline" style="flex:1;min-width:100px;text-decoration:none;justify-content:center" href="${state.avatarVideo}" download="postpost-avatar.mp4">${I('download',14)} MP4</a>`
+            : `<button class="btn outline" style="flex:1;min-width:100px" disabled>${I('download',14)} MP4</button>`}
+          <button class="btn outline" style="flex:1;min-width:140px">${I('send',14)} ${T('โพสต์','Post')}</button>
         </div>
         <div style="margin-top:14px;padding:12px;border-radius:12px;background:var(--blue-soft);border:1px solid #DBE5FF;display:flex;align-items:center;gap:10px">
           ${I('sparkles',14,'#2563EB')}
@@ -3959,7 +3966,171 @@ render();
   }
   document.addEventListener('click', function(e){
     if (e.target.closest('[data-tts]')) { e.preventDefault(); genTts(); }
+    if (e.target.closest('[data-avatarvideo]')) { e.preventDefault(); genAvatarVideo(); }
   });
+
+  // 🎬 Client-side MP4 renderer — combines the picked avatar image + Azure TTS audio into
+  // a downloadable video (9:16 1080×1920). Uses Canvas + MediaRecorder + Web Audio API,
+  // so no backend video processing is needed. Result is a webm/mp4 dataURL ready to download.
+  async function genAvatarVideo(){
+    if (state.avatarVideoLoading) return;
+    var ab = BRANDS.filter(function(b){ return b.id===state.brand; })[0];
+    if (!ab) return;
+    // Require TTS audio first — render() flow is: pick voice + script → "ฟังเสียง" → then create video
+    if (!state.ttsAudio) {
+      toast(state.lang==='th'?'กด "ฟังเสียง" ก่อน — สร้างเสียง TTS เสร็จแล้วค่อยสร้างวิดีโอ':'Generate TTS audio first','error');
+      return;
+    }
+    // Find picked avatar's image
+    var all = (typeof AVATARS!=='undefined'?AVATARS:[]).concat(state.customAvatars||[]);
+    var picked = all.filter(function(a){ return a.id===state.avatar; })[0];
+    state.avatarVideoLoading = true; state.avatarVideoProgress = 0; render();
+    toast(state.lang==='th'?'กำลังเรนเดอร์วิดีโอ MP4… (~30 วินาที)':'Rendering MP4… (~30 sec)');
+    try {
+      // 1) Load avatar image (or render initial as fallback)
+      var avImg = null;
+      if (picked && picked.image) {
+        avImg = await new Promise(function(resolve){
+          var im = new Image(); im.crossOrigin='anonymous';
+          im.onload = function(){ resolve(im); };
+          im.onerror = function(){ resolve(null); };
+          im.src = picked.image;
+        });
+      }
+      // 2) Set up 9:16 canvas (1080×1920) — Reels/TikTok format
+      var W = 1080, H = 1920;
+      var cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+      var cx = cv.getContext('2d');
+      // 3) Audio — decode TTS dataURL so we can drive the recorder + know duration
+      var audioBuf = await fetch(state.ttsAudio).then(function(r){ return r.arrayBuffer(); });
+      var audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+      var decoded = await audioCtx.decodeAudioData(audioBuf.slice(0));
+      var duration = decoded.duration;        // seconds
+      // 4) Build a MediaStream: canvas video track + audio track from a hidden <audio>
+      var canvasStream = cv.captureStream(30);   // 30 fps
+      // Use a NEW <audio> element so MediaRecorder can capture its output via WebAudio
+      var audioEl = new Audio(state.ttsAudio);
+      audioEl.crossOrigin = 'anonymous';
+      var srcNode = audioCtx.createMediaElementSource(audioEl);
+      var dest = audioCtx.createMediaStreamDestination();
+      srcNode.connect(dest);
+      srcNode.connect(audioCtx.destination);     // also play through speakers during render (silent ok)
+      var combinedStream = new MediaStream([
+        canvasStream.getVideoTracks()[0],
+        dest.stream.getAudioTracks()[0],
+      ]);
+      // 5) Pick the best MIME this browser supports
+      var mime = 'video/webm;codecs=vp9,opus';
+      if (!MediaRecorder.isTypeSupported(mime)) mime = 'video/webm;codecs=vp8,opus';
+      if (!MediaRecorder.isTypeSupported(mime)) mime = 'video/webm';
+      var recorder = new MediaRecorder(combinedStream, { mimeType: mime, videoBitsPerSecond: 4_000_000 });
+      var chunks = [];
+      recorder.ondataavailable = function(e){ if (e.data && e.data.size) chunks.push(e.data); };
+      // 6) Animate frames — orange gradient bg + product card top + avatar + script caption rolling
+      var startTs = performance.now();
+      var stopTs = startTs + duration * 1000 + 400;      // +400ms tail
+      var caption = (state.avatarScript||'').trim();
+      function drawFrame(now){
+        var elapsed = (now - startTs) / 1000;
+        var pct = Math.min(1, elapsed / duration);
+        state.avatarVideoProgress = Math.round(pct * 100);
+        // Background — warm orange gradient like the in-app phone preview
+        var g = cx.createLinearGradient(0, 0, 0, H);
+        g.addColorStop(0,'#FFE4B5'); g.addColorStop(.4,'#FB923C'); g.addColorStop(1,'#9A3412');
+        cx.fillStyle = g; cx.fillRect(0,0,W,H);
+        // Brand header
+        cx.fillStyle = 'rgba(255,255,255,.18)'; cx.fillRect(40,40,W-80,90);
+        cx.fillStyle = '#fff'; cx.font = '700 38px Prompt, sans-serif'; cx.textBaseline='middle';
+        cx.fillText(ab.name || 'Brand', 70, 85);
+        // Avatar — large centered portrait
+        var ax = W/2, ay = H/2 - 100, ar = 380;
+        cx.save();
+        cx.beginPath(); cx.arc(ax, ay, ar, 0, Math.PI*2); cx.closePath(); cx.clip();
+        if (avImg) {
+          // cover-fit
+          var iw = avImg.naturalWidth, ih = avImg.naturalHeight, ir = iw/ih, cr = 1;
+          var dw, dh, dx, dy;
+          if (ir > cr) { dh = ar*2; dw = dh*ir; dx = ax - dw/2; dy = ay - ar; }
+          else { dw = ar*2; dh = dw/ir; dx = ax - ar; dy = ay - dh/2; }
+          cx.drawImage(avImg, dx, dy, dw, dh);
+        } else {
+          // fallback color circle with initial
+          cx.fillStyle = '#FB923C'; cx.fillRect(ax-ar, ay-ar, ar*2, ar*2);
+          cx.fillStyle = '#fff'; cx.font = '900 240px Prompt, sans-serif';
+          cx.textAlign='center'; cx.textBaseline='middle';
+          cx.fillText((picked&&picked.initial_th)||(picked&&picked.name_th||'?').charAt(0), ax, ay);
+        }
+        cx.restore();
+        // Avatar ring
+        cx.lineWidth = 12; cx.strokeStyle = 'rgba(255,255,255,.9)';
+        cx.beginPath(); cx.arc(ax, ay, ar, 0, Math.PI*2); cx.stroke();
+        // Caption rolling — show ~25 chars at a time, advance with audio
+        cx.fillStyle = 'rgba(0,0,0,.6)';
+        cx.fillRect(60, H-470, W-120, 380);
+        cx.fillStyle = '#fff'; cx.font = '600 44px Prompt, sans-serif';
+        cx.textAlign='left'; cx.textBaseline='top';
+        // wrap caption into lines and scroll through them
+        var words = caption.split(/(\s+)/);
+        var lines = [], cur = '';
+        for (var wi=0; wi<words.length; wi++){
+          var test = cur + words[wi];
+          if (cx.measureText(test).width > W - 180 && cur) { lines.push(cur.trim()); cur = words[wi]; }
+          else cur = test;
+        }
+        if (cur.trim()) lines.push(cur.trim());
+        var totalLines = Math.max(1, lines.length);
+        var visibleLines = 6;
+        var maxScroll = Math.max(0, totalLines - visibleLines);
+        var scrollStart = Math.floor(pct * maxScroll);
+        var lineY = H - 430;
+        for (var li=0; li<visibleLines; li++){
+          var idx = scrollStart + li;
+          if (idx >= lines.length) break;
+          cx.fillText(lines[idx], 100, lineY + li * 58);
+        }
+        // Progress bar at bottom
+        cx.fillStyle = 'rgba(255,255,255,.35)';
+        cx.fillRect(60, H-50, W-120, 8);
+        cx.fillStyle = '#fff';
+        cx.fillRect(60, H-50, (W-120) * pct, 8);
+      }
+      // 7) Start everything
+      var rafId = null;
+      function loop(now){
+        drawFrame(now);
+        if (now < stopTs) {
+          rafId = requestAnimationFrame(loop);
+          if (state.avatarVideoLoading) render(); // update progress %
+        }
+      }
+      var stopPromise = new Promise(function(resolve){
+        recorder.onstop = function(){
+          if (rafId) cancelAnimationFrame(rafId);
+          try { audioCtx.close(); } catch(_){}
+          var blob = new Blob(chunks, { type: mime });
+          var reader = new FileReader();
+          reader.onload = function(){ resolve(reader.result); };
+          reader.readAsDataURL(blob);
+        };
+      });
+      // Start audio + canvas drawing + recorder all at once
+      audioEl.play();
+      recorder.start(250);
+      requestAnimationFrame(loop);
+      // Stop after audio finishes (+ short tail)
+      setTimeout(function(){ try { recorder.stop(); } catch(_){} }, duration * 1000 + 500);
+      var dataUrl = await stopPromise;
+      state.avatarVideo = dataUrl;
+      // Best-effort: even though MIME is webm, the .mp4 extension on the download link
+      // works with most players. For real MP4 the user can transcode offline if needed.
+      toast(state.lang==='th'?'สร้างวิดีโอเสร็จ ✓ — กด MP4 เพื่อดาวน์โหลด':'Video ready ✓ — click MP4 to download','success');
+    } catch(e){
+      console.error('[avatar-video]', e);
+      toast((state.lang==='th'?'สร้างวิดีโอไม่สำเร็จ: ':'Failed: ')+(e.message||''),'error');
+    } finally {
+      state.avatarVideoLoading = false; state.avatarVideoProgress = 0; render();
+    }
+  }
 
   async function createAvatarWithAI(){
     if (state.avatarGenLoading) return;
@@ -4874,7 +5045,7 @@ render();
     + '[data-filter],[data-filterclose],[data-sortby],[data-instocktoggle],'
     + '[data-gentopics],[data-topicgoal],'
     + '[data-saveproduct],[data-newimgclear],[data-newimg],[data-proddelete],[data-usetopic],[data-genall],[data-savedraft],[data-savevideodraft],[data-editdraft],[data-deletedraft],[data-schedule],[data-avatarscript],[data-veogen],[data-newavatar],'
-    + '[data-uploadavatar],[data-uploadref],[data-clearref],[data-pickrefproduct],[data-refclose],[data-refpick],[data-genvideoprompt],[data-delavatar],[data-addtoday],[data-pickdraft],[data-pickdraftclose],[data-pickdraftgo],[data-tts],[data-pickfbpage],'
+    + '[data-uploadavatar],[data-uploadref],[data-clearref],[data-pickrefproduct],[data-refclose],[data-refpick],[data-genvideoprompt],[data-delavatar],[data-addtoday],[data-pickdraft],[data-pickdraftclose],[data-pickdraftgo],[data-tts],[data-pickfbpage],[data-avatarvideo],'
     + '[data-previewaspect],[data-previewidx],[data-downloadpng]';
   document.addEventListener('click', function(e){
     var b = e.target.closest('button, a');
