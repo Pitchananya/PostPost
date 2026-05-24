@@ -54,6 +54,9 @@ import { pageCreative } from './pages/creative.js';
 import { pageProfile } from './pages/profile.js';
 import { pageTextVideo } from './pages/textvideo.js';
 import { pageAvatar } from './pages/avatar.js';
+import { sidebarHTML } from './components/sidebar.js';
+import { topbarHTML } from './components/topbar.js';
+import { profileMenuHTML, openProfileDetail } from './components/profile-menu.js';
 
 // ── Step 1: bind i18n to the (now-canonical) state ──
 // state.js's _initState() already returned the same object the inline
@@ -128,6 +131,10 @@ window.PP = Object.assign(window.PP || {}, {
   splitScriptIntoChunks,
   detectChromaMode, makeChromaKeyer,
   idbPutImage, idbGetImage, idbDeleteImage, compressImageDataUrl,
+  // Phase 3e — extracted shell components (sidebar, topbar, profile menu)
+  // The inline render() now reads these via window.PP.* so the inline
+  // declarations can be deleted.
+  sidebarHTML, topbarHTML, profileMenuHTML, openProfileDetail,
   // PAGES + render survive from inline; we re-export here so future page
   // modules can grab them off window.PP without poking at globals.
   // (The inline script wrote these onto window.PP during its own boot block.)
