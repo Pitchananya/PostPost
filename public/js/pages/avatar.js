@@ -94,9 +94,45 @@ export function pageAvatar() {
   const modeAudioReactiveHint = state.avatarMode === 'free' ? `
     <div style="margin-top:12px;padding:11px 13px;border-radius:10px;background:#FEF3C7;border:1px solid #FDE68A;display:flex;align-items:flex-start;gap:9px;font-size:11.5px;line-height:1.55;color:#92400E">
       ${I('info', 14, '#92400E')}
-      <div><b>${T('ในโหมดนี้หน้าจะไม่ขยับจริง', 'Face stays static in this mode')}</b> — ${T('แค่หายใจ + ขยับเล็กตามเสียง', 'just breathing + audio-driven motion')}<br>
-      ${T('อยากให้เหมือนคนพูดจริง (ปากขยับ + ตัวขยับ + ทำท่า)? เปลี่ยนเป็น', 'Want real talking-person animation (mouth + body + gestures)? Switch to')} <b>${T('Real lip-sync', 'Real lip-sync')}</b> ${T('— โมเดลแนะนำ', '— recommended model')} <b>OmniHuman v1.5</b></div>
-    </div>` : '';
+      <div>
+        <b>${T('ในโหมดนี้หน้าจะไม่ขยับจริง', 'Face stays static in this mode')}</b> — ${T('แค่หายใจ + ขยับเล็กตามเสียง', 'just breathing + audio-driven motion')}<br>
+        ${T('อยากให้ปากขยับจริงแบบฟรี?', 'Want real mouth animation for FREE?')} ${T('กด ▶ ดูทางเลือกฟรี ด้านล่าง — Hedra, HF Wav2Lip, ฯลฯ', 'Click ▶ Free options below — Hedra, HF Wav2Lip, etc.')}
+      </div>
+    </div>
+    <details style="margin-top:10px;background:#F0FDF4;border:1px solid #86EFAC;border-radius:10px;overflow:hidden">
+      <summary style="padding:11px 13px;font-size:12.5px;font-weight:700;color:#065F46;cursor:pointer;display:flex;align-items:center;gap:8px;list-style:none">
+        ${I('sparkles', 14, '#065F46')} ${T('🆓 ทางเลือกฟรีให้ปาก/หน้าขยับ (ไม่ผ่าน fal.ai)', '🆓 Free options for real lipsync (skip fal.ai)')}
+      </summary>
+      <div style="padding:0 14px 14px;font-size:12px;line-height:1.7;color:#064E3B">
+        <p style="margin:0 0 10px"><b>${T('หลักการ:', 'How it works:')}</b> ${T('ไปใช้ AI lipsync ฟรีในเว็บอื่น → copy URL วิดีโอ → กลับมา paste ที่ "วาง URL วิดีโอ lip-sync" (ในส่วน Real lip-sync) → PostPost จะ composite กับ Pexels bg ให้', 'Use free AI lipsync on another site → copy the result URL → paste it back here under Real lip-sync\\'s "paste URL" input → PostPost composites it with the Pexels bg')}</p>
+        <div style="background:#fff;border-radius:8px;padding:10px 12px;margin-bottom:8px">
+          <b style="color:#065F46">🌟 Hedra</b> <span style="background:#10B981;color:#fff;font-size:9px;padding:1px 6px;border-radius:99px;font-weight:800">30 FREE/MO</span><br>
+          <a href="https://www.hedra.com/app" target="_blank" style="color:#065F46;font-size:11px">https://www.hedra.com/app</a><br>
+          <span style="font-size:11px;opacity:.85">${T('คุณภาพดีที่สุดในกลุ่มฟรี · ปากขยับเป๊ะ · หน้าขยับ · 30 คลิป/เดือน', 'Best free quality · accurate lipsync · face motion · 30 clips/month')}</span>
+        </div>
+        <div style="background:#fff;border-radius:8px;padding:10px 12px;margin-bottom:8px">
+          <b style="color:#065F46">🤗 Hugging Face Spaces — Wav2Lip</b> <span style="background:#10B981;color:#fff;font-size:9px;padding:1px 6px;border-radius:99px;font-weight:800">UNLIMITED FREE</span><br>
+          <a href="https://huggingface.co/spaces/manavisrani07/gradio-lipsync-wav2lip" target="_blank" style="color:#065F46;font-size:11px">huggingface.co/spaces/manavisrani07/gradio-lipsync-wav2lip</a><br>
+          <span style="font-size:11px;opacity:.85">${T('ฟรีไม่จำกัด แต่ต่อคิว 1-5 นาที · ปากขยับเท่านั้น (ไม่ทั้งหน้า)', 'Unlimited free but 1-5 min queue · mouth-only animation')}</span>
+        </div>
+        <div style="background:#fff;border-radius:8px;padding:10px 12px;margin-bottom:8px">
+          <b style="color:#065F46">🤗 Hugging Face Spaces — SadTalker</b> <span style="background:#10B981;color:#fff;font-size:9px;padding:1px 6px;border-radius:99px;font-weight:800">UNLIMITED FREE</span><br>
+          <a href="https://huggingface.co/spaces/vinthony/SadTalker" target="_blank" style="color:#065F46;font-size:11px">huggingface.co/spaces/vinthony/SadTalker</a><br>
+          <span style="font-size:11px;opacity:.85">${T('ฟรี · ปาก + หน้าเอียงนิดๆ · queue บางครั้งยาว', 'Free · mouth + slight head tilt · queue can be slow')}</span>
+        </div>
+        <div style="background:#fff;border-radius:8px;padding:10px 12px;margin-bottom:8px">
+          <b style="color:#065F46">💧 Replicate</b> <span style="background:#10B981;color:#fff;font-size:9px;padding:1px 6px;border-radius:99px;font-weight:800">$5 FREE TRIAL</span><br>
+          <a href="https://replicate.com/devxpy/wav2lip-hq" target="_blank" style="color:#065F46;font-size:11px">replicate.com/devxpy/wav2lip-hq</a><br>
+          <span style="font-size:11px;opacity:.85">${T('$5 free credit แรกสมัคร (~50 clips) · คุณภาพ HQ', '$5 free credit on signup (~50 clips) · HQ quality')}</span>
+        </div>
+        <div style="background:#fff;border-radius:8px;padding:10px 12px">
+          <b style="color:#065F46">🎬 D-ID</b> <span style="background:#F59E0B;color:#fff;font-size:9px;padding:1px 6px;border-radius:99px;font-weight:800">14-DAY TRIAL</span><br>
+          <a href="https://studio.d-id.com/" target="_blank" style="color:#065F46;font-size:11px">studio.d-id.com</a><br>
+          <span style="font-size:11px;opacity:.85">${T('คุณภาพสูงมาก · ฟรี 14 วันแรก · หลังจากนั้นจ่าย', 'Premium quality · free 14 days · paid after')}</span>
+        </div>
+        <p style="margin:12px 0 0;font-size:11px;color:#065F46;font-style:italic">${T('💡 Tip: รูป + เสียงต้องเป็น URL สาธารณะ — ลาก/วาง avatar ที่ Step 2 + เสียงจาก Supabase (PostPost upload ให้แล้ว)', '💡 Tip: image + audio must be public URLs — drag your avatar in Step 2 + audio is auto-uploaded by PostPost')}</p>
+      </div>
+    </details>` : '';
 
   const modeInfinitalkWarning = (state.avatarMode === 'real' && (state.avatarLipsyncModel || '').indexOf('infinitalk') >= 0) ? `
     <div style="margin-top:12px;padding:11px 13px;border-radius:10px;background:#FEE2E2;border:1px solid #FCA5A5;display:flex;align-items:flex-start;gap:9px;font-size:11.5px;line-height:1.55;color:#991B1B">
