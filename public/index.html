@@ -1027,7 +1027,7 @@ function setupAvatarBgRotation() {
 // ====================================================================
 // EVENT DELEGATION
 // ====================================================================
-console.log('[boot] PostPost ready · page=' + (state && state.page) + ' · lang=' + (state && state.lang) + ' · build=fix-bg-button');
+console.log('[boot] PostPost ready · page=' + (state && state.page) + ' · lang=' + (state && state.lang) + ' · build=auto-repair-bg');
 document.addEventListener('click', (e) => {
   // Diagnostic — log every data-go click so we can verify the navigation
   // chain actually fires. User reported "เข้าสู่ระบบไม่ได้" — if this log
@@ -1269,7 +1269,7 @@ render();
      ES-module graph instead of serving a stale index.html that calls old code.
      Critical for billing-fix rollouts (see commit e043a18) — stale cache here
      means the user keeps clicking "free" while old code keeps calling fal.ai. -->
-<script type="module" src="/js/main.js?v=fix-bg-button"></script>
+<script type="module" src="/js/main.js?v=auto-repair-bg"></script>
 
 <!-- ============================================================ -->
 <!-- PostPost backend wiring — API client + real auth             -->
@@ -2754,6 +2754,88 @@ render();
         }
       } catch (e) {
         console.warn('[avatar-video] chroma detection failed:', e.message);
+      }
+
+      // ── AUTO-REPAIR ────────────────────────────────────────────────────
+      // If we detected OPAQUE BLACK corners on an IMAGE source (no lipsync
+      // video), the avatar is almost certainly a JPEG-corrupted ex-removeBg
+      // file from before commit b13cfe5. Black-keying it would eat dark
+      // hair (luminance 15-25 sits in the black-key fade range).
+      //
+      // Restructured fix (replaces the manual "🔧 ซ่อม bg" button workflow):
+      // detect the situation right here, call /api/ai/remove-bg on the fly
+      // to get a fresh transparent PNG from birefnet, save it back to the
+      // avatar (cached for future renders), re-decode it, and re-run the
+      // chroma sample — should land on 'transparent' mode the second time
+      // around. Adds ~10-15s once per broken avatar; subsequent renders
+      // use the cached PNG (no API call).
+      //
+      // Only triggers for image sources — video sources (e.g. Wav2Lip
+      // output with black bg) keep their original black chroma behavior.
+      if (chromaMode === 'black' && !avLipsyncVideo && avImg && state.avatar) {
+        try {
+          console.warn('[avatar-video] black bg detected on image source → auto-repairing via birefnet (one-time per avatar)');
+          toast(state.lang==='th'?'🔧 ตรวจพบ avatar ที่มี bg เสีย — กำลังซ่อมอัตโนมัติ (~15 วิ)…':'🔧 Broken avatar bg detected — auto-repairing (~15s)…');
+          var rrSub = await api('/api/ai/remove-bg', { method:'POST', body:{ image_b64: avImg.src } });
+          if (rrSub && rrSub.image_url) {
+            // Fetch + cache as proper PNG (alpha preserved per compressImageDataUrl fmt='png')
+            var rrBlob = await fetch(rrSub.image_url).then(function(rr){ return rr.blob(); });
+            var rrDataUrl = await new Promise(function(resolve, reject){
+              var rd = new FileReader();
+              rd.onload = function(){ resolve(rd.result); };
+              rd.onerror = function(){ reject(new Error('read fail')); };
+              rd.readAsDataURL(rrBlob);
+            });
+            var rrPng = await compressImageDataUrl(rrDataUrl, 600, 1.0, 'png').catch(function(){ return rrDataUrl; });
+            // Persist the fix so we don't repeat the API call next render
+            var rrAv = (state.customAvatars||[]).filter(function(a){ return a.id===state.avatar; })[0];
+            if (rrAv) {
+              rrAv.image = rrPng;
+              rrAv.bgRemoved = true;
+              try { saveCustomAvatars(); } catch(_){}
+            }
+            // Re-decode + re-run chroma sample
+            await new Promise(function(resolve){
+              var newImg = new Image();
+              newImg.crossOrigin = 'anonymous';
+              newImg.onload = function(){ avImg = newImg; resolve(); };
+              newImg.onerror = function(){ resolve(); };
+              newImg.src = rrPng;
+            });
+            // Re-sample 4 corners on the repaired image
+            try {
+              var sw2 = avImg.naturalWidth || 256, sh2 = avImg.naturalHeight || 256;
+              chromaCanvas.width = Math.min(sw2, 256);
+              chromaCanvas.height = Math.min(sh2, 256);
+              chromaCx.clearRect(0, 0, chromaCanvas.width, chromaCanvas.height);
+              chromaCx.drawImage(avImg, 0, 0, chromaCanvas.width, chromaCanvas.height);
+              var samples2 = [
+                chromaCx.getImageData(2, 2, 1, 1).data,
+                chromaCx.getImageData(chromaCanvas.width-3, 2, 1, 1).data,
+                chromaCx.getImageData(2, chromaCanvas.height-3, 1, 1).data,
+                chromaCx.getImageData(chromaCanvas.width-3, chromaCanvas.height-3, 1, 1).data,
+              ];
+              var tx2 = 0;
+              for (var si2 = 0; si2 < samples2.length; si2++) {
+                if (samples2[si2][3] < 50) tx2++;
+              }
+              if (tx2 >= 3) {
+                chromaMode = 'transparent';
+                console.log('[avatar-video] ✓ auto-repair done — re-detected mode: transparent');
+                toast(state.lang==='th'?'✓ ซ่อม avatar สำเร็จ — ใช้ pass-through compositor':'✓ Avatar repaired — using pass-through compositor','success');
+              } else {
+                console.warn('[avatar-video] auto-repair: birefnet ran but corners not transparent (count='+tx2+'), keeping mode=black');
+              }
+            } catch(e2) {
+              console.warn('[avatar-video] auto-repair re-sample failed:', e2.message);
+            }
+          } else {
+            console.warn('[avatar-video] auto-repair: birefnet returned no image_url, keeping mode=black');
+          }
+        } catch (rrErr) {
+          console.warn('[avatar-video] auto-repair failed:', rrErr.message, '— continuing with black mode');
+          toast(state.lang==='th'?'ซ่อม avatar ไม่สำเร็จ — render ต่อด้วยโหมดเดิม':'Auto-repair failed — continuing with original mode');
+        }
       }
       // ─────────────────────────────────────────────────────────────────
       // chromaKeyFrame — 3 optimizations vs the original CPU loop:
