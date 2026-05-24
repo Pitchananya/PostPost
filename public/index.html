@@ -1144,7 +1144,21 @@ document.addEventListener('click', (e) => {
       state.brandDesc = nb.desc || '';
       state.voice = Array.isArray(nb.voice) ? nb.voice.slice() : [];
       state.archetype = nb.archetype || '';
-      TOPICS = (Array.isArray(nb.topics) && nb.topics.length) ? nb.topics : (nb.id === 'happyprice' ? DEMO_TOPICS : []);
+      TOPICS = (function(){
+        // Defense in depth: even if nb.topics survives migration, filter at read time.
+        // If brand isn't happyprice AND the first saved topic mentions a known skincare
+        // keyword → ignore the cloud/local cache and start fresh (empty state → user gens new).
+        var saved = Array.isArray(nb.topics) ? nb.topics : null;
+        if (saved && saved.length && nb.id !== 'happyprice') {
+          var ft = saved[0], sample = (ft && (ft.th || ft.en)) || '';
+          if (/Marine Collagen|สกินแคร์|skincare|ผิวบอบบาง|Sheet Mask|Rose Repair|Bio Astin|Bovine Collagen|คอลลาเจน|เซรั่ม|กุหลาบเขาใหญ่/i.test(sample)) {
+            console.log('[topics] read-time filter — ignoring stale skincare topics for brand:', nb.id);
+            nb.topics = [];          // also wipe on the brand obj so it doesn't propagate
+            saved = null;
+          }
+        }
+        return (saved && saved.length) ? saved : (nb.id === 'happyprice' ? DEMO_TOPICS : []);
+      })();
       PRODUCTS = (Array.isArray(nb.products) && nb.products.length) ? nb.products : (nb.id === 'happyprice' ? DEMO_PRODUCTS : []);
       state.selectedProducts = PRODUCTS.map(function(p){ return p.id; });
       state.shopStats = nb.shopStats || null;
@@ -1243,7 +1257,7 @@ render();
      ES-module graph instead of serving a stale index.html that calls old code.
      Critical for billing-fix rollouts (see commit e043a18) — stale cache here
      means the user keeps clicking "free" while old code keeps calling fal.ai. -->
-<script type="module" src="/js/main.js?v=kinds-14"></script>
+<script type="module" src="/js/main.js?v=skincare-purge"></script>
 
 <!-- ============================================================ -->
 <!-- PostPost backend wiring — API client + real auth             -->
@@ -1690,7 +1704,21 @@ render();
         state.brandDesc = nb.desc || '';
         state.voice = Array.isArray(nb.voice) ? nb.voice.slice() : [];
         state.archetype = nb.archetype || '';
-        TOPICS = (Array.isArray(nb.topics) && nb.topics.length) ? nb.topics : (nb.id === 'happyprice' ? DEMO_TOPICS : []);
+        TOPICS = (function(){
+        // Defense in depth: even if nb.topics survives migration, filter at read time.
+        // If brand isn't happyprice AND the first saved topic mentions a known skincare
+        // keyword → ignore the cloud/local cache and start fresh (empty state → user gens new).
+        var saved = Array.isArray(nb.topics) ? nb.topics : null;
+        if (saved && saved.length && nb.id !== 'happyprice') {
+          var ft = saved[0], sample = (ft && (ft.th || ft.en)) || '';
+          if (/Marine Collagen|สกินแคร์|skincare|ผิวบอบบาง|Sheet Mask|Rose Repair|Bio Astin|Bovine Collagen|คอลลาเจน|เซรั่ม|กุหลาบเขาใหญ่/i.test(sample)) {
+            console.log('[topics] read-time filter — ignoring stale skincare topics for brand:', nb.id);
+            nb.topics = [];          // also wipe on the brand obj so it doesn't propagate
+            saved = null;
+          }
+        }
+        return (saved && saved.length) ? saved : (nb.id === 'happyprice' ? DEMO_TOPICS : []);
+      })();
         PRODUCTS = (Array.isArray(nb.products) && nb.products.length) ? nb.products : (nb.id === 'happyprice' ? DEMO_PRODUCTS : []);
         state.selectedProducts = PRODUCTS.map(function(p){ return p.id; });
         state.shopStats = nb.shopStats || null;
@@ -4461,12 +4489,51 @@ render();
       if (s.activeBrandId && BRANDS.some(function(b){ return b.id===s.activeBrandId; })) {
         state.brand = s.activeBrandId;
       }
+      // ──────────────────────────────────────────────────────────────
+      // Skincare migration — RE-RUN after cloud pull. The boot-time
+      // migration cleans local BRANDS, but then cloudPull replaces
+      // BRANDS with the cloud version which may still have stale
+      // skincare topics/products. Re-run here to clean the merged
+      // BRANDS, then push the cleaned version back to cloud so it
+      // doesn't haunt future logins.
+      // ──────────────────────────────────────────────────────────────
+      var SKIN_KW = /Marine Collagen|สกินแคร์|skincare|ผิวบอบบาง|Sheet Mask|Rose Repair|Bio Astin|Bovine Collagen|Toner Pad|คอลลาเจน|เซรั่ม|Beauty Trio|กุหลาบเขาใหญ่/i;
+      var PROD_KW = /Marine Collagen|iCON|BellaCare|Amado|CmaX|JOJU|Linhzhimin|Kumiko/i;
+      var cleaned = false;
+      BRANDS.forEach(function(b){
+        if (b.id === 'happyprice') return;
+        if (Array.isArray(b.topics) && b.topics.length) {
+          var ft = b.topics[0];
+          var sample = (ft && (ft.th || ft.en)) || '';
+          if (SKIN_KW.test(sample)) {
+            console.log('[cloud-sync] post-pull cleanup — wiping skincare topics from:', b.id);
+            b.topics = [];
+            cleaned = true;
+          }
+        }
+        if (Array.isArray(b.products) && b.products.length) {
+          var fp = b.products[0];
+          var pname = (fp && (fp.name_th || fp.name_en || fp.name)) || '';
+          if (PROD_KW.test(pname)) {
+            console.log('[cloud-sync] post-pull cleanup — wiping skincare products from:', b.id);
+            b.products = [];
+            cleaned = true;
+          }
+        }
+      });
+      if (cleaned) {
+        try { localStorage.setItem('postpost_brands', JSON.stringify(BRANDS)); } catch(_){}
+        // Force push the cleaned BRANDS back to cloud immediately so future
+        // pulls don't reintroduce the skincare data.
+        if (typeof schedCloudPush === 'function') schedCloudPush();
+        dirty = true;
+      }
       _cloudPushLastBody = JSON.stringify({
         brands: BRANDS, drafts: state.drafts||[], customAvatars: state.customAvatars||[],
         activeBrandId: state.brand, updated_at: s.updated_at,
       });
       if (dirty && typeof render === 'function') render();
-      console.log('[cloud-sync] pulled', { brands: (s.brands||[]).length, drafts: (s.drafts||[]).length, avatars: (s.customAvatars||[]).length });
+      console.log('[cloud-sync] pulled', { brands: (s.brands||[]).length, drafts: (s.drafts||[]).length, avatars: (s.customAvatars||[]).length, cleaned: cleaned });
     } catch (e) {
       console.warn('[cloud-sync] pull failed (offline or new tenant):', e.message);
     }
