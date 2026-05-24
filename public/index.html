@@ -1027,7 +1027,7 @@ function setupAvatarBgRotation() {
 // ====================================================================
 // EVENT DELEGATION
 // ====================================================================
-console.log('[boot] PostPost ready · page=' + (state && state.page) + ' · lang=' + (state && state.lang) + ' · build=login-fix-v2');
+console.log('[boot] PostPost ready · page=' + (state && state.page) + ' · lang=' + (state && state.lang) + ' · build=png-alpha-keep');
 document.addEventListener('click', (e) => {
   // Diagnostic — log every data-go click so we can verify the navigation
   // chain actually fires. User reported "เข้าสู่ระบบไม่ได้" — if this log
@@ -1269,7 +1269,7 @@ render();
      ES-module graph instead of serving a stale index.html that calls old code.
      Critical for billing-fix rollouts (see commit e043a18) — stale cache here
      means the user keeps clicking "free" while old code keeps calling fal.ai. -->
-<script type="module" src="/js/main.js?v=force-green-upload"></script>
+<script type="module" src="/js/main.js?v=png-alpha-keep"></script>
 
 <!-- ============================================================ -->
 <!-- PostPost backend wiring — API client + real auth             -->
@@ -3384,8 +3384,11 @@ render();
         rd.onerror = function(){ reject(new Error('read fail')); };
         rd.readAsDataURL(blob);
       });
-      // Keep the PNG (alpha is critical) — compress only the dimensions
-      var compressed = await compressImageDataUrl(rawDataUrl, 600, 1.0).catch(function(){ return rawDataUrl; });
+      // ⚠ MUST pass fmt='png' — the default JPEG path destroys the alpha
+      // channel that birefnet just produced. Without this, the "transparent"
+      // avatar comes back as an OPAQUE BLACK-bg JPEG, and chroma detection
+      // then picks black-mode → black-keyer eats dark hair on render.
+      var compressed = await compressImageDataUrl(rawDataUrl, 600, 1.0, 'png').catch(function(){ return rawDataUrl; });
       av.image = compressed;
       av.bgRemoved = true;
       saveCustomAvatars();
@@ -4185,8 +4188,18 @@ render();
     });
   }
 
-  function compressImageDataUrl(dataUrl, maxDim, quality){
+  // compressImageDataUrl(src, maxDim, quality, fmt?)
+  //   fmt: 'jpeg' (default — smaller, no alpha) | 'png' (lossless, KEEPS alpha)
+  //
+  // ⚠ JPEG silently destroys the alpha channel — transparent pixels become
+  // OPAQUE BLACK. This used to break avatar chroma-key in a subtle way:
+  // removeAvatarBg returned a transparent PNG → this function JPEG'd it →
+  // saved avatar had alpha=255 + RGB=(0,0,0) at corners → chroma detector
+  // picked 'black' mode → black-keyer ate dark Asian hair. Always pass
+  // fmt='png' for any image that needs to keep transparency.
+  function compressImageDataUrl(dataUrl, maxDim, quality, fmt){
     maxDim = maxDim || 360; quality = quality || 0.7;
+    fmt = (fmt === 'png') ? 'png' : 'jpeg';
     return new Promise(function(resolve){
       if (!dataUrl || dataUrl.indexOf('data:') !== 0) return resolve(dataUrl);
       var img = new Image();
@@ -4196,8 +4209,11 @@ render();
         w = Math.max(1, Math.round(w * s)); h = Math.max(1, Math.round(h * s));
         try {
           var c = document.createElement('canvas'); c.width = w; c.height = h;
+          // For PNG output keep the canvas transparent before drawing so the
+          // source alpha channel is preserved through drawImage + toDataURL.
           c.getContext('2d').drawImage(img, 0, 0, w, h);
-          resolve(c.toDataURL('image/jpeg', quality));
+          // PNG ignores the quality arg, but pass it harmlessly for symmetry
+          resolve(c.toDataURL('image/' + fmt, quality));
         } catch(e){ resolve(dataUrl); }
       };
       img.onerror = function(){ resolve(dataUrl); };
