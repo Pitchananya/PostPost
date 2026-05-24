@@ -76,9 +76,24 @@ export function pageTextVideo() {
         <input type="file" accept="image/*" id="ppTtvRefInput" style="display:none"/>
         ${state.ttvReference ? `<button class="btn ghost sm" data-clearref="1" style="width:fit-content;color:var(--red)">${I('x', 12, '#DC2626')} ${T('ลบรูป', 'Remove')}</button>` : ''}
         <div class="micro" style="margin-top:auto;line-height:1.5">${T('ใส่รูปอ้างอิงเพื่อช่วยให้ AI เขียน prompt ตรงสินค้า', 'Add a reference so AI writes a prompt matching the product')}</div>
-        ${state.ttvReference && (state.ttvModel || '').indexOf('veo-2') === 0
-          ? `<div class="micro" style="line-height:1.5;color:#92400E;background:#FEF3C7;padding:8px 10px;border-radius:8px;border:1px solid #FDE68A">${I('zap', 11, '#92400E')} ${T('Veo 2 จะ "ใกล้เคียง" รูปอ้างอิง — ถ้าอยากให้ตรงเป๊ะ ๆ ใช้ Veo 3 Fast/Pro (ต้องเปิด billing)', 'Veo 2 approximates the reference — for exact match use Veo 3 Fast/Pro (needs billing)')}</div>`
-          : ''}
+        ${(() => {
+          if (!state.ttvReference) return '';
+          const m = state.ttvModel || '';
+          // Veo 2 has weak image conditioning — keep the amber warning.
+          if (m.indexOf('veo-2') === 0) {
+            return `<div class="micro" style="line-height:1.5;color:#92400E;background:#FEF3C7;padding:8px 10px;border-radius:8px;border:1px solid #FDE68A">${I('zap', 11, '#92400E')} ${T('Veo 2 จะ "ใกล้เคียง" รูปอ้างอิง — ถ้าอยากให้ตรงเป๊ะ ๆ ใช้ Veo 3 Fast/Pro หรือ Wan/Kling (จะใช้ image-to-video อัตโนมัติ)', 'Veo 2 only approximates the reference — for exact match use Veo 3 Fast/Pro, OR pick a fal.ai model (auto-switches to image-to-video)')}</div>`;
+          }
+          // fal.ai models with known i2v variants → auto-route to i2v mode.
+          const I2V_CAPABLE = /^fal-ai\/(wan|minimax|kling-video|luma-dream-machine)/;
+          if (I2V_CAPABLE.test(m)) {
+            return `<div class="micro" style="line-height:1.5;color:#065F46;background:#D1FAE5;padding:8px 10px;border-radius:8px;border:1px solid #6EE7B7">${I('check', 11, '#065F46')} ${T('🔒 จะใช้ image-to-video อัตโนมัติ — รูปสินค้านี้จะปรากฏในวิดีโอแน่นอน (ไม่ใช่ "ใกล้เคียง")', '🔒 Will auto-use image-to-video — the uploaded product will literally appear in the video (not just inspiration)')}</div>`;
+          }
+          // Veo 3.x has stronger image conditioning — neutral positive note.
+          if (m.indexOf('veo-3') === 0) {
+            return `<div class="micro" style="line-height:1.5;color:#1E40AF;background:#DBEAFE;padding:8px 10px;border-radius:8px;border:1px solid #93C5FD">${I('check', 11, '#1E40AF')} ${T('Veo 3 จะ lock กับรูปอ้างอิงค่อนข้างแม่น (image conditioning ดีกว่า Veo 2)', 'Veo 3 locks tightly to the reference (much better image conditioning than Veo 2)')}</div>`;
+          }
+          return '';
+        })()}
       </div>
     </div>
   </div>`;

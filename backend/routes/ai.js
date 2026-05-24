@@ -2925,12 +2925,12 @@ router.post('/fal-t2v-submit', async (req, res) => {
   const falKey = process.env.FAL_KEY;
   if (!falKey) return res.status(400).json({ error: 'FAL_KEY not set — ตั้ง env ที่ Vercel → Settings → Environment Variables' });
   if (!prompt) return res.status(400).json({ error: 'prompt required' });
-  const model = String(modelIn || 'fal-ai/wan/v2.2-a14b/text-to-video');
+  let model = String(modelIn || 'fal-ai/wan/v2.2-a14b/text-to-video');
 
   try {
     // Optional reference image — uploaded to Supabase Storage so fal models that support
-    // image input can grab it. Most text-to-video models ignore this; Wan/Kling support it
-    // via image_url for image-to-video conditioning.
+    // image input can grab it. When present, we ALSO swap the model URL from its
+    // text-to-video variant to image-to-video — see T2V_TO_I2V_MAP below.
     let image_url = null;
     if (referenceImage && typeof referenceImage === 'string' && referenceImage.indexOf('data:') === 0) {
       try {
@@ -2939,7 +2939,32 @@ router.post('/fal-t2v-submit', async (req, res) => {
       } catch (e) { console.warn('[fal-t2v] reference upload failed:', e.message); }
     }
 
-    // Per-model input schema — fal.ai is annoyingly inconsistent across models
+    // ── Auto image-to-video routing ────────────────────────────────────
+    // User feedback: "ต้องการให้เห็นรูปสินค้าที่อัพโหลดในวิดีโอด้วย"
+    // Text-to-video models treat image_url as weak "inspiration" — the output
+    // product drifts. Image-to-video model variants strictly animate the input
+    // image, so the uploaded product is literally what appears in the video.
+    // When we have an image AND the picked t2v model has a known i2v sibling,
+    // swap to the i2v endpoint silently. UI surfaces the swap via a hint.
+    const T2V_TO_I2V_MAP = {
+      'fal-ai/wan/v2.2-a14b/text-to-video':              'fal-ai/wan/v2.2-a14b/image-to-video',
+      'fal-ai/wan-2.5/text-to-video/preview':            'fal-ai/wan-2.5/image-to-video/preview',
+      'fal-ai/minimax/hailuo-02/standard/text-to-video': 'fal-ai/minimax/hailuo-02/standard/image-to-video',
+      'fal-ai/kling-video/v2.5-turbo/pro/text-to-video': 'fal-ai/kling-video/v2.5-turbo/pro/image-to-video',
+      'fal-ai/kling-video/v2.1/master/text-to-video':    'fal-ai/kling-video/v2.1/master/image-to-video',
+      'fal-ai/luma-dream-machine':                       'fal-ai/luma-dream-machine/ray-2/image-to-video',
+    };
+    let routedAsI2V = false;
+    if (image_url && T2V_TO_I2V_MAP[model]) {
+      const i2vModel = T2V_TO_I2V_MAP[model];
+      console.log('[fal-t2v-submit] auto-swap t2v→i2v: ' + model + ' → ' + i2vModel);
+      model = i2vModel;
+      routedAsI2V = true;
+    }
+
+    // Per-model input schema — fal.ai is annoyingly inconsistent across models.
+    // Separate t2v / i2v maps because the i2v endpoints require image_url as a
+    // first-class field (not optional) and some omit aspect_ratio (derived from image).
     const dur = Math.max(2, Math.min(parseInt(duration_sec, 10) || 5, 10));
     const aspectRatio = String(aspect);                            // '9:16' | '16:9' | '1:1'
     const FAL_T2V_INPUT = {
@@ -2950,7 +2975,17 @@ router.post('/fal-t2v-submit', async (req, res) => {
       'fal-ai/kling-video/v2.1/master/text-to-video':  { prompt, aspect_ratio: aspectRatio, duration: dur >= 10 ? '10' : '5' },
       'fal-ai/luma-dream-machine':                     { prompt, aspect_ratio: aspectRatio, loop: false },
     };
-    const inputBody = FAL_T2V_INPUT[model] || { prompt, aspect_ratio: aspectRatio };
+    const FAL_I2V_INPUT = {
+      'fal-ai/wan/v2.2-a14b/image-to-video':              { prompt, image_url, num_frames: dur * 16 },
+      'fal-ai/wan-2.5/image-to-video/preview':            { prompt, image_url, duration: dur },
+      'fal-ai/minimax/hailuo-02/standard/image-to-video': { prompt, image_url, duration: dur === 10 ? 10 : 6, prompt_optimizer: true },
+      'fal-ai/kling-video/v2.5-turbo/pro/image-to-video': { prompt, image_url, duration: dur >= 10 ? '10' : '5', cfg_scale: 0.5 },
+      'fal-ai/kling-video/v2.1/master/image-to-video':    { prompt, image_url, duration: dur >= 10 ? '10' : '5' },
+      'fal-ai/luma-dream-machine/ray-2/image-to-video':   { prompt, image_url, aspect_ratio: aspectRatio, loop: false },
+    };
+    const inputBody = routedAsI2V
+      ? (FAL_I2V_INPUT[model] || { prompt, image_url, aspect_ratio: aspectRatio })
+      : (FAL_T2V_INPUT[model] || { prompt, aspect_ratio: aspectRatio });
 
     const r = await fetch(`https://queue.fal.run/${model}`, {
       method: 'POST',
@@ -2973,6 +3008,7 @@ router.post('/fal-t2v-submit', async (req, res) => {
       ok: true,
       request_id,
       model,
+      routedAsI2V,         // frontend can surface "Used image-to-video for exact product match"
       aspect: aspectRatio,
       status_url: submitData.status_url || `https://queue.fal.run/${model}/requests/${request_id}/status`,
       response_url: submitData.response_url || `https://queue.fal.run/${model}/requests/${request_id}`,

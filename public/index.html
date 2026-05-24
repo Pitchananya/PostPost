@@ -1027,7 +1027,7 @@ function setupAvatarBgRotation() {
 // ====================================================================
 // EVENT DELEGATION
 // ====================================================================
-console.log('[boot] PostPost ready · page=' + (state && state.page) + ' · lang=' + (state && state.lang) + ' · build=lipsync-grid');
+console.log('[boot] PostPost ready · page=' + (state && state.page) + ' · lang=' + (state && state.lang) + ' · build=t2v-i2v-autoswap');
 document.addEventListener('click', (e) => {
   // Diagnostic — log every data-go click so we can verify the navigation
   // chain actually fires. User reported "เข้าสู่ระบบไม่ได้" — if this log
@@ -1269,7 +1269,7 @@ render();
      ES-module graph instead of serving a stale index.html that calls old code.
      Critical for billing-fix rollouts (see commit e043a18) — stale cache here
      means the user keeps clicking "free" while old code keeps calling fal.ai. -->
-<script type="module" src="/js/main.js?v=lipsync-grid"></script>
+<script type="module" src="/js/main.js?v=t2v-i2v-autoswap"></script>
 
 <!-- ============================================================ -->
 <!-- PostPost backend wiring — API client + real auth             -->
@@ -2452,6 +2452,15 @@ render();
       toast(state.lang==='th'?'⚡ ใช้ URL ที่วางไว้ — ข้าม fal.ai backend ไปประกอบกับ bg เลย':'⚡ Using pasted URL — skipping backend, going straight to bg composite','success');
       // Fall through — the canvas compositor below already checks
       // state.avatarLipsyncRawVideo and uses it as the avatar source.
+    } else if (state.avatarMode === 'hfree') {
+      // ── GUARD: HF Spaces (free real) mode requires a pasted URL ─────
+      // User picked the free-real path but hasn't run the HF Space + pasted
+      // the result yet. Don't silently fall back to audio-reactive — that
+      // produces a clip with no real lipsync, defeating the user's choice.
+      toast(state.lang==='th'?'⚠️ ยังไม่ได้วาง URL ผลลัพธ์จาก HF Space — กด ⚡ "ใช้เลย" บนโมเดลด้านบน แล้ววาง URL วิดีโอกลับมา':'⚠️ No HF Space result URL yet — tap ⚡ "Go" on a model above, then paste the result URL back','error');
+      state.avatarVideoLoading = false;
+      render();
+      return;
     } else if (state.avatarMode !== 'real') {
       // ── BYPASS B: Audio-reactive mode → DO NOT call fal.ai ──────────
       console.log('[avatar-video] ✅ Audio-reactive mode (state.avatarMode=' + state.avatarMode + ') — SKIPPING fal.ai, going straight to canvas (FREE)');
