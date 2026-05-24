@@ -2617,19 +2617,34 @@ render();
         canvasStream.getVideoTracks()[0],
         dest.stream.getAudioTracks()[0],
       ]);
-      // Prefer native MP4 (H.264 + AAC) — Chrome 94+ and Safari 16+ support this in
-      // MediaRecorder, which means the user gets a real .mp4 ready for Reels/TikTok
-      // upload without any client-side transcoding. Fall back to WebM/VP9 otherwise.
-      var mime = 'video/mp4;codecs=avc1.42E01F,mp4a.40.2';
-      if (!MediaRecorder.isTypeSupported(mime)) mime = 'video/mp4;codecs=h264,aac';
-      if (!MediaRecorder.isTypeSupported(mime)) mime = 'video/mp4';
-      if (!MediaRecorder.isTypeSupported(mime)) mime = 'video/webm;codecs=vp9,opus';
+      // ⚠️ MIME selection — WebM FIRST, MP4 only if explicitly working.
+      //
+      // Chrome's MediaRecorder + canvas captureStream + MP4 mime combo has a
+      // known bug: the encoder produces exactly ONE keyframe at start, then
+      // no P-frames follow → the resulting .mp4 has 1 video packet + full
+      // audio track → looks like a static image with sound playing. The
+      // 0.033 s video duration vs 15 s audio duration in the user's file
+      // was a textbook case.
+      //
+      // WebM/VP9 doesn't have this issue with canvas captureStream — it
+      // captures continuously as expected. So: WebM preferred, MP4 as a
+      // last-resort fallback only if WebM isn't supported (it always is on
+      // every modern browser, so the fallback rarely triggers).
+      //
+      // File extension follows the mime, and TikTok / Instagram do accept
+      // WebM via their web uploaders even though their docs prefer MP4.
+      var mime = 'video/webm;codecs=vp9,opus';
       if (!MediaRecorder.isTypeSupported(mime)) mime = 'video/webm;codecs=vp8,opus';
       if (!MediaRecorder.isTypeSupported(mime)) mime = 'video/webm';
-      // Track the file extension separately so the download link uses the right one
-      // (some platforms reject webm; mp4 is universally accepted).
-      state.avatarVideoExt = (mime.indexOf('mp4') === 0 || mime.indexOf('video/mp4') === 0) ? 'mp4' : 'webm';
+      if (!MediaRecorder.isTypeSupported(mime)) mime = 'video/mp4;codecs=avc1.42E01F,mp4a.40.2';
+      if (!MediaRecorder.isTypeSupported(mime)) mime = 'video/mp4';
+      state.avatarVideoExt = (mime.indexOf('webm') >= 0) ? 'webm' : 'mp4';
+      console.log('[avatar-video] Recorder mime:', mime, '→ ext:', state.avatarVideoExt);
       var recorder = new MediaRecorder(combinedStream, { mimeType: mime, videoBitsPerSecond: 5_500_000 });
+      // Safety net: explicitly request a frame from the canvas track each tick
+      // (no-op on most browsers since captureStream(30) auto-publishes, but on
+      // browsers that miss frames it forces a re-publish per draw call).
+      var _videoTrack = canvasStream.getVideoTracks && canvasStream.getVideoTracks()[0];
       var chunks = [];
       recorder.ondataavailable = function(e){ if (e.data && e.data.size) chunks.push(e.data); };
 
@@ -2881,6 +2896,11 @@ render();
       function loop(now){
         if (aborted) return;
         drawFrame(now);
+        // Force-publish the freshly-drawn frame to the captureStream track.
+        // Some browsers (especially when the tab is partially occluded or on
+        // certain Chrome builds) drop frames despite captureStream(30) — calling
+        // requestFrame() guarantees every drawn frame gets into the recording.
+        try { _videoTrack && _videoTrack.requestFrame && _videoTrack.requestFrame(); } catch(_){}
         if (now < stopTs) {
           rafId = requestAnimationFrame(loop);
           // Update progress % via direct DOM write (cheap) instead of calling
