@@ -1027,7 +1027,7 @@ function setupAvatarBgRotation() {
 // ====================================================================
 // EVENT DELEGATION
 // ====================================================================
-console.log('[boot] PostPost ready · page=' + (state && state.page) + ' · lang=' + (state && state.lang) + ' · build=auto-repair-bg');
+console.log('[boot] PostPost ready · page=' + (state && state.page) + ' · lang=' + (state && state.lang) + ' · build=re-enable-rmbg');
 document.addEventListener('click', (e) => {
   // Diagnostic — log every data-go click so we can verify the navigation
   // chain actually fires. User reported "เข้าสู่ระบบไม่ได้" — if this log
@@ -1269,7 +1269,7 @@ render();
      ES-module graph instead of serving a stale index.html that calls old code.
      Critical for billing-fix rollouts (see commit e043a18) — stale cache here
      means the user keeps clicking "free" while old code keeps calling fal.ai. -->
-<script type="module" src="/js/main.js?v=auto-repair-bg"></script>
+<script type="module" src="/js/main.js?v=re-enable-rmbg"></script>
 
 <!-- ============================================================ -->
 <!-- PostPost backend wiring — API client + real auth             -->
@@ -3528,27 +3528,29 @@ render();
         image: imgSrc, isCustom: true,
       };
       await addCustomAvatar(avatar);
-      // ⚠ Intentionally NOT calling removeAvatarBg here anymore.
+      // ── Auto-remove the green chroma bg ────────────────────────────────
+      // The gen prompt requested a flat #00FF00 bg; birefnet now strips it
+      // and we save back as a PROPER PNG with the alpha channel intact
+      // (commit b13cfe5 made compressImageDataUrl honor fmt='png' here —
+      // before that, the JPEG default was silently destroying the alpha).
       //
-      // We USED to auto-remove the bg right after gen so static previews
-      // looked clean. But fal.ai/birefnet returns transparent PNGs with
-      // RGB=(0,0,0) at the alpha=0 corners — the chroma-key detector
-      // (line ~2719) samples corners ignoring alpha, sees pure black,
-      // and switches to BLACK chroma mode. The black-keyer then nukes
-      // any pixel with luminance < 18 — which is exactly the range of
-      // dark Asian hair. Result: avatars rendered for lipsync had their
-      // hair eaten off.
+      // With alpha preserved end-to-end:
+      //   • Gallery shows a clean transparent face (no green square)
+      //   • Chroma corner sample reads alpha=0 → mode='transparent'
+      //   • Compositor uses the pass-through GPU/CPU path (no per-pixel
+      //     keying) → dark Asian hair never enters the black-keyer's
+      //     luminance fade range → no hair-eating.
       //
-      // Per user feedback ("ใช้ background สีเขียว เพราะหน้าไม่เห็นผมเลย"):
-      // keeping the saturated #00FF00 bg the gen-prompt requests means
-      // chroma detection picks GREEN mode + the green-keyer ignores hair
-      // entirely (hair has g < r in RGB terms — fails the g>r*1.15 gate).
-      //
-      // Users who DO want a transparent PNG can still hit the manual
-      // RM-BG chip in the avatar gallery (data-rmbgavatar) per-avatar.
-      // saveCustomAvatars() ran inside addCustomAvatar — localStorage hook
-      // also fires schedCloudPush() so it lands on every device.
-      toast(state.lang==='th'?('บันทึก "'+name+'" ไว้ในคลังพรีเซนเตอร์แล้ว ✓ (พื้นหลังเขียวเพื่อ chroma-key คลีนๆ — กดปุ่ม "ลบ bg" ในคลังถ้าอยากให้โปร่งใส)'):('"'+name+'" saved to presenter library ✓ (kept green bg for clean chroma-key — hit RM-BG in gallery if you want transparent)'),'success');
+      // Per user feedback "gen พรีเซนเตอร์ใหม่ ให้ลบ background สีเขียว".
+      // If removeAvatarBg errors (birefnet quota / network), the avatar
+      // still saves with the green bg — auto-repair at render time
+      // (commit 98979e7) handles that case too via a fresh birefnet call.
+      toast(state.lang==='th'?'สร้างผู้บรรยายเสร็จ — กำลังลบ bg สีเขียวให้อัตโนมัติ…':'Presenter created — auto-removing green bg…');
+      try {
+        await removeAvatarBg(avatar.id);
+      } catch (_) { /* leave the green-bg version — auto-repair at render covers this */ }
+      // saveCustomAvatars() runs inside both addCustomAvatar + removeAvatarBg.
+      toast(state.lang==='th'?('บันทึก "'+name+'" ไว้ในคลังพรีเซนเตอร์แล้ว ✓'):('"'+name+'" saved to presenter library ✓'),'success');
     } catch(e){
       toast((state.lang==='th'?'สร้างไม่สำเร็จ: ':'Failed: ')+(e.message||''),'error');
     } finally {
