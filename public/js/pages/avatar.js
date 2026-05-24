@@ -79,9 +79,11 @@ export function pageAvatar() {
      <button class="btn outline sm">${I('info', 14)} ${T('คู่มือ', 'Guide')}</button>`;
 
   // ── Step 1: Mode tiles + sub-pickers ────────────────────────────────
+  // 3 หมวดชัดๆ: ทันใจ (audio-reactive) / ฟรี+ปากขยับ (HF Spaces) / พรีเมียม (fal.ai)
   const modeTiles = [
-    { id: 'free', th: 'Audio-reactive', en: 'Audio-reactive', sub_th: 'หายใจ + ขยับเล็กตามเสียง · ฟรี (หน้าไม่ขยับจริง)', sub_en: 'Breathing + audio-driven motion · free (face stays still)', time_th: '~30 วินาที', time_en: '~30 sec', icon: 'mic' },
-    { id: 'real', th: 'Real lip-sync', en: 'Real lip-sync', sub_th: 'หน้า+ปากขยับตามคำจริง · ใช้ fal.ai (แนะนำ)', sub_en: 'Real face + mouth animation via fal.ai (recommended)', time_th: '1-3 นาที', time_en: '1-3 min', icon: 'sparkles' },
+    { id: 'free',  th: 'ทันใจ ฟรี',     en: 'Instant',     sub_th: 'หน้าไม่ขยับ · แค่หายใจ + ขยับตามเสียง',           sub_en: 'Face stays still · breathing + audio reaction',          time_th: '~30 วินาที', time_en: '~30 sec',  icon: 'mic',      tagTh: 'ฟรี',     tagEn: 'FREE',  tagBg: '#10B981' },
+    { id: 'hfree', th: 'ฟรี + ปากขยับ', en: 'Free real',   sub_th: 'หน้า+ปากขยับจริง · ใช้ HF Spaces (one-click)',   sub_en: 'Real face + mouth · via HF Spaces (one-click)',          time_th: '1-5 นาที',  time_en: '1-5 min',  icon: 'sparkles', tagTh: 'ฟรี',     tagEn: 'FREE',  tagBg: '#065F46' },
+    { id: 'real',  th: 'พรีเมียม',       en: 'Premium',     sub_th: 'คุณภาพสูงสุด · หน้า+ตัว+มือขยับ · ผ่าน fal.ai',  sub_en: 'Top quality · full face+body+hands · via fal.ai',         time_th: '1-3 นาที',  time_en: '1-3 min',  icon: 'sparkles', tagTh: 'เสียเงิน', tagEn: 'PAID',  tagBg: '#9F1239' },
   ];
   const lipsyncModels = [
     { id: 'fal-ai/sadtalker',                       name: 'SadTalker',        price: '$0.10', desc_th: 'ปากอย่างเดียว · ถูกสุด',         desc_en: 'Mouth only · cheapest' },
@@ -91,82 +93,105 @@ export function pageAvatar() {
     { id: 'fal-ai/bytedance/omnihuman/v1.5',        name: 'OmniHuman v1.5',   price: '$0.50', desc_th: 'แนะนำ · หน้า+ตัว+มือ เหมือนคนพูดจริง', desc_en: 'Recommended · full body realistic talking', badge: 'BEST' },
   ];
 
+  // ── HF Spaces (one-click free) and manual-web catalogs ──
+  const oneClickHfModels = [
+    { kind: 'joyhallo',  emoji: '🌏', name: 'JoyHallo',     stars: 5, speed: '🐢',     badge: { txt: 'BEST FOR THAI', bg: '#DC2626' }, descTh: 'Hallo + Chinese fine-tuning · ดีที่สุดสำหรับเสียงไทย · diffusion-based',  descEn: 'Hallo + Chinese fine-tuning · BEST for Thai voice · diffusion-based' },
+    { kind: 'musetalk',  emoji: '⚡', name: 'MuseTalk',     stars: 4, speed: '⚡⚡⚡', badge: { txt: 'FASTEST',       bg: '#10B981' }, descTh: 'Tencent · real-time · Chinese-trained · เร็วสุด (~1-3 นาที)',           descEn: 'Tencent · real-time · Chinese-trained · fastest (~1-3 min)' },
+    { kind: 'latent',    emoji: '⭐', name: 'LatentSync 1.5', stars: 4, speed: '⚡',    badge: { txt: 'BALANCED',      bg: '#7C3AED' }, descTh: 'ByteDance · คุณภาพดี · queue สั้น · Chinese training',                  descEn: 'ByteDance · solid quality · short queue · Chinese training' },
+    { kind: 'hallo3',    emoji: '✨', name: 'Hallo3',       stars: 5, speed: '🐢🐢', badge: { txt: 'TOP QUALITY',   bg: '#9F1239' }, descTh: 'Diffusion · expression รายละเอียดสูงสุด · ช้า 15-30 นาที',              descEn: 'Diffusion · richest expression · slow 15-30 min' },
+    { kind: 'wav2lip',   emoji: '🤗', name: 'Wav2Lip',      stars: 2, speed: '⚡⚡⚡', badge: { txt: 'QUICK',         bg: '#0EA5E9' }, descTh: 'เร็วมาก · ปากอย่างเดียว (ไม่ทั้งหน้า)',                                 descEn: 'Very fast · mouth-only (no face)' },
+  ];
+  const manualWebModels = [
+    { emoji: '🌟', name: 'Hedra',        url: 'https://www.hedra.com/app',                                  badge: { txt: '30 FREE/MO', bg: '#10B981' }, descTh: 'Web app · UI ง่ายสุด · 30 คลิป/เดือน · คุณภาพดีมาก',     descEn: 'Web app · easiest UI · 30 clips/mo · great quality' },
+    { emoji: '🎭', name: 'AniPortrait',  url: 'https://huggingface.co/spaces/ZJYang/AniPortrait_official',  badge: { txt: 'FREE',       bg: '#10B981' }, descTh: 'Tencent · ขยับทั้งใบหน้า + คาง + คอ',                  descEn: 'Tencent · animates full face + chin + neck' },
+    { emoji: '🎪', name: 'EchoMimic V2', url: 'https://huggingface.co/spaces/BadToBest/EchoMimicV2',        badge: { txt: 'FREE',       bg: '#10B981' }, descTh: 'Alibaba · ขยับครึ่งตัว + มือ (มี gestures)',           descEn: 'Alibaba · half-body + hand gestures' },
+    { emoji: '😢', name: 'SadTalker',    url: 'https://huggingface.co/spaces/vinthony/SadTalker',           badge: { txt: 'FREE',       bg: '#10B981' }, descTh: 'ปาก + หน้าเอียงนิดๆ · queue บางครั้งยาว',              descEn: 'Mouth + slight head tilt · queue can be slow' },
+    { emoji: '💧', name: 'Replicate',    url: 'https://replicate.com/zsxkib/latent-sync-1.5',               badge: { txt: '$5 TRIAL',   bg: '#F59E0B' }, descTh: '$5 free credit แรกสมัคร · API-style · เร็ว reliable',  descEn: '$5 free signup credit · API-style · fast reliable' },
+    { emoji: '🎬', name: 'D-ID',         url: 'https://studio.d-id.com/',                                   badge: { txt: '14d TRIAL',  bg: '#F59E0B' }, descTh: 'Premium · ฟรี 14 วันแรก · UI โปร',                    descEn: 'Premium · free 14 days · pro UI' },
+  ];
+
+  // โหมด 'free' (audio-reactive): แค่ note สั้นๆ บอกข้อจำกัด — ไม่ต้องซ่อนตัวเลือกฟรีจริงไว้ที่นี่อีก
   const modeAudioReactiveHint = state.avatarMode === 'free' ? `
     <div style="margin-top:12px;padding:11px 13px;border-radius:10px;background:#FEF3C7;border:1px solid #FDE68A;display:flex;align-items:flex-start;gap:9px;font-size:11.5px;line-height:1.55;color:#92400E">
       ${I('info', 14, '#92400E')}
       <div>
-        <b>${T('ในโหมดนี้หน้าจะไม่ขยับจริง', 'Face stays static in this mode')}</b> — ${T('แค่หายใจ + ขยับเล็กตามเสียง', 'just breathing + audio-driven motion')}<br>
-        ${T('อยากให้ปากขยับจริงแบบฟรี?', 'Want real mouth animation for FREE?')} ${T('กด ▶ ดูทางเลือกฟรี ด้านล่าง — Hedra, HF Wav2Lip, ฯลฯ', 'Click ▶ Free options below — Hedra, HF Wav2Lip, etc.')}
+        <b>${T('โหมดนี้หน้าจะไม่ขยับจริง', 'Face stays static in this mode')}</b> — ${T('แค่หายใจ + ขยับเล็กตามเสียง · ไม่มีค่าใช้จ่าย', 'just breathing + audio reaction · zero cost')}<br>
+        ${T('อยากให้ปากขยับจริงแบบฟรี? → กดแท็บ', 'Want real mouth animation for free? → tap')} <b>${T('ฟรี + ปากขยับ', 'Free real')}</b> ${T('ด้านบน', 'above')}
       </div>
-    </div>
-    <details style="margin-top:10px;background:#F0FDF4;border:1px solid #86EFAC;border-radius:10px;overflow:hidden">
-      <summary style="padding:11px 13px;font-size:12.5px;font-weight:700;color:#065F46;cursor:pointer;display:flex;align-items:center;gap:8px;list-style:none">
-        ${I('sparkles', 14, '#065F46')} ${T('🆓 ทางเลือกฟรีให้ปาก/หน้าขยับ (ไม่ผ่าน fal.ai)', '🆓 Free options for real lipsync (skip fal.ai)')}
+    </div>` : '';
+
+  // โหมด 'hfree' (HF Spaces ฟรีจริง): โผล่ขึ้นมาเลย ไม่ต้องคลิกเปิด details
+  const modeHfreeSubpicker = state.avatarMode === 'hfree' ? `
+    <div style="margin-top:14px;padding-top:14px;border-top:1px dashed var(--line)" data-hflipsync-grid="1">
+      <div class="micro" style="font-weight:700;color:var(--purple);margin-bottom:6px;display:flex;align-items:center;gap:6px">
+        ${I('sparkles', 12, '#065F46')} ${T('โมเดลฟรี · One-click', 'Free models · One-click')}
+        <span style="margin-left:auto;background:#065F46;color:#fff;font-size:9px;padding:1px 7px;border-radius:99px;font-weight:800">${oneClickHfModels.length}</span>
+      </div>
+      <div class="micro" style="color:var(--muted);margin-bottom:10px;line-height:1.5">
+        ${T('กดปุ่ม ⚡ "ใช้เลย" → PostPost upload รูป+เสียงให้ + เปิด HF Space → กด Generate → copy URL ผลลัพธ์ → paste ที่ "วาง URL" ด้านล่าง', 'Tap ⚡ "Go" → PostPost uploads + opens HF Space → Generate → copy result URL → paste below')}
+      </div>
+      <div style="display:flex;flex-direction:column;gap:7px">
+        ${oneClickHfModels.map((m, i) => `<div style="background:#fff;border-radius:10px;padding:10px 12px;border:${i === 0 ? '2px solid #DC2626' : '1px solid var(--line)'};display:flex;align-items:center;gap:10px;${state.hfLipsyncLoading ? 'opacity:.6;' : ''}">
+          <div style="font-size:22px;line-height:1;flex-shrink:0">${m.emoji}</div>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:2px">
+              <b style="color:var(--purple);font-size:12.5px">${m.name}</b>
+              <span style="background:${m.badge.bg};color:#fff;font-size:8.5px;padding:1px 6px;border-radius:99px;font-weight:800;letter-spacing:.03em">${m.badge.txt}</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;font-size:10.5px;color:var(--muted);margin-bottom:3px">
+              <span style="color:#F59E0B;letter-spacing:1px">${'★'.repeat(m.stars) + '☆'.repeat(5 - m.stars)}</span>
+              <span>${m.speed}</span>
+            </div>
+            <div class="micro" style="line-height:1.4">${t({ th: m.descTh, en: m.descEn })}</div>
+          </div>
+          <button class="btn primary" data-hflipsync="${m.kind}" style="background:${i === 0 ? 'linear-gradient(135deg,#DC2626,#7C2D12)' : 'linear-gradient(135deg,#065F46,#047857)'};color:#fff;border:0;flex-shrink:0;height:36px;padding:0 13px;font-size:11.5px;font-weight:800;white-space:nowrap;border-radius:8px;cursor:pointer" ${state.hfLipsyncLoading ? 'disabled' : ''}>${state.hfLipsyncLoading ? '⏳' : '⚡ ' + T('ใช้เลย', 'Go')}</button>
+        </div>`).join('')}
+      </div>
+      ${!state.ttsAudio ? `<div style="margin-top:10px;font-size:10.5px;color:#92400E;background:#FEF3C7;border:1px solid #FDE68A;border-radius:8px;padding:7px 10px;line-height:1.45">${T('💡 ยังไม่มีเสียง TTS? — ปุ่ม "ใช้เลย" จะสร้างให้อัตโนมัติก่อน (ต้องมีสคริปต์ที่ Step 5)','💡 No TTS yet? — Go button will auto-generate it first (needs a script at Step 5)')}</div>` : ''}
+    </div>` : '';
+
+  // Manual web tools — collapsible เล็กๆ แสดงตลอด (ไม่ผูกกับโหมด)
+  const manualWebCollapsible = `
+    <details style="margin-top:14px;padding-top:14px;border-top:1px dashed var(--line)">
+      <summary style="font-size:12px;font-weight:700;color:var(--muted);cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;padding:4px 0">
+        🌐 ${T('ทำเองในเว็บอื่น (Hedra, D-ID, ฯลฯ)', 'Manual web tools (Hedra, D-ID, etc.)')}
+        <span style="margin-left:auto;background:var(--cream2);color:var(--muted);font-size:9px;padding:1px 7px;border-radius:99px;font-weight:800">${manualWebModels.length}</span>
       </summary>
-      <div style="padding:0 14px 14px;font-size:12px;line-height:1.7;color:#064E3B" data-hflipsync-grid="1">
-        <p style="margin:0 0 10px"><b>${T('หลักการ:', 'How it works:')}</b> ${T('ปุ่ม ⚡ "ใช้เลย" = PostPost upload รูป+เสียงให้ + เปิด HF Space + copy URLs ให้พร้อม ✓ กด Generate → copy URL ผลลัพธ์ → กลับมา paste ที่ "วาง URL วิดีโอ" ด้านล่าง', 'Click ⚡ "Go" → PostPost uploads + opens HF Space + copies URLs ✓ Then Generate → copy result URL → paste back into "Paste URL" below')}</p>
-
-        <!-- ── ⚡ ONE-CLICK MODELS (5) ─────────────────────────────────
-             Each card → button[data-hflipsync=...] → HF_REGISTRY in
-             index.html handler picks the Space URL + tuning tip.
-             Models sorted by recommendation rank (best for Thai first). -->
-        <div style="font-size:10.5px;font-weight:800;color:#065F46;letter-spacing:.04em;text-transform:uppercase;margin:6px 0 8px;display:flex;align-items:center;gap:6px;padding-bottom:6px;border-bottom:1px solid #86EFAC">
-          ${I('sparkles', 11, '#065F46')} ${T('One-click · กดปุ่มเดียวให้พร้อม', 'One-click · auto-prepared')}
-          <span style="margin-left:auto;background:#065F46;color:#fff;font-size:9px;padding:1px 7px;border-radius:99px;font-weight:800">5</span>
-        </div>
-        <div style="display:flex;flex-direction:column;gap:7px">
-          ${[
-            { kind: 'joyhallo',  emoji: '🌏', name: 'JoyHallo',     stars: 5, speed: '🐢',     badge: { txt: 'BEST FOR THAI', bg: '#DC2626' }, descTh: 'Hallo + Chinese fine-tuning · ดีที่สุดสำหรับเสียงไทย · diffusion-based',  descEn: 'Hallo + Chinese fine-tuning · BEST for Thai voice · diffusion-based' },
-            { kind: 'musetalk',  emoji: '⚡', name: 'MuseTalk',     stars: 4, speed: '⚡⚡⚡', badge: { txt: 'FASTEST',       bg: '#10B981' }, descTh: 'Tencent · real-time · Chinese-trained · เร็วสุด (~1-3 นาที)',           descEn: 'Tencent · real-time · Chinese-trained · fastest (~1-3 min)' },
-            { kind: 'latent',    emoji: '⭐', name: 'LatentSync 1.5', stars: 4, speed: '⚡',    badge: { txt: 'BALANCED',      bg: '#7C3AED' }, descTh: 'ByteDance · คุณภาพดี · queue สั้น · Chinese training',                  descEn: 'ByteDance · solid quality · short queue · Chinese training' },
-            { kind: 'hallo3',    emoji: '✨', name: 'Hallo3',       stars: 5, speed: '🐢🐢', badge: { txt: 'TOP QUALITY',   bg: '#9F1239' }, descTh: 'Diffusion · expression รายละเอียดสูงสุด · ช้า 15-30 นาที',              descEn: 'Diffusion · richest expression · slow 15-30 min' },
-            { kind: 'wav2lip',   emoji: '🤗', name: 'Wav2Lip',      stars: 2, speed: '⚡⚡⚡', badge: { txt: 'QUICK',         bg: '#0EA5E9' }, descTh: 'เร็วมาก · ปากอย่างเดียว (ไม่ทั้งหน้า)',                                 descEn: 'Very fast · mouth-only (no face)' },
-          ].map((m, i) => `<div style="background:#fff;border-radius:10px;padding:10px 12px;border:${i === 0 ? '2px solid #DC2626' : '1px solid #D1FAE5'};display:flex;align-items:center;gap:10px;${state.hfLipsyncLoading ? 'opacity:.6;' : ''}">
-            <div style="font-size:22px;line-height:1;flex-shrink:0">${m.emoji}</div>
-            <div style="flex:1;min-width:0">
-              <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:2px">
-                <b style="color:#065F46;font-size:12.5px">${m.name}</b>
-                <span style="background:${m.badge.bg};color:#fff;font-size:8.5px;padding:1px 6px;border-radius:99px;font-weight:800;letter-spacing:.03em">${m.badge.txt}</span>
-              </div>
-              <div style="display:flex;align-items:center;gap:8px;font-size:10.5px;color:#065F46;margin-bottom:3px">
-                <span style="color:#F59E0B;letter-spacing:1px">${'★'.repeat(m.stars) + '☆'.repeat(5 - m.stars)}</span>
-                <span style="opacity:.7">${m.speed}</span>
-              </div>
-              <div style="font-size:10.5px;color:#064E3B;opacity:.85;line-height:1.4">${t({ th: m.descTh, en: m.descEn })}</div>
+      <div style="margin-top:10px;display:flex;flex-direction:column;gap:6px">
+        ${manualWebModels.map((m) => `<a href="${m.url}" target="_blank" rel="noopener" style="background:#fff;border-radius:10px;padding:9px 12px;border:1px solid #E5E7EB;display:flex;align-items:center;gap:10px;text-decoration:none;color:inherit">
+          <div style="font-size:20px;line-height:1;flex-shrink:0">${m.emoji}</div>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:2px">
+              <b style="color:#374151;font-size:12px">${m.name}</b>
+              <span style="background:${m.badge.bg};color:#fff;font-size:8.5px;padding:1px 6px;border-radius:99px;font-weight:800;letter-spacing:.03em">${m.badge.txt}</span>
             </div>
-            <button class="btn primary" data-hflipsync="${m.kind}" style="background:${i === 0 ? 'linear-gradient(135deg,#DC2626,#7C2D12)' : 'linear-gradient(135deg,#065F46,#047857)'};color:#fff;border:0;flex-shrink:0;height:36px;padding:0 13px;font-size:11.5px;font-weight:800;white-space:nowrap;border-radius:8px;cursor:pointer" ${state.hfLipsyncLoading ? 'disabled' : ''}>${state.hfLipsyncLoading ? '⏳' : '⚡ ' + T('ใช้เลย', 'Go')}</button>
-          </div>`).join('')}
-        </div>
-
-        ${!state.ttsAudio ? `<div style="margin-top:10px;font-size:10.5px;color:#92400E;background:#FEF3C7;border:1px solid #FDE68A;border-radius:8px;padding:7px 10px;line-height:1.45">${T('💡 ยังไม่มีเสียง TTS? — ปุ่ม "ใช้เลย" จะสร้างให้อัตโนมัติก่อน (ต้องมีสคริปต์ที่ Step 5)','💡 No TTS yet? — Go button will auto-generate it first (needs a script at Step 5)')}</div>` : ''}
-
-        <!-- ── 🌐 MANUAL MODELS (6) — open the site, do it yourself ───── -->
-        <div style="font-size:10.5px;font-weight:800;color:#92400E;letter-spacing:.04em;text-transform:uppercase;margin:18px 0 8px;display:flex;align-items:center;gap:6px;padding-bottom:6px;border-bottom:1px solid #FDE68A">
-          🌐 ${T('ทำเองในเว็บอื่น · web/app', 'Manual · web/app')}
-          <span style="margin-left:auto;background:#92400E;color:#fff;font-size:9px;padding:1px 7px;border-radius:99px;font-weight:800">6</span>
-        </div>
-        <div style="display:flex;flex-direction:column;gap:6px">
-          ${[
-            { emoji: '🌟', name: 'Hedra',        url: 'https://www.hedra.com/app',                                  badge: { txt: '30 FREE/MO', bg: '#10B981' }, descTh: 'Web app · UI ง่ายสุด · 30 คลิป/เดือน · คุณภาพดีมาก',     descEn: 'Web app · easiest UI · 30 clips/mo · great quality' },
-            { emoji: '🎭', name: 'AniPortrait',  url: 'https://huggingface.co/spaces/ZJYang/AniPortrait_official',  badge: { txt: 'FREE',       bg: '#10B981' }, descTh: 'Tencent · ขยับทั้งใบหน้า + คาง + คอ',                  descEn: 'Tencent · animates full face + chin + neck' },
-            { emoji: '🎪', name: 'EchoMimic V2', url: 'https://huggingface.co/spaces/BadToBest/EchoMimicV2',        badge: { txt: 'FREE',       bg: '#10B981' }, descTh: 'Alibaba · ขยับครึ่งตัว + มือ (มี gestures)',           descEn: 'Alibaba · half-body + hand gestures' },
-            { emoji: '😢', name: 'SadTalker',    url: 'https://huggingface.co/spaces/vinthony/SadTalker',           badge: { txt: 'FREE',       bg: '#10B981' }, descTh: 'ปาก + หน้าเอียงนิดๆ · queue บางครั้งยาว',              descEn: 'Mouth + slight head tilt · queue can be slow' },
-            { emoji: '💧', name: 'Replicate',    url: 'https://replicate.com/zsxkib/latent-sync-1.5',               badge: { txt: '$5 TRIAL',   bg: '#F59E0B' }, descTh: '$5 free credit แรกสมัคร · API-style · เร็ว reliable',  descEn: '$5 free signup credit · API-style · fast reliable' },
-            { emoji: '🎬', name: 'D-ID',         url: 'https://studio.d-id.com/',                                   badge: { txt: '14d TRIAL',  bg: '#F59E0B' }, descTh: 'Premium · ฟรี 14 วันแรก · UI โปร',                    descEn: 'Premium · free 14 days · pro UI' },
-          ].map((m) => `<a href="${m.url}" target="_blank" rel="noopener" style="background:#fff;border-radius:10px;padding:9px 12px;border:1px solid #E5E7EB;display:flex;align-items:center;gap:10px;text-decoration:none;color:inherit">
-            <div style="font-size:20px;line-height:1;flex-shrink:0">${m.emoji}</div>
-            <div style="flex:1;min-width:0">
-              <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:2px">
-                <b style="color:#374151;font-size:12px">${m.name}</b>
-                <span style="background:${m.badge.bg};color:#fff;font-size:8.5px;padding:1px 6px;border-radius:99px;font-weight:800;letter-spacing:.03em">${m.badge.txt}</span>
-              </div>
-              <div style="font-size:10.5px;color:#6B7280;line-height:1.4">${t({ th: m.descTh, en: m.descEn })}</div>
-            </div>
-            <span style="color:#9CA3AF;font-size:14px;flex-shrink:0">↗</span>
-          </a>`).join('')}
-        </div>
+            <div style="font-size:10.5px;color:#6B7280;line-height:1.4">${t({ th: m.descTh, en: m.descEn })}</div>
+          </div>
+          <span style="color:#9CA3AF;font-size:14px;flex-shrink:0">↗</span>
+        </a>`).join('')}
       </div>
-    </details>` : '';
+    </details>`;
+
+  // Paste-URL block — ใช้ได้ทั้ง 'hfree' (รับ URL จาก HF) และ 'real' (รับ URL จาก fal.ai playground)
+  const pasteUrlBlock = (state.avatarMode === 'hfree' || state.avatarMode === 'real') ? `
+    <div style="margin-top:14px;padding-top:14px;border-top:1px dashed var(--line)">
+      <div class="micro" style="font-weight:700;color:var(--purple);margin-bottom:6px;display:flex;align-items:center;gap:6px">
+        ${I('upload', 12, '#5B21B6')} ${T('วาง URL วิดีโอ lip-sync ที่ทำเสร็จแล้ว', 'Paste a finished lip-sync video URL')}
+      </div>
+      <div class="micro" style="color:var(--muted);margin-bottom:10px;line-height:1.5">
+        ${state.avatarMode === 'hfree'
+          ? T('จาก HF Space ที่กด Generate เสร็จ → copy video URL → วางที่นี่', 'From the HF Space after Generate → copy video URL → paste here')
+          : T('รัน Infinitalk/OmniHuman บน fal.ai เอง → copy URL → วางที่นี่ → ระบบจะข้ามขั้นเรียก fal.ai แล้วประกอบกับ Pexels bg ให้เลย', 'Run on fal.ai directly → copy URL → paste here → PostPost skips the backend call and composites with the Pexels bg')}
+      </div>
+      <div style="display:flex;gap:6px">
+        <input class="input" id="ppLipsyncPasteUrl" placeholder="https://v3b.fal.media/files/..." value="${state.avatarLipsyncRawVideo || ''}" style="flex:1;font-size:11.5px;height:34px;font-family:var(--mono)"/>
+        <button class="btn outline" data-pastelipsyncurl="1" style="height:34px;font-size:11.5px;padding:0 14px">${I('check', 12)} ${T('ใช้คลิปนี้', 'Use this')}</button>
+      </div>
+      ${state.avatarLipsyncRawVideo ? `<div style="margin-top:8px;padding:8px 10px;background:#D1FAE5;border:1px solid #6EE7B7;border-radius:8px;font-size:11px;color:#065F46;display:flex;align-items:center;gap:6px">
+        ${I('check', 12, '#065F46')} <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${T('พร้อมแล้ว: ', 'Ready: ')}${state.avatarLipsyncRawVideo.split('/').pop().slice(0, 40)}…</span>
+        <button data-clearlipsyncurl="1" style="background:none;border:0;color:#065F46;cursor:pointer;padding:0;display:flex;align-items:center">${I('x', 12, '#065F46')}</button>
+      </div>` : ''}
+    </div>` : '';
 
   const modeInfinitalkWarning = (state.avatarMode === 'real' && (state.avatarLipsyncModel || '').indexOf('infinitalk') >= 0) ? `
     <div style="margin-top:12px;padding:11px 13px;border-radius:10px;background:#FEE2E2;border:1px solid #FCA5A5;display:flex;align-items:flex-start;gap:9px;font-size:11.5px;line-height:1.55;color:#991B1B">
@@ -177,7 +202,10 @@ export function pageAvatar() {
 
   const modeRealSubpicker = state.avatarMode === 'real' ? `
     <div style="margin-top:14px;padding-top:14px;border-top:1px dashed var(--line)">
-      <div class="micro" style="font-weight:700;color:var(--purple);margin-bottom:8px">${T('โมเดล lip-sync', 'Lip-sync model')}</div>
+      <div class="micro" style="font-weight:700;color:var(--purple);margin-bottom:8px;display:flex;align-items:center;gap:6px">
+        ${I('sparkles', 12, '#9F1239')} ${T('โมเดล lip-sync · fal.ai', 'Lip-sync model · fal.ai')}
+        <span style="margin-left:auto;background:#9F1239;color:#fff;font-size:9px;padding:1px 7px;border-radius:99px;font-weight:800">${lipsyncModels.length}</span>
+      </div>
       <div style="display:flex;flex-direction:column;gap:6px">
         ${lipsyncModels.map((m) => {
           const on = (state.avatarLipsyncModel || 'fal-ai/bytedance/omnihuman/v1.5') === m.id;
@@ -197,46 +225,20 @@ export function pageAvatar() {
         }).join('')}
       </div>
       <div class="micro" style="margin-top:8px;font-size:10.5px;color:var(--muted);line-height:1.4">${T('ราคาต่อคลิป 30 วินาที — fal.ai bill ตามจริง', 'Per 30s clip — fal.ai bills usage')}</div>
-
-      <!-- ── Bypass: paste an existing fal.ai output URL ──────────────────
-        Power-user path: user runs Infinitalk / OmniHuman directly on
-        fal.ai's playground (fal.ai/models/.../playground), copies the
-        result video URL, pastes here. PostPost skips the backend
-        /api/ai/lipsync-submit call entirely + jumps straight to the
-        canvas compositor (chroma-key + Pexels bg). Useful when:
-          • PostPost's lipsync-submit returns 500 (Supabase/env issue)
-          • User wants more control over fal.ai params
-          • User has fal.ai pre-paid credits + wants direct billing
-      -->
-      <div style="margin-top:14px;padding-top:14px;border-top:1px dashed var(--line)">
-        <div class="micro" style="font-weight:700;color:var(--purple);margin-bottom:6px;display:flex;align-items:center;gap:6px">
-          ${I('upload', 12, '#5B21B6')} ${T('หรือ — วาง URL วิดีโอ lip-sync ที่ทำเสร็จแล้ว', 'Or — paste a finished lip-sync video URL')}
-        </div>
-        <div class="micro" style="color:var(--muted);margin-bottom:10px;line-height:1.5">
-          ${T('รัน Infinitalk/OmniHuman บน fal.ai เอง → copy video URL → วางที่นี่ → ระบบจะข้ามขั้นเรียก fal.ai แล้วประกอบกับ Pexels bg ให้เลย', 'Run Infinitalk/OmniHuman directly on fal.ai → copy the result URL → paste here → PostPost skips the backend call and composites with the Pexels bg')}
-        </div>
-        <div style="display:flex;gap:6px">
-          <input class="input" id="ppLipsyncPasteUrl" placeholder="https://v3b.fal.media/files/..." value="${state.avatarLipsyncRawVideo || ''}" style="flex:1;font-size:11.5px;height:34px;font-family:var(--mono)"/>
-          <button class="btn outline" data-pastelipsyncurl="1" style="height:34px;font-size:11.5px;padding:0 14px">${I('check', 12)} ${T('ใช้คลิปนี้', 'Use this')}</button>
-        </div>
-        ${state.avatarLipsyncRawVideo ? `<div style="margin-top:8px;padding:8px 10px;background:#D1FAE5;border:1px solid #6EE7B7;border-radius:8px;font-size:11px;color:#065F46;display:flex;align-items:center;gap:6px">
-          ${I('check', 12, '#065F46')} <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${T('พร้อมแล้ว: ', 'Ready: ')}${state.avatarLipsyncRawVideo.split('/').pop().slice(0, 40)}…</span>
-          <button data-clearlipsyncurl="1" style="background:none;border:0;color:#065F46;cursor:pointer;padding:0;display:flex;align-items:center">${I('x', 12, '#065F46')}</button>
-        </div>` : ''}
-      </div>
     </div>` : '';
 
   const card1Mode = `
   <div class="card">
     <div class="eyebrow" style="margin-bottom:8px">${T('ขั้นที่ 1 · โหมด', 'Step 1 · Mode')}</div>
     <h3 class="cardTitle" style="margin-bottom:14px">${T('เลือกระดับคุณภาพ', 'Pick quality level')}</h3>
-    <div class="grid g2" style="gap:10px">
+    <div class="grid g3" style="gap:10px">
       ${modeTiles.map((m) => {
         const on = m.id === state.avatarMode;
-        return `<button class="toneTile ${on ? 'active' : ''}" data-set="avatarMode=${m.id}" style="flex-direction:column;align-items:flex-start;gap:8px;padding:14px">
-          <div style="display:flex;align-items:center;gap:10px;width:100%">
+        return `<button class="toneTile ${on ? 'active' : ''}" data-set="avatarMode=${m.id}" style="flex-direction:column;align-items:flex-start;gap:8px;padding:14px;position:relative">
+          <span style="position:absolute;top:8px;right:8px;background:${m.tagBg};color:#fff;font-size:8.5px;font-weight:800;letter-spacing:.04em;padding:2px 7px;border-radius:99px">${T(m.tagTh, m.tagEn)}</span>
+          <div style="display:flex;align-items:center;gap:10px;width:100%;padding-right:42px">
             <div class="toneEmoji" style="background:${on ? '#fff' : 'var(--cream2)'};color:${on ? 'var(--orange)' : 'var(--muted)'}">${I(m.icon, 16)}</div>
-            <b style="font-size:13px;color:var(--purple)">${T(m.th, m.en)}</b>
+            <b style="font-size:13px;color:var(--purple);line-height:1.2">${T(m.th, m.en)}</b>
             ${on ? `<span style="margin-left:auto;color:var(--orange)">${I('check', 14)}</span>` : ''}
           </div>
           <div class="micro" style="line-height:1.45">${t({ th: m.sub_th, en: m.sub_en })}</div>
@@ -246,7 +248,10 @@ export function pageAvatar() {
     </div>
     ${modeAudioReactiveHint}
     ${modeInfinitalkWarning}
+    ${modeHfreeSubpicker}
     ${modeRealSubpicker}
+    ${pasteUrlBlock}
+    ${manualWebCollapsible}
   </div>`;
 
   // ── Step 2: Presenter gallery (built-ins + custom) + upload tile ────
