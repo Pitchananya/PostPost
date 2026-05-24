@@ -2706,6 +2706,27 @@ async function uploadDataUrlToBucket(dataUrl, prefix, fallbackExt) {
 // compositor can drop just the person onto a Pexels bg cleanly.
 // body: { image_b64 } → { ok, image_url } (PNG with alpha, hosted on Supabase)
 // Uses fal-ai/birefnet which returns a high-quality alpha matte for human subjects.
+// 📤 POST /ai/get-asset-urls — upload image + audio data-URLs to Supabase,
+//    return their public URLs ready to paste into any third-party lipsync
+//    tool (HF Spaces, Hedra, Replicate, D-ID, etc.). Lets PostPost users
+//    use FREE external services without manually rehosting their files.
+//    body: { image_b64?, audio_b64? } — at least one required
+//    → { ok, image_url?, audio_url? }
+router.post('/get-asset-urls', async (req, res) => {
+  const { image_b64, audio_b64 } = req.body || {};
+  if (!image_b64 && !audio_b64) return res.status(400).json({ error: 'image_b64 or audio_b64 required' });
+  try {
+    await ensureLipsyncBucket();
+    const out = { ok: true };
+    if (image_b64) out.image_url = await uploadDataUrlToBucket(image_b64, 'asset-img', 'png');
+    if (audio_b64) out.audio_url = await uploadDataUrlToBucket(audio_b64, 'asset-aud', 'mp3');
+    res.json(out);
+  } catch (e) {
+    console.error('[get-asset-urls]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 router.post('/remove-bg', async (req, res) => {
   const { image_b64 } = req.body || {};
   const falKey = process.env.FAL_KEY;

@@ -75,6 +75,7 @@ window.PP.state = window.PP.state || {
   storyboardOpenSlot: -1,     // which slot's Pexels picker is expanded (-1 = none)
   storyboardSlotCands: {},    // { [slotIdx]: [pexels videos] } — cached candidate sets per slot
   storyboardSearch: {},       // { [slotIdx]: 'free-text query' } — per-slot custom search override
+  hfLipsyncLoading: false,    // true while one-click HF Wav2Lip is uploading image+audio + writing URLs to clipboard
   previewAspect: '4:5',    // 1:1 | 4:5 | 9:16  — aspect for post preview + PNG download
   previewIndex: 0,         // current slide in carousel
   sidebarOpen: false,      // mobile drawer state (≤768px) — toggled by the hamburger button
@@ -1118,12 +1119,19 @@ document.addEventListener('click', (e) => {
     }
     console.log('[voice] toggled:', v, wasSelected ? 'OFF' : 'ON', '→ state.voice =', JSON.stringify(state.voice));
     // Auto-persist to the active brand so Brand Voice survives page reload + cloud-sync.
-    // saveBrands lives in module scope (data/brands.js) — reach it through the
-    // window.PP bridge so this inline event handler can call it without ReferenceError.
+    // ⚠ Do NOT route through `window.PP.saveBrands` — that's the MODULE saveBrands
+    // (data/brands.js) which serializes the MODULE BRANDS array. After
+    // cloudPullOnBoot rebuilds the INLINE BRANDS in place (line ~4528), the
+    // two arrays diverge — module saveBrands then writes stale data.
+    // Instead, serialize the inline BRANDS directly + push via window.PP.schedCloudPush
+    // (published by script 2 — same schedCloudPush that cloudPushNow uses, which
+    // reads inline BRANDS). This keeps localStorage + cloud in sync with what
+    // the handler actually mutated.
     const _vab = BRANDS.find(b => b.id === state.brand);
     if (_vab) {
       _vab.voice = state.voice.slice();
-      try { (window.PP && window.PP.saveBrands || function(){})(); } catch(saveErr){ console.warn('[voice] saveBrands failed:', saveErr.message); }
+      try { localStorage.setItem('postpost_brands', JSON.stringify(BRANDS)); } catch(saveErr){ console.warn('[voice] localStorage failed:', saveErr.message); }
+      try { (window.PP && window.PP.schedCloudPush || function(){})(); } catch(pushErr){ console.warn('[voice] cloud push failed:', pushErr.message); }
     } else {
       console.warn('[voice] no active brand to save voice into — state.brand =', state.brand);
     }
@@ -1184,11 +1192,15 @@ document.addEventListener('click', (e) => {
     e.preventDefault();
     state.archetype = archeEl.dataset.archetype;
     console.log('[archetype] picked:', state.archetype);
-    // Auto-persist via window.PP.saveBrands (module-scope fn — same as Brand Voice handler).
+    // Auto-persist directly — same pattern as the Brand Voice handler above:
+    // localStorage write on inline BRANDS + schedCloudPush (which serializes
+    // inline BRANDS in cloudPushNow). Routing through window.PP.saveBrands
+    // would hit the module copy which diverges from inline after cloudPullOnBoot.
     const _aab = BRANDS.find(b => b.id === state.brand);
     if (_aab) {
       _aab.archetype = state.archetype;
-      try { (window.PP && window.PP.saveBrands || function(){})(); } catch(saveErr){ console.warn('[archetype] saveBrands failed:', saveErr.message); }
+      try { localStorage.setItem('postpost_brands', JSON.stringify(BRANDS)); } catch(saveErr){ console.warn('[archetype] localStorage failed:', saveErr.message); }
+      try { (window.PP && window.PP.schedCloudPush || function(){})(); } catch(pushErr){ console.warn('[archetype] cloud push failed:', pushErr.message); }
     } else {
       console.warn('[archetype] no active brand — state.brand =', state.brand);
     }
@@ -1257,7 +1269,7 @@ render();
      ES-module graph instead of serving a stale index.html that calls old code.
      Critical for billing-fix rollouts (see commit e043a18) — stale cache here
      means the user keeps clicking "free" while old code keeps calling fal.ai. -->
-<script type="module" src="/js/main.js?v=skincare-purge"></script>
+<script type="module" src="/js/main.js?v=latentsync-oneclick"></script>
 
 <!-- ============================================================ -->
 <!-- PostPost backend wiring — API client + real auth             -->
@@ -1664,7 +1676,10 @@ render();
   function scheduleBrandSave(){
     if (_brandSaveTimer) clearTimeout(_brandSaveTimer);
     _brandSaveTimer = setTimeout(function(){
-      try { (window.PP && window.PP.saveBrands || function(){})(); } catch(_){}
+      // Use inline saveBrands (in script-2 IIFE scope) — it serializes the inline
+      // BRANDS array + calls inline schedCloudPush. Routing through window.PP.saveBrands
+      // would hit the module copy which can diverge from inline after cloudPullOnBoot.
+      try { saveBrands(); } catch(_){}
     }, 600);
   }
   document.addEventListener('input', function(e){
@@ -1685,8 +1700,9 @@ render();
       var ab = liveBrand();
       if (ab) {
         ab.bizType = t.value;
-        // bizType is a select → fires once on change, save immediately (no debounce needed)
-        try { (window.PP && window.PP.saveBrands || function(){})(); } catch(_){}
+        // bizType is a select → fires once on change, save immediately (no debounce needed).
+        // Use inline saveBrands — same divergence reason as the debounced scheduleBrandSave above.
+        try { saveBrands(); } catch(_){}
       }
       return;
     }
@@ -3953,6 +3969,89 @@ render();
       toast(state.lang==='th'?'ล้างแล้ว — จะเรียก fal.ai ปกติเมื่อกดสร้างวิดีโอ':'Cleared — will call fal.ai normally on next render','success');
       return;
     }
+    // ── One-click HF lip-sync workflow (Wav2Lip OR LatentSync) ─────────
+    // Upload picked avatar image + TTS audio to Supabase Storage (via
+    // /api/ai/get-asset-urls) → get public URLs → copy them to clipboard
+    // → open the picked HF Space in a new tab. User pastes the URLs into
+    // the Space, runs the model (free, ~1-5 min queue for Wav2Lip; longer
+    // for LatentSync), copies the result URL, then pastes it back into the
+    // "วาง URL วิดีโอ lip-sync" input above — PostPost composites it with
+    // the Pexels bg via the same BYPASS A path used for fal.ai paste-URL.
+    //
+    // The button's data-hflipsync value picks the Space:
+    //   "latent"  → fffiloni/LatentSync (ByteDance 1.5, BEST FOR THAI)
+    //   "wav2lip" → manavisrani07/gradio-lipsync-wav2lip (fastest queue)
+    var hfEl = e.target.closest('[data-hflipsync]');
+    if (hfEl) {
+      e.preventDefault();
+      var hfKind = (hfEl.getAttribute('data-hflipsync') || 'wav2lip').toLowerCase();
+      // Each model gets its own Space URL + tone-adjusted toast text.
+      // LatentSync needs the user to bump lips_expression to 1.8-2.0 for Thai
+      // — surface that as a follow-up tip so they don't miss it.
+      var hfConfig = (hfKind === 'latent') ? {
+        spaceUrl: 'https://huggingface.co/spaces/fffiloni/LatentSync',
+        labelTh: 'LatentSync 1.5',
+        labelEn: 'LatentSync 1.5',
+        tipTh: '⭐ TIP: ใน Settings → ปรับ "lips_expression" เป็น 1.8-2.0 เพื่อให้ปากเปิดชัดสำหรับเสียงไทย',
+        tipEn: '⭐ TIP: In Settings → set "lips_expression" to 1.8-2.0 for clearer mouth motion on Thai voice',
+      } : {
+        spaceUrl: 'https://huggingface.co/spaces/manavisrani07/gradio-lipsync-wav2lip',
+        labelTh: 'Wav2Lip',
+        labelEn: 'Wav2Lip',
+        tipTh: '⭐ TIP: เลือก Checkpoint = wav2lip_gan + Pad Bottom = 15-20 (เพื่อให้รวมคาง)',
+        tipEn: '⭐ TIP: pick Checkpoint = wav2lip_gan + Pad Bottom = 15-20 (to include the chin)',
+      };
+      (async function(){
+        if (state.hfLipsyncLoading) return;
+        if (!state.ttsAudio) {
+          toast(state.lang==='th'?'กด "ฟังเสียง" ก่อน — ต้องมีไฟล์เสียง TTS':'Press "Listen" first — needs TTS audio','error');
+          return;
+        }
+        var all2 = (typeof AVATARS!=='undefined'?AVATARS:[]).concat(state.customAvatars||[]);
+        var picked2 = all2.filter(function(a){ return a.id===state.avatar; })[0];
+        if (!picked2 || !picked2.image) {
+          toast(state.lang==='th'?'เลือก avatar ที่มีรูป (ไม่ใช่ตัวอักษร) ก่อน':'Pick an avatar with a real image first','error');
+          return;
+        }
+        state.hfLipsyncLoading = true; render();
+        try {
+          toast(state.lang==='th'?'กำลังอัปโหลดรูป + เสียง…':'Uploading image + audio…');
+          var r = await api('/api/ai/get-asset-urls', { method:'POST', body:{
+            image_b64: picked2.image,
+            audio_b64: state.ttsAudio,
+          }});
+          if (!r || !r.image_url || !r.audio_url) {
+            throw new Error('upload failed (missing URLs)');
+          }
+          var clipText = 'IMAGE (face): ' + r.image_url + '\nAUDIO (voice): ' + r.audio_url;
+          var copied = false;
+          try {
+            await navigator.clipboard.writeText(clipText);
+            copied = true;
+          } catch(clipErr){
+            // older browsers / non-https — fall back to prompt()
+            try { window.prompt(state.lang==='th'?('คัดลอก 2 URL นี้ไปวางในหน้า '+hfConfig.labelTh+':'):('Copy these 2 URLs into the '+hfConfig.labelEn+' page:'), clipText); copied = true; } catch(_){}
+          }
+          window.open(hfConfig.spaceUrl, '_blank', 'noopener');
+          var modelLabel = state.lang==='th' ? hfConfig.labelTh : hfConfig.labelEn;
+          toast(state.lang==='th'
+            ? (copied ? '✓ คัดลอก URL แล้ว · เปิด '+modelLabel+' — วาง IMAGE+AUDIO → Run → copy result URL → กลับมาวางที่ "วาง URL วิดีโอ"' : 'เปิด '+modelLabel+' แล้ว — copy URL ที่เห็นใน console ไปวางเอง')
+            : (copied ? '✓ URLs copied · '+modelLabel+' opened — paste IMAGE+AUDIO → Run → copy result URL → paste back into "Paste URL"' : modelLabel+' opened — copy URLs manually from console'),
+            'success');
+          // Surface the model-specific tuning tip 1.5s later (after the first toast settles).
+          setTimeout(function(){
+            toast(state.lang==='th' ? hfConfig.tipTh : hfConfig.tipEn);
+          }, 1500);
+          console.log('[hflipsync] kind=' + hfKind + ' image_url=' + r.image_url);
+          console.log('[hflipsync] kind=' + hfKind + ' audio_url=' + r.audio_url);
+        } catch(err){
+          toast((state.lang==='th'?'อัปโหลดไม่สำเร็จ: ':'Upload failed: ') + ((err&&err.message)||err), 'error');
+        } finally {
+          state.hfLipsyncLoading = false; render();
+        }
+      })();
+      return;
+    }
     if (e.target.closest('[data-pastevideourl]')) {
       e.preventDefault();
       var u = (window.prompt(state.lang==='th'
@@ -4376,6 +4475,15 @@ render();
     if (_cloudPushTimer) clearTimeout(_cloudPushTimer);
     _cloudPushTimer = setTimeout(cloudPushNow, delay);
   }
+  // ── Publish schedCloudPush on window.PP ──────────────────────────────
+  // Script 1's voice/archetype handlers (lines ~1127, ~1192) call
+  // window.PP.schedCloudPush() directly so they can persist Brand Voice +
+  // Archetype to cloud (localStorage alone is overwritten by cloudPullOnBoot
+  // on next session). Module saveBrands (data/brands.js) ALSO looks for
+  // this hook — it's a no-op without us publishing it here.
+  // main.js's Object.assign(window.PP, {...}) doesn't include schedCloudPush,
+  // so this publish is safe from being clobbered by the module bootstrap.
+  try { window.PP = window.PP || {}; window.PP.schedCloudPush = schedCloudPush; } catch(_){}
   async function cloudPushNow(){
     if (typeof api !== 'function') return;
     if (!getTok || !getTok()) return;   // not logged in
@@ -4850,7 +4958,7 @@ render();
     + '[data-filter],[data-filterclose],[data-sortby],[data-instocktoggle],'
     + '[data-gentopics],[data-topicgoal],'
     + '[data-saveproduct],[data-newimgclear],[data-newimg],[data-proddelete],[data-usetopic],[data-genall],[data-savedraft],[data-savevideodraft],[data-saveavatardraft],[data-editdraft],[data-deletedraft],[data-schedule],[data-avatarscript],[data-veogen],[data-newavatar],[data-rmbgavatar],'
-    + '[data-uploadavatar],[data-uploadref],[data-clearref],[data-pickrefproduct],[data-refclose],[data-refpick],[data-genvideoprompt],[data-delavatar],[data-addtoday],[data-pickdraft],[data-pickdraftclose],[data-pickdraftgo],[data-tts],[data-pickfbpage],[data-avatarvideo],[data-pastevideourl],[data-pastelipsyncurl],[data-clearlipsyncurl],[data-locallocaltoggle],[data-bgscene],[data-bgpick],[data-bgsearch],[data-bgsearchclear],[data-bginterval],[data-clipdur],[data-avatarabort],[data-genstoryboard],[data-slottoggle],[data-slotsearch],[data-slotpickurl],[data-mobilemenu],[data-mobilebackdrop],[data-profilemenu],[data-profileview],[data-profileclose],[data-signout],'
+    + '[data-uploadavatar],[data-uploadref],[data-clearref],[data-pickrefproduct],[data-refclose],[data-refpick],[data-genvideoprompt],[data-delavatar],[data-addtoday],[data-pickdraft],[data-pickdraftclose],[data-pickdraftgo],[data-tts],[data-pickfbpage],[data-avatarvideo],[data-pastevideourl],[data-pastelipsyncurl],[data-clearlipsyncurl],[data-hflipsync],[data-locallocaltoggle],[data-bgscene],[data-bgpick],[data-bgsearch],[data-bgsearchclear],[data-bginterval],[data-clipdur],[data-avatarabort],[data-genstoryboard],[data-slottoggle],[data-slotsearch],[data-slotpickurl],[data-mobilemenu],[data-mobilebackdrop],[data-profilemenu],[data-profileview],[data-profileclose],[data-signout],'
     + '[data-previewaspect],[data-previewidx],[data-downloadpng]';
   document.addEventListener('click', function(e){
     var b = e.target.closest('button, a');

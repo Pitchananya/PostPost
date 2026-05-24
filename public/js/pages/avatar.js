@@ -137,7 +137,23 @@ export function pageAvatar() {
           <a href="https://studio.d-id.com/" target="_blank" style="color:#065F46;font-size:11px">studio.d-id.com</a><br>
           <span style="font-size:11px;opacity:.85">${T('คุณภาพสูงมาก · ฟรี 14 วันแรก · หลังจากนั้นจ่าย', 'Premium quality · free 14 days · paid after')}</span>
         </div>
-        <p style="margin:12px 0 0;font-size:11px;color:#065F46;font-style:italic">${T('💡 Tip: รูป + เสียงต้องเป็น URL สาธารณะ — ลาก/วาง avatar ที่ Step 2 + เสียงจาก Supabase (PostPost upload ให้แล้ว)', '💡 Tip: image + audio must be public URLs — drag your avatar in Step 2 + audio is auto-uploaded by PostPost')}</p>
+        <!-- ⚡ ONE-CLICK quick workflow — upload image+audio, copy URLs, open HF Space.
+             Two flavors share the same backend (/api/ai/get-asset-urls) + state.hfLipsyncLoading:
+               • LatentSync (BEST FOR THAI) — primary CTA, ByteDance model w/ Chinese training
+               • Wav2Lip — fallback, fastest queue, unlimited but mouth-only -->
+        <div style="margin-top:14px;padding:14px;background:linear-gradient(135deg,#FEF3C7,#FDE68A);border-radius:10px;border:2px solid #FBBF24">
+          <div style="font-size:12.5px;font-weight:800;color:#92400E;margin-bottom:6px">${T('⚡ One-click: เปิดใช้งานได้ทันที','⚡ One-click: instant setup')}</div>
+          <div style="font-size:11px;color:#92400E;line-height:1.5;margin-bottom:12px">${T('กดปุ่มเดียว — PostPost จะ upload รูป+เสียงให้ → copy URLs ลง clipboard → เปิด HF Space ให้พร้อมวาง · งานนี้ฟรี 100%','One click — PostPost uploads image+audio → copies URLs to clipboard → opens HF Space ready for paste · 100% free')}</div>
+          <button class="btn primary" data-hflipsync="latent" style="background:linear-gradient(135deg,#7C2D12,#9A3412);color:#fff;border:0;width:100%;font-weight:800" ${(!state.ttsAudio || state.hfLipsyncLoading)?'disabled':''}>${state.hfLipsyncLoading ? T('⏳ กำลังอัปโหลด…','⏳ Uploading…') : T('⭐ เริ่มใช้ LatentSync 1.5 — แนะนำสำหรับภาษาไทย','⭐ Start with LatentSync 1.5 — BEST for Thai')}</button>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
+            <div style="flex:1;height:1px;background:#FBBF24;opacity:.5"></div>
+            <span style="font-size:9.5px;color:#92400E;font-weight:700;letter-spacing:.05em">${T('หรือ','OR')}</span>
+            <div style="flex:1;height:1px;background:#FBBF24;opacity:.5"></div>
+          </div>
+          <button class="btn outline" data-hflipsync="wav2lip" style="border-color:#92400E;color:#92400E;width:100%;margin-top:8px;font-size:11.5px" ${(!state.ttsAudio || state.hfLipsyncLoading)?'disabled':''}>${state.hfLipsyncLoading ? T('⏳ กำลังอัปโหลด…','⏳ Uploading…') : T('🤗 ใช้ Wav2Lip แทน (เร็วกว่า · ปากอย่างเดียว)','🤗 Use Wav2Lip instead (faster · mouth-only)')}</button>
+          ${!state.ttsAudio ? `<div style="font-size:10.5px;color:#92400E;margin-top:8px">⚠ ${T('กด "ฟังเสียง" ก่อนเพื่อสร้าง TTS audio','Press "Listen" first to generate TTS audio')}</div>` : ''}
+        </div>
+        <p style="margin:12px 0 0;font-size:11px;color:#065F46;font-style:italic">${T('💡 Tip: รูป + เสียงต้องเป็น URL สาธารณะ — ใช้ปุ่ม one-click ด้านบน หรือทำเองที่ HF/Hedra/etc.','💡 Tip: image + audio must be public URLs — use the one-click button above OR do it manually')}</p>
       </div>
     </details>` : '';
 
