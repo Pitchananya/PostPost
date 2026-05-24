@@ -7,16 +7,16 @@
 //     their results in raw() to opt out of escaping
 //   - .map(...).join('') results are also wrapped in raw()
 //
-// Phase-2 bridge: state / T / I / LOGO_ICON still live on the global inline
-// script. We read them via window.PP.* so we don't have to refactor those
-// helpers yet. This bridge goes away in Phase 3 once icons/state/i18n move
-// to their own modules.
+// Phase 3 — now reads helpers directly from their modules instead of
+// window.PP. The bridge still exists (so inline pages keep working) but
+// extracted pages prove the new direct-import path works.
 
 import { html, raw } from '../html.js';
+import { state } from '../state.js';
+import { T } from '../i18n.js';
+import { I, LOGO_ICON } from '../icons.js';
 
 export function pageLanding() {
-  const { state, T, I, LOGO_ICON } = window.PP;
-
   return html`<div class="landingNav"><div class="landingNavInner">
     <div class="navBrand">
       ${raw(LOGO_ICON(40))}

@@ -4,14 +4,15 @@
 // index.html. Pixel-identical output; conversion notes match landing.js
 // (icon/i18n helper output is HTML, so it goes through raw()).
 //
-// Phase-2 bridge: reads state / T / I / LOGO_ICON from window.PP. This
-// bridge goes away in Phase 3 once those helpers move to their own modules.
+// Phase 3 — now reads helpers directly from their modules instead of
+// window.PP. The bridge still exists for inline pages but this file proves
+// the new direct-import pipeline works end-to-end.
 
 import { html, raw } from '../html.js';
+import { T } from '../i18n.js';
+import { I, LOGO_ICON } from '../icons.js';
 
 export function pageLogin() {
-  const { T, I, LOGO_ICON } = window.PP;
-
   return html`<div class="authShell">
     <div class="authForm">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:32px;cursor:pointer" data-go="landing">

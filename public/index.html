@@ -3354,13 +3354,16 @@ document.addEventListener('click', (e) => {
 });
 
 // boot
-// ---- Phase-2 bridge ------------------------------------------------------
-// Expose the bits that the ES-module page renderers need (state, helpers,
-// the PAGES map so they can swap themselves in, and render() so they can
-// trigger a re-paint after swapping). Disappears in Phase 3 once state/
-// icons/i18n move to their own modules.
+// ---- Phase-2/3 bridge ----------------------------------------------------
+// Expose the inline-declared values that the ES-module loader (main.js) needs
+// to sync FROM. Phase 3 added the data arrays so main.js can splice persisted
+// values into the module copies (BRANDS reassignment happens here on boot,
+// so the inline copy holds the localStorage state; main.js copies into the
+// module's shared array). PAGES + render stay so module pages can register
+// themselves. Bridge shrinks as each piece moves to its own module.
 window.PP = Object.assign(window.PP || {}, {
   state, T, t, I, LOGO_ICON, PAGES, render,
+  BRANDS, TOPICS, PRODUCTS,
 });
 // --------------------------------------------------------------------------
 render();
