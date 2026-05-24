@@ -61,6 +61,7 @@ import { pageCaption } from './pages/caption.js';
 import { pageCreative } from './pages/creative.js';
 import { pageProfile } from './pages/profile.js';
 import { pageTextVideo } from './pages/textvideo.js';
+import { pageAvatar } from './pages/avatar.js';
 
 // ── Step 1+2: sync state from inline → module on every render ──
 // The inline <script> holds its own `const state = {…}` — every inline page
@@ -198,6 +199,8 @@ if (PAGES) {
   PAGES.profile = pageProfile;
   // Phase 3d — text-to-video page (smaller, less coupled).
   PAGES.textvideo = pageTextVideo;
+  // Phase 3d — Talking Avatar (biggest page).
+  PAGES.avatar = pageAvatar;
 }
 if (window.PP && typeof window.PP.render === 'function') {
   window.PP.render();
