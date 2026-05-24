@@ -105,10 +105,17 @@ export function pageAvatar() {
       </summary>
       <div style="padding:0 14px 14px;font-size:12px;line-height:1.7;color:#064E3B">
         <p style="margin:0 0 10px"><b>${T('หลักการ:', 'How it works:')}</b> ${T('ไปใช้ AI lipsync ฟรีในเว็บอื่น → copy URL วิดีโอ → กลับมา paste ที่ "วาง URL วิดีโอ lip-sync" (ในส่วน Real lip-sync) → PostPost จะ composite กับ Pexels bg ให้', 'Use free AI lipsync on another site → copy the result URL → paste it back here under Real lip-sync\\'s "paste URL" input → PostPost composites it with the Pexels bg')}</p>
+        <div style="background:#fff;border-radius:8px;padding:10px 12px;margin-bottom:8px;border:2px solid #FBBF24">
+          <b style="color:#065F46">⭐ LatentSync 1.5 (ByteDance) — แนะนำสำหรับภาษาไทย</b> <span style="background:#FBBF24;color:#92400E;font-size:9px;padding:1px 6px;border-radius:99px;font-weight:800">BEST FOR THAI</span><br>
+          <a href="https://huggingface.co/spaces/fffiloni/LatentSync" target="_blank" style="color:#065F46;font-size:11px">HF Space (fffiloni)</a> ·
+          <a href="https://replicate.com/zsxkib/latentsync" target="_blank" style="color:#065F46;font-size:11px">Replicate ($0.04/min)</a> ·
+          <a href="https://huggingface.co/ByteDance/LatentSync-1.5" target="_blank" style="color:#065F46;font-size:11px">Model card</a><br>
+          <span style="font-size:11px;opacity:.85">${T('คุณภาพดีมาก · Chinese training data รองรับภาษาเอเชียดี · ตั้ง lips_expression=1.8-2.0 สำหรับเสียงไทย · HF Space ฟรี (queue), Replicate $5 trial', 'Excellent quality · Chinese training data handles Asian langs well · set lips_expression=1.8-2.0 for Thai · HF Space free (queue), Replicate $5 trial')}</span>
+        </div>
         <div style="background:#fff;border-radius:8px;padding:10px 12px;margin-bottom:8px">
           <b style="color:#065F46">🌟 Hedra</b> <span style="background:#10B981;color:#fff;font-size:9px;padding:1px 6px;border-radius:99px;font-weight:800">30 FREE/MO</span><br>
           <a href="https://www.hedra.com/app" target="_blank" style="color:#065F46;font-size:11px">https://www.hedra.com/app</a><br>
-          <span style="font-size:11px;opacity:.85">${T('คุณภาพดีที่สุดในกลุ่มฟรี · ปากขยับเป๊ะ · หน้าขยับ · 30 คลิป/เดือน', 'Best free quality · accurate lipsync · face motion · 30 clips/month')}</span>
+          <span style="font-size:11px;opacity:.85">${T('คุณภาพดีในกลุ่มฟรี · ปากขยับเป๊ะ · หน้าขยับ · 30 คลิป/เดือน · UI ง่ายสุด', 'Best free UX · accurate lipsync · face motion · 30 clips/month · easiest UI')}</span>
         </div>
         <div style="background:#fff;border-radius:8px;padding:10px 12px;margin-bottom:8px">
           <b style="color:#065F46">🤗 Hugging Face Spaces — Wav2Lip</b> <span style="background:#10B981;color:#fff;font-size:9px;padding:1px 6px;border-radius:99px;font-weight:800">UNLIMITED FREE</span><br>
