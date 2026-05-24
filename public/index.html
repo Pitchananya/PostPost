@@ -1061,8 +1061,8 @@ document.addEventListener('click', (e) => {
       state.brandDesc = nb.desc || '';
       state.voice = Array.isArray(nb.voice) ? nb.voice.slice() : [];
       state.archetype = nb.archetype || '';
-      TOPICS = (Array.isArray(nb.topics) && nb.topics.length) ? nb.topics : DEMO_TOPICS;
-      PRODUCTS = (Array.isArray(nb.products) && nb.products.length) ? nb.products : DEMO_PRODUCTS;
+      TOPICS = (Array.isArray(nb.topics) && nb.topics.length) ? nb.topics : (nb.id === 'happyprice' ? DEMO_TOPICS : []);
+      PRODUCTS = (Array.isArray(nb.products) && nb.products.length) ? nb.products : (nb.id === 'happyprice' ? DEMO_PRODUCTS : []);
       state.selectedProducts = PRODUCTS.map(function(p){ return p.id; });
       state.shopStats = nb.shopStats || null;
       state.shopUrl = nb.shopUrl || '';
@@ -1553,8 +1553,8 @@ render();
         state.brandDesc = nb.desc || '';
         state.voice = Array.isArray(nb.voice) ? nb.voice.slice() : [];
         state.archetype = nb.archetype || '';
-        TOPICS = (Array.isArray(nb.topics) && nb.topics.length) ? nb.topics : DEMO_TOPICS;
-        PRODUCTS = (Array.isArray(nb.products) && nb.products.length) ? nb.products : DEMO_PRODUCTS;
+        TOPICS = (Array.isArray(nb.topics) && nb.topics.length) ? nb.topics : (nb.id === 'happyprice' ? DEMO_TOPICS : []);
+        PRODUCTS = (Array.isArray(nb.products) && nb.products.length) ? nb.products : (nb.id === 'happyprice' ? DEMO_PRODUCTS : []);
         state.selectedProducts = PRODUCTS.map(function(p){ return p.id; });
         state.shopStats = nb.shopStats || null;
         state.shopUrl = nb.shopUrl || '';
@@ -1583,7 +1583,10 @@ render();
       state.voice = Array.isArray(ab.voice) ? ab.voice.slice() : [];
       state.brandDesc = ab.desc || '';
       state.archetype = ab.archetype || '';
+      // Boot fallback: use DEMO_TOPICS only for the original HappyPrice seed brand;
+      // other brands (e.g. คุรุเทพ) start empty so they don't show skincare topics.
       if (Array.isArray(ab.topics) && ab.topics.length) TOPICS = ab.topics;
+      else if (ab.id !== 'happyprice') TOPICS = [];
     }
     if (ab && Array.isArray(ab.products) && ab.products.length){
       PRODUCTS = ab.products;

@@ -81,28 +81,39 @@ export function pageTopics() {
     <span class="pill" style="height:34px">${raw(T('ใช้ไปแล้ว', 'Used'))} <b>${TOPICS.filter((tp) => tp.used).length}</b> / ${TOPICS.length}</span>
   </div>
 
-  <!-- Topics grid -->
-  <div class="grid g3">
-    ${raw(filtered.map((tp) => {
-      const k = KIND_MAP[tp.kind];
-      return `<div class="topicCard ${tp.used ? 'used' : ''}">
-        <div class="split">
-          <span class="pill ${k.pill}">${T(k.th, k.en)}</span>
-          <span style="font-family:var(--mono);font-size:10.5px;color:var(--muted)">${tp.f}</span>
-        </div>
-        <div class="topicText">${T(tp.th, tp.en)}</div>
-        <div class="split" style="padding-top:10px;border-top:1px dashed var(--line)">
-          <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted)">
-            <span style="display:inline-flex;align-items:center;gap:3px">${I('type', 11)} ${t({ th: tp.len_th, en: tp.len_en })}</span>
-            ${tp.used ? `<span class="pill green" style="height:18px;font-size:10px">✓ ${T('ใช้แล้ว', 'Used')}</span>` : ''}
+  <!-- Topics grid OR empty state for brands without topics yet -->
+  ${TOPICS.length === 0 ? raw(`
+    <div style="padding:60px 24px;text-align:center;background:var(--cream2);border-radius:18px;border:1px dashed var(--line3)">
+      ${I('sparkles', 48, '#9C8BB8')}
+      <div style="font-size:17px;font-weight:800;color:var(--ink);margin:14px 0 6px">${T('ยังไม่มีหัวข้อสำหรับ ' + (BRANDS.find(b => b.id === state.brand)?.name || ''), 'No topics yet for ' + (BRANDS.find(b => b.id === state.brand)?.name || ''))}</div>
+      <div style="font-size:13px;color:var(--muted);max-width:480px;margin:0 auto 22px;line-height:1.6">${T('แต่ละแบรนด์มีหัวข้อของตัวเอง — กดปุ่มด้านล่างให้ AI วางแผน 30 หัวข้อตามแบรนด์ จุดมุ่งหมาย และธีมที่ตั้งไว้ข้างบน', 'Each brand has its own topics — hit the button below to let AI plan 30 topics matched to this brand, its goals, and the theme above')}</div>
+      <button class="btn primary" data-gentopics="1" ${state.topicGenLoading ? 'disabled' : ''} style="padding:12px 28px;font-size:14px">
+        ${I('sparkles', 16)} ${state.topicGenLoading ? T('AI กำลังสร้าง…', 'Generating…') : T('🪄 ให้ AI สร้างหัวข้อให้แบรนด์นี้', '🪄 Generate topics for this brand')}
+      </button>
+    </div>
+  `) : raw(`
+    <div class="grid g3">
+      ${filtered.map((tp) => {
+        const k = KIND_MAP[tp.kind];
+        return `<div class="topicCard ${tp.used ? 'used' : ''}">
+          <div class="split">
+            <span class="pill ${k.pill}">${T(k.th, k.en)}</span>
+            <span style="font-family:var(--mono);font-size:10.5px;color:var(--muted)">${tp.f}</span>
           </div>
-          <button class="btn ghost sm" style="color:var(--orange);height:26px;padding:0 8px;font-size:11.5px" data-usetopic="${TOPICS.indexOf(tp)}">${T('ใช้หัวข้อนี้', 'Use this')} ${I('chev_right', 11, '#FF7A1A')}</button>
-        </div>
-      </div>`;
-    }).join(''))}
-  </div>
+          <div class="topicText">${T(tp.th, tp.en)}</div>
+          <div class="split" style="padding-top:10px;border-top:1px dashed var(--line)">
+            <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted)">
+              <span style="display:inline-flex;align-items:center;gap:3px">${I('type', 11)} ${t({ th: tp.len_th, en: tp.len_en })}</span>
+              ${tp.used ? `<span class="pill green" style="height:18px;font-size:10px">✓ ${T('ใช้แล้ว', 'Used')}</span>` : ''}
+            </div>
+            <button class="btn ghost sm" style="color:var(--orange);height:26px;padding:0 8px;font-size:11.5px" data-usetopic="${TOPICS.indexOf(tp)}">${T('ใช้หัวข้อนี้', 'Use this')} ${I('chev_right', 11, '#FF7A1A')}</button>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
 
-  <div style="margin-top:24px;display:flex;justify-content:center">
-    <button class="btn outline">${raw(I('plus', 14))} ${raw(T('คิดเพิ่มอีก 30 หัวข้อ', 'Generate 30 more'))}</button>
-  </div>`;
+    <div style="margin-top:24px;display:flex;justify-content:center">
+      <button class="btn outline" data-gentopics="1">${I('sparkles', 14)} ${T('คิดเพิ่มอีก 30 หัวข้อ', 'Generate 30 more')}</button>
+    </div>
+  `)}`;
 }
