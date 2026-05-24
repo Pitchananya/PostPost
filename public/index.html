@@ -2803,77 +2803,63 @@ function pageLibrary() {
 }
 
 // ====================================================================
-// ROUTER
+// ROUTER — Phase-3e: PAGES + render + setupAvatarBgRotation lifted to
+// public/js/render.js + components/avatar-bg.js. The inline shims below
+// preserve the bare-identifier call sites (event handlers + the auth-
+// wiring inline script's render-wrap) until everything migrates to
+// direct imports.
 // ====================================================================
-const PAGES = {
+// Seed PAGES with the inline page functions so the very first paint
+// (before main.js loads) can still render pageLanding. main.js
+// overwrites every entry with the module page renderer once it boots.
+window.PP = window.PP || {};
+window.PP.PAGES = window.PP.PAGES || {};
+Object.assign(window.PP.PAGES, {
   landing: pageLanding, login: pageLogin, onboarding: pageOnboarding,
   profile: pageProfile, topics: pageTopics, caption: pageCaption, creative: pageCreative,
   avatar: pageAvatar, textvideo: pageTextVideo,
   automation: pageAutomation, analytics: pageAnalytics, calendar: pageCalendar, library: pageLibrary,
-};
+});
+const PAGES = window.PP.PAGES;
+const PUBLIC_PAGES = new Set(['landing', 'login', 'onboarding']);
 
-const PUBLIC_PAGES = new Set(['landing','login','onboarding']);
-
+// Shim render() — delegates to the module copy once main.js publishes
+// it. Before that point (initial inline boot), we paint pageLanding
+// directly so the user sees content immediately even on slow networks.
 let _ppLastPage = null;
 function render() {
+  if (window.PP && typeof window.PP.render === 'function' && window.PP.render !== render) {
+    return window.PP.render();
+  }
+  // Pre-module boot: only the landing page renders (public, no shell).
   const root = document.getElementById('root');
+  if (!root) return;
   const isPublic = PUBLIC_PAGES.has(state.page);
   root.className = 'app' + (isPublic ? ' no-shell' : '');
   const pageFn = PAGES[state.page] || PAGES.landing;
-  // Same-page re-renders (button clicks) must keep the scroll position;
-  // only a real page change scrolls back to the top.
+  if (typeof pageFn !== 'function') return;
   const _samePage = (state.page === _ppLastPage);
   const _keepY = _samePage ? (window.scrollY || document.documentElement.scrollTop || 0) : 0;
   if (isPublic) {
     root.innerHTML = `<main class="main"><div class="page">${pageFn()}</div></main>`;
   } else {
-    // Mobile drawer: sidebar gets `.open` class when state.sidebarOpen is true;
-    // backdrop overlay shows + closes the drawer on tap.
-    var sideClass = state.sidebarOpen ? ' open' : '';
-    var backdropClass = state.sidebarOpen ? ' show' : '';
-    root.innerHTML = sidebarHTML().replace('class="sidebar"', 'class="sidebar' + sideClass + '"')
-      + '<div class="mobileBackdrop' + backdropClass + '" data-mobilebackdrop="1"></div>'
-      + '<main class="main"><div class="mainInner">' + topbarHTML() + '<div class="page">' + pageFn() + '</div></div></main>';
+    // Pre-module non-public render would need the module's sidebar /
+    // topbar — those aren't loaded yet, so skip. main.js will repaint
+    // the shell-page after import resolves.
+    root.innerHTML = `<main class="main"><div class="page">${pageFn()}</div></main>`;
   }
   window.scrollTo({ top: _keepY, behavior: 'instant' });
   _ppLastPage = state.page;
-  // Talking Avatar bg rotation — cycle the preview <video src> through avatarBgCandidates
-  // every `avatarBgInterval` seconds. Re-wired on every render so it stays in sync with
-  // state changes (interval picker, candidate list, page leave).
-  setupAvatarBgRotation();
-  // One-shot TTS autoplay — consumed by the very next render after audio is ready,
-  // so subsequent progress-update renders don't restart playback from 0:00.
-  if (state.ttsAutoplayPending) state.ttsAutoplayPending = false;
 }
 
-// Module-level so we can clear it across renders.
-let _avatarBgRotateTimer = null;
+// setupAvatarBgRotation lives in components/avatar-bg.js. The shim only
+// matters during the brief pre-module window when the inline render
+// would have called it — at that point the avatar page can't render
+// anyway (it's private), so a no-op is safe.
 function setupAvatarBgRotation() {
-  if (_avatarBgRotateTimer) { clearInterval(_avatarBgRotateTimer); _avatarBgRotateTimer = null; }
-  const interval = state.avatarBgInterval || 0;
-  const cands = (state.avatarBgCandidates || []).filter(c => c && c.url);
-  if (interval <= 0 || cands.length < 2) return;
-  const vid = document.querySelector('video[data-rotate-bg]');
-  if (!vid) return;
-  // Start the cycle at whichever candidate matches the current src — keeps the
-  // visual continuous when the interval was just toggled on.
-  let idx = Math.max(0, cands.findIndex(c => c.url === vid.getAttribute('src')));
-  if (idx < 0) idx = 0;
-  _avatarBgRotateTimer = setInterval(() => {
-    idx = (idx + 1) % cands.length;
-    const next = cands[idx].url;
-    // Fade out, swap src, fade back in
-    vid.style.opacity = '0';
-    setTimeout(() => {
-      try {
-        vid.src = next;
-        vid.load();
-        vid.play().catch(() => {});
-        state.avatarBgRotateIdx = idx;
-      } catch (_) {}
-      vid.style.opacity = '1';
-    }, 220);
-  }, interval * 1000);
+  if (window.PP && typeof window.PP.setupAvatarBgRotation === 'function') {
+    return window.PP.setupAvatarBgRotation();
+  }
 }
 
 // ====================================================================
@@ -3025,23 +3011,26 @@ document.addEventListener('click', (e) => {
 });
 
 // boot
-// ---- Phase-2/3 bridge ----------------------------------------------------
-// Expose the inline-declared values that the ES-module loader (main.js) needs
-// to sync FROM. Phase 3 added the data arrays so main.js can splice persisted
-// values into the module copies (BRANDS reassignment happens here on boot,
-// so the inline copy holds the localStorage state; main.js copies into the
-// module's shared array). PAGES + render stay so module pages can register
-// themselves. Bridge shrinks as each piece moves to its own module.
+// ---- Phase-3 bridge ------------------------------------------------------
+// Expose the inline-declared values that the ES-module loader (main.js)
+// reads to splice persisted state into the module-side mutable arrays
+// (BRANDS reassignment happens here on boot, so the inline copy holds
+// the localStorage state; main.js copies into the module's shared
+// array). Once data is fully extracted (Phase 4+) the bridge shrinks
+// further. PAGES + render are seeded above (PAGES.* = inline pageFns)
+// so the very first paint works before modules import.
 window.PP = Object.assign(window.PP || {}, {
-  state, T, t, I, LOGO_ICON, PAGES, render,
+  T, t, I, LOGO_ICON,
   BRANDS, TOPICS, PRODUCTS,
   // Phase 3c — shared HTML helpers + Caption/Creative cards. Extracted
   // page modules (caption.js, creative.js, profile.js) call these via the
-  // bridge until Phase 3e/3f moves the cards into component modules.
+  // bridge until they're moved into component modules.
   escText, head, brandMark, productImgHTML, businessOptions,
   productPickerHTML, generateInputHTML, postPreviewHTML, publishCardHTML,
 });
 // --------------------------------------------------------------------------
+// First paint with the inline pageLanding (public, no shell). main.js
+// fires its own render() after PAGES is filled with module renderers.
 render();
 </script>
 
@@ -3097,8 +3086,9 @@ render();
     return data;
   }
 
-  // expose for later page wiring
-  window.PP = { api: api, token: { get: getTok, set: setTok }, toast: toast };
+  // expose for later page wiring — Object.assign to preserve everything
+  // script 1's pre-boot put on window.PP (state, PAGES, etc.)
+  window.PP = Object.assign(window.PP || {}, { api: api, token: { get: getTok, set: setTok }, toast: toast });
 
   // wrap the prototype's render() to keep the login form usable
   var _render = render;

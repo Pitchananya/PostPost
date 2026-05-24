@@ -57,6 +57,7 @@ import { pageAvatar } from './pages/avatar.js';
 import { sidebarHTML } from './components/sidebar.js';
 import { topbarHTML } from './components/topbar.js';
 import { profileMenuHTML, openProfileDetail } from './components/profile-menu.js';
+import { render, PAGES, PUBLIC_PAGES } from './render.js';
 
 // ── Step 1: bind i18n to the (now-canonical) state ──
 // state.js's _initState() already returned the same object the inline
@@ -132,34 +133,37 @@ window.PP = Object.assign(window.PP || {}, {
   detectChromaMode, makeChromaKeyer,
   idbPutImage, idbGetImage, idbDeleteImage, compressImageDataUrl,
   // Phase 3e — extracted shell components (sidebar, topbar, profile menu)
-  // The inline render() now reads these via window.PP.* so the inline
+  // The inline render() shims read these via window.PP.* so the inline
   // declarations can be deleted.
   sidebarHTML, topbarHTML, profileMenuHTML, openProfileDetail,
-  // PAGES + render survive from inline; we re-export here so future page
-  // modules can grab them off window.PP without poking at globals.
-  // (The inline script wrote these onto window.PP during its own boot block.)
+  // Phase 3e — render + PAGES + PUBLIC_PAGES lifted to render.js. Publish
+  // here so the inline event handlers + the auth-wiring inline script
+  // can still call window.PP.render() / window.render() by name.
+  render, PAGES, PUBLIC_PAGES,
 });
 
-// ── Step 4: swap landing + login + extracted-page renderers, repaint ──
-const PAGES = window.PP && window.PP.PAGES;
-if (PAGES) {
-  PAGES.landing = pageLanding;
-  PAGES.login = pageLogin;
-  // Phase 3c — simple read-only / data-display pages.
-  PAGES.onboarding = pageOnboarding;
-  PAGES.automation = pageAutomation;
-  PAGES.analytics = pageAnalytics;
-  PAGES.calendar = pageCalendar;
-  PAGES.topics = pageTopics;
-  PAGES.library = pageLibrary;
-  PAGES.caption = pageCaption;
-  PAGES.creative = pageCreative;
-  PAGES.profile = pageProfile;
-  // Phase 3d — text-to-video page (smaller, less coupled).
-  PAGES.textvideo = pageTextVideo;
-  // Phase 3d — Talking Avatar (biggest page).
-  PAGES.avatar = pageAvatar;
-}
-if (window.PP && typeof window.PP.render === 'function') {
-  window.PP.render();
-}
+// Also expose render globally so the inline auth-wiring script can wrap
+// it (login-form pre-fill) AND so the inline event delegators that fire
+// `render()` by bare identifier resolve to the module version after the
+// shim hands off.
+window.render = render;
+
+// ── Step 4: fill the PAGES map with module renderers ──
+PAGES.landing = pageLanding;
+PAGES.login = pageLogin;
+// Phase 3c — simple read-only / data-display pages.
+PAGES.onboarding = pageOnboarding;
+PAGES.automation = pageAutomation;
+PAGES.analytics = pageAnalytics;
+PAGES.calendar = pageCalendar;
+PAGES.topics = pageTopics;
+PAGES.library = pageLibrary;
+PAGES.caption = pageCaption;
+PAGES.creative = pageCreative;
+PAGES.profile = pageProfile;
+// Phase 3d — text-to-video page (smaller, less coupled).
+PAGES.textvideo = pageTextVideo;
+// Phase 3d — Talking Avatar (biggest page).
+PAGES.avatar = pageAvatar;
+// First paint — now that PAGES is filled in, render the canonical page.
+render();
