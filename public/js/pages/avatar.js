@@ -104,7 +104,7 @@ export function pageAvatar() {
         ${I('sparkles', 14, '#065F46')} ${T('🆓 ทางเลือกฟรีให้ปาก/หน้าขยับ (ไม่ผ่าน fal.ai)', '🆓 Free options for real lipsync (skip fal.ai)')}
       </summary>
       <div style="padding:0 14px 14px;font-size:12px;line-height:1.7;color:#064E3B">
-        <p style="margin:0 0 10px"><b>${T('หลักการ:', 'How it works:')}</b> ${T('ไปใช้ AI lipsync ฟรีในเว็บอื่น → copy URL วิดีโอ → กลับมา paste ที่ "วาง URL วิดีโอ lip-sync" (ในส่วน Real lip-sync) → PostPost จะ composite กับ Pexels bg ให้', 'Use free AI lipsync on another site → copy the result URL → paste it back here under Real lip-sync\\'s "paste URL" input → PostPost composites it with the Pexels bg')}</p>
+        <p style="margin:0 0 10px"><b>${T('หลักการ:', 'How it works:')}</b> ${T('ไปใช้ AI lipsync ฟรีในเว็บอื่น → copy URL วิดีโอ → กลับมา paste ที่ "วาง URL วิดีโอ lip-sync" (ในส่วน Real lip-sync) → PostPost จะ composite กับ Pexels bg ให้', 'Use free AI lipsync on another site → copy the result URL → paste back into the "paste URL" input under Real lip-sync → PostPost composites it with the Pexels bg')}</p>
         <div style="background:#fff;border-radius:8px;padding:10px 12px;margin-bottom:8px;border:2px solid #FBBF24">
           <b style="color:#065F46">⭐ LatentSync 1.5 (ByteDance) — แนะนำสำหรับภาษาไทย</b> <span style="background:#FBBF24;color:#92400E;font-size:9px;padding:1px 6px;border-radius:99px;font-weight:800">BEST FOR THAI</span><br>
           <a href="https://huggingface.co/spaces/fffiloni/LatentSync" target="_blank" style="color:#065F46;font-size:11px">HF Space (fffiloni)</a> ·
