@@ -82,6 +82,13 @@ import { pageAvatar } from './pages/avatar.js';
 // we'll add a two-way sync (or finish the inline-state removal).
 const inlineState = (window.PP && window.PP.state) || null;
 if (inlineState) {
+  // Stash the inline-state reference so module pages that mutate state
+  // from their render path (e.g. pages/avatar.js caching the voice list
+  // onto state.avatarVoices) can mirror the write back to inline. Without
+  // this, the inline event handlers (genTts, genAvatarScript, …) would
+  // read undefined off the inline state copy and revert to defaults.
+  // Phase 3e removes the dual-copy entirely.
+  window.PP._inlineState = inlineState;
   Object.assign(state, inlineState);
   // Wrap the GLOBAL render() (function declaration in the inline script —
   // already-wrapped once by the auth-wiring block to inject login form

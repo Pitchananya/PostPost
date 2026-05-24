@@ -63,11 +63,24 @@ function fetchAvatarBg() {
   }
 }
 
+// Mirror a state mutation back to the inline state copy (see state.js dual-
+// copy notes). The wrapped render() in main.js syncs inline→module on every
+// tick, so writes that originate in the module render path get overwritten
+// next paint unless we also write them to inline. Phase 3e drops the dual
+// copy entirely.
+function mirrorToInline(key, value) {
+  try {
+    const inlineState = window.PP && window.PP._inlineState;
+    if (inlineState) inlineState[key] = value;
+  } catch (_) {}
+}
+
 export function pageAvatar() {
   // Lazy-fetch a looping Pexels stock video for the phone preview on first
   // visit. Subsequent fetches are driven by user picks on the BG scene row.
   if (!state.avatarPreviewBgUrl && !state.avatarPreviewBgLoaded && typeof window !== 'undefined' && window.PP) {
     state.avatarPreviewBgLoaded = true;
+    mirrorToInline('avatarPreviewBgLoaded', true);   // see comment on mirrorToInline
     if ((state.avatarBgScene || 'auto') !== 'off' && (state.avatarBgScene || 'auto') !== 'upload') {
       fetchAvatarBg();
     }
@@ -199,6 +212,7 @@ export function pageAvatar() {
     { id: 'casual',    name: 'พี่ตี้',     g: 'ชาย',  tone: 'เป็นกันเอง',       desc: 'casual · บันเทิง',       az: 'th-TH-NiwatNeural' },
   ];
   state.avatarVoices = voices;
+  mirrorToInline('avatarVoices', voices);   // inline genTts/genAvatarScript/genAvatarVideo read this
   const selVoice = state.avatarVoice || 'premwadee';
   const selVoiceObj = voices.filter((v) => v.id === selVoice)[0] || voices[0];
   const voiceSelect = `<select class="select" id="ppAvatarVoice" style="width:100%;font-size:13px;padding:10px 36px 10px 12px">`
