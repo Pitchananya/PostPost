@@ -394,7 +394,7 @@ export function pageAvatar() {
   let phonePreview = '';
   if (displayVideo) {
     phonePreview = `<div class="phone" style="background:#000;overflow:hidden">`
-      + `<video src="${displayVideo}" controls autoplay loop playsinline style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:inherit;z-index:1"></video>`
+      + `<video src="${displayVideo}" controls autoplay loop playsinline preload="metadata" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:inherit;z-index:1" onerror="console.warn('[avatar] video preview load failed:', this.src, this.error)"></video>`
       + (state.avatarVideo ? '' : `<div style="position:absolute;top:10px;left:10px;background:rgba(0,0,0,.65);color:#fff;font-size:10px;font-weight:700;padding:4px 8px;border-radius:99px;z-index:2;backdrop-filter:blur(8px)">${T('คลิปล่าสุด', 'Latest clip')}</div>`)
       + `</div>`;
   } else if (state.avatarVideoLoading) {

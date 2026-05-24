@@ -1044,10 +1044,14 @@ document.addEventListener('click', (e) => {
     const i = state.voice.indexOf(v);
     if (i >= 0) state.voice.splice(i, 1);
     else if (state.voice.length < 3) state.voice.push(v);
-    // Auto-persist to the active brand so Brand Voice survives page reload + cloud-sync
-    // (no manual "บันทึก" required for a 3-pill toggle — too easy to forget).
+    // Auto-persist to the active brand so Brand Voice survives page reload + cloud-sync.
+    // saveBrands lives in module scope (data/brands.js) — reach it through the
+    // window.PP bridge so this inline event handler can call it without ReferenceError.
     const _vab = BRANDS.find(b => b.id === state.brand);
-    if (_vab) { _vab.voice = state.voice.slice(); saveBrands(); }
+    if (_vab) {
+      _vab.voice = state.voice.slice();
+      try { (window.PP && window.PP.saveBrands || function(){})(); } catch(_){}
+    }
     render();
     return;
   }
@@ -1090,9 +1094,12 @@ document.addEventListener('click', (e) => {
   if (archeEl) {
     e.preventDefault();
     state.archetype = archeEl.dataset.archetype;
-    // Auto-persist to the active brand — same reason as Brand Voice above.
+    // Auto-persist via window.PP.saveBrands (module-scope fn — same as Brand Voice handler).
     const _aab = BRANDS.find(b => b.id === state.brand);
-    if (_aab) { _aab.archetype = state.archetype; saveBrands(); }
+    if (_aab) {
+      _aab.archetype = state.archetype;
+      try { (window.PP && window.PP.saveBrands || function(){})(); } catch(_){}
+    }
     render();
     return;
   }
@@ -1545,7 +1552,9 @@ render();
   var _brandSaveTimer = null;
   function scheduleBrandSave(){
     if (_brandSaveTimer) clearTimeout(_brandSaveTimer);
-    _brandSaveTimer = setTimeout(function(){ try { saveBrands(); } catch(_){} }, 600);
+    _brandSaveTimer = setTimeout(function(){
+      try { (window.PP && window.PP.saveBrands || function(){})(); } catch(_){}
+    }, 600);
   }
   document.addEventListener('input', function(e){
     var t = e.target; if (!t || !t.id) return;
@@ -1566,7 +1575,7 @@ render();
       if (ab) {
         ab.bizType = t.value;
         // bizType is a select → fires once on change, save immediately (no debounce needed)
-        try { saveBrands(); } catch(_){}
+        try { (window.PP && window.PP.saveBrands || function(){})(); } catch(_){}
       }
       return;
     }
@@ -2697,6 +2706,18 @@ render();
       var _videoTrack = canvasStream.getVideoTracks && canvasStream.getVideoTracks()[0];
       var chunks = [];
       recorder.ondataavailable = function(e){ if (e.data && e.data.size) chunks.push(e.data); };
+      // Diagnostics — log final chunk count + total bytes when recorder stops.
+      // If chunks.length === 0 or totalBytes < 1000, the resulting blob URL
+      // is empty/broken and the download (or <video> preview) will fail with
+      // ERR_REQUEST_RANGE_NOT_SATISFIABLE. That tells us the canvas captureStream
+      // never produced frames (tab backgrounded, RAF throttled, aborted early).
+      recorder.addEventListener('stop', function(){
+        var total = chunks.reduce(function(s, c){ return s + (c.size||0); }, 0);
+        console.log('[avatar-video] Recorder stopped — chunks:', chunks.length, 'totalBytes:', total);
+        if (total < 1000) {
+          console.warn('[avatar-video] ⚠ Recording is empty/tiny — likely RAF stopped early or capture stream stalled');
+        }
+      });
 
       // 6) Brand-themed gradient (used when no Pexels video for a scene)
       var bizGrad = (function(){
