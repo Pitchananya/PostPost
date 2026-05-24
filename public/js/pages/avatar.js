@@ -127,6 +127,33 @@ export function pageAvatar() {
         }).join('')}
       </div>
       <div class="micro" style="margin-top:8px;font-size:10.5px;color:var(--muted);line-height:1.4">${T('ราคาต่อคลิป 30 วินาที — fal.ai bill ตามจริง', 'Per 30s clip — fal.ai bills usage')}</div>
+
+      <!-- ── Bypass: paste an existing fal.ai output URL ──────────────────
+        Power-user path: user runs Infinitalk / OmniHuman directly on
+        fal.ai's playground (fal.ai/models/.../playground), copies the
+        result video URL, pastes here. PostPost skips the backend
+        /api/ai/lipsync-submit call entirely + jumps straight to the
+        canvas compositor (chroma-key + Pexels bg). Useful when:
+          • PostPost's lipsync-submit returns 500 (Supabase/env issue)
+          • User wants more control over fal.ai params
+          • User has fal.ai pre-paid credits + wants direct billing
+      -->
+      <div style="margin-top:14px;padding-top:14px;border-top:1px dashed var(--line)">
+        <div class="micro" style="font-weight:700;color:var(--purple);margin-bottom:6px;display:flex;align-items:center;gap:6px">
+          ${I('upload', 12, '#5B21B6')} ${T('หรือ — วาง URL วิดีโอ lip-sync ที่ทำเสร็จแล้ว', 'Or — paste a finished lip-sync video URL')}
+        </div>
+        <div class="micro" style="color:var(--muted);margin-bottom:10px;line-height:1.5">
+          ${T('รัน Infinitalk/OmniHuman บน fal.ai เอง → copy video URL → วางที่นี่ → ระบบจะข้ามขั้นเรียก fal.ai แล้วประกอบกับ Pexels bg ให้เลย', 'Run Infinitalk/OmniHuman directly on fal.ai → copy the result URL → paste here → PostPost skips the backend call and composites with the Pexels bg')}
+        </div>
+        <div style="display:flex;gap:6px">
+          <input class="input" id="ppLipsyncPasteUrl" placeholder="https://v3b.fal.media/files/..." value="${state.avatarLipsyncRawVideo || ''}" style="flex:1;font-size:11.5px;height:34px;font-family:var(--mono)"/>
+          <button class="btn outline" data-pastelipsyncurl="1" style="height:34px;font-size:11.5px;padding:0 14px">${I('check', 12)} ${T('ใช้คลิปนี้', 'Use this')}</button>
+        </div>
+        ${state.avatarLipsyncRawVideo ? `<div style="margin-top:8px;padding:8px 10px;background:#D1FAE5;border:1px solid #6EE7B7;border-radius:8px;font-size:11px;color:#065F46;display:flex;align-items:center;gap:6px">
+          ${I('check', 12, '#065F46')} <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${T('พร้อมแล้ว: ', 'Ready: ')}${state.avatarLipsyncRawVideo.split('/').pop().slice(0, 40)}…</span>
+          <button data-clearlipsyncurl="1" style="background:none;border:0;color:#065F46;cursor:pointer;padding:0;display:flex;align-items:center">${I('x', 12, '#065F46')}</button>
+        </div>` : ''}
+      </div>
     </div>` : '';
 
   const card1Mode = `

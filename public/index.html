@@ -2287,6 +2287,15 @@ render();
     try { var _prevA = document.getElementById('ppTtsAudio'); if (_prevA) { _prevA.pause(); _prevA.currentTime = 0; } } catch(_){}
     render();
 
+    // ── BYPASS: user already pasted a fal.ai output URL ─────────────────
+    // Skip the entire backend lipsync-submit + poll loop. Jump straight to
+    // the canvas compositor (which reads state.avatarLipsyncRawVideo).
+    if (state.avatarLipsyncRawVideo && /^https?:\/\//.test(state.avatarLipsyncRawVideo)) {
+      toast(state.lang==='th'?'⚡ ใช้ URL ที่วางไว้ — ข้าม fal.ai backend ไปประกอบกับ bg เลย':'⚡ Using pasted URL — skipping backend, going straight to bg composite','success');
+      // Fall through — the canvas compositor below already checks
+      // state.avatarLipsyncRawVideo and uses it as the avatar source.
+    } else {
+
     // ── Try fal.ai lip-sync first ──────────────────────────────────────────
     // Backend uploads image+audio to Supabase Storage → submits to fal.ai queue,
     // we poll until done. Real mouth movement, ~60-180s. Requires FAL_KEY env var.
@@ -2361,6 +2370,7 @@ render();
         toast((state.lang==='th'?'fal.ai ใช้ไม่ได้ ใช้แบบ static แทน: ':'fal.ai unavailable, using static: ')+msg, 'error');
       }
     }
+    } // end else (no pasted URL)
 
     // ── Client-side canvas fallback — OEM style ────────────────────────────
     // Background = Pexels stock video per scene + avatar in lower-right + scene
@@ -3612,6 +3622,33 @@ render();
   }
   document.addEventListener('click', function(e){
     if (e.target.closest('[data-veogen]')) { e.preventDefault(); genVeoVideo(); }
+    // Avatar lipsync — paste an existing fal.ai output URL to bypass the
+    // backend /api/ai/lipsync-submit call. The canvas compositor then jumps
+    // straight to chroma-key + Pexels bg composite.
+    if (e.target.closest('[data-pastelipsyncurl]')) {
+      e.preventDefault();
+      var lsInp = document.getElementById('ppLipsyncPasteUrl');
+      var lsUrl = lsInp ? lsInp.value.trim() : '';
+      if (!lsUrl) {
+        toast(state.lang==='th'?'วาง URL วิดีโอจาก fal.ai ก่อน':'Paste a fal.ai video URL first','error');
+        return;
+      }
+      if (!/^https?:\/\/.+/i.test(lsUrl)) {
+        toast(state.lang==='th'?'URL ไม่ถูกต้อง — ต้องเริ่มด้วย https://':'Invalid URL — must start with https://','error');
+        return;
+      }
+      state.avatarLipsyncRawVideo = lsUrl;
+      toast(state.lang==='th'?'✓ ใช้คลิปนี้แล้ว — กด "สร้างวิดีโอ MP4" เพื่อประกอบกับ bg':'✓ Locked in — hit "Create MP4" to composite with bg','success');
+      render();
+      return;
+    }
+    if (e.target.closest('[data-clearlipsyncurl]')) {
+      e.preventDefault();
+      state.avatarLipsyncRawVideo = '';
+      render();
+      toast(state.lang==='th'?'ล้างแล้ว — จะเรียก fal.ai ปกติเมื่อกดสร้างวิดีโอ':'Cleared — will call fal.ai normally on next render','success');
+      return;
+    }
     if (e.target.closest('[data-pastevideourl]')) {
       e.preventDefault();
       var u = (window.prompt(state.lang==='th'
@@ -4470,7 +4507,7 @@ render();
     + '[data-filter],[data-filterclose],[data-sortby],[data-instocktoggle],'
     + '[data-gentopics],[data-topicgoal],'
     + '[data-saveproduct],[data-newimgclear],[data-newimg],[data-proddelete],[data-usetopic],[data-genall],[data-savedraft],[data-savevideodraft],[data-saveavatardraft],[data-editdraft],[data-deletedraft],[data-schedule],[data-avatarscript],[data-veogen],[data-newavatar],[data-rmbgavatar],'
-    + '[data-uploadavatar],[data-uploadref],[data-clearref],[data-pickrefproduct],[data-refclose],[data-refpick],[data-genvideoprompt],[data-delavatar],[data-addtoday],[data-pickdraft],[data-pickdraftclose],[data-pickdraftgo],[data-tts],[data-pickfbpage],[data-avatarvideo],[data-pastevideourl],[data-locallocaltoggle],[data-bgscene],[data-bgpick],[data-bgsearch],[data-bgsearchclear],[data-bginterval],[data-clipdur],[data-avatarabort],[data-genstoryboard],[data-slottoggle],[data-slotsearch],[data-slotpickurl],[data-mobilemenu],[data-mobilebackdrop],[data-profilemenu],[data-profileview],[data-profileclose],[data-signout],'
+    + '[data-uploadavatar],[data-uploadref],[data-clearref],[data-pickrefproduct],[data-refclose],[data-refpick],[data-genvideoprompt],[data-delavatar],[data-addtoday],[data-pickdraft],[data-pickdraftclose],[data-pickdraftgo],[data-tts],[data-pickfbpage],[data-avatarvideo],[data-pastevideourl],[data-pastelipsyncurl],[data-clearlipsyncurl],[data-locallocaltoggle],[data-bgscene],[data-bgpick],[data-bgsearch],[data-bgsearchclear],[data-bginterval],[data-clipdur],[data-avatarabort],[data-genstoryboard],[data-slottoggle],[data-slotsearch],[data-slotpickurl],[data-mobilemenu],[data-mobilebackdrop],[data-profilemenu],[data-profileview],[data-profileclose],[data-signout],'
     + '[data-previewaspect],[data-previewidx],[data-downloadpng]';
   document.addEventListener('click', function(e){
     var b = e.target.closest('button, a');
