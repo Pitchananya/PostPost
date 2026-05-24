@@ -1269,7 +1269,7 @@ render();
      ES-module graph instead of serving a stale index.html that calls old code.
      Critical for billing-fix rollouts (see commit e043a18) — stale cache here
      means the user keeps clicking "free" while old code keeps calling fal.ai. -->
-<script type="module" src="/js/main.js?v=keep-green-bg"></script>
+<script type="module" src="/js/main.js?v=force-green-upload"></script>
 
 <!-- ============================================================ -->
 <!-- PostPost backend wiring — API client + real auth             -->
@@ -4059,8 +4059,40 @@ render();
             render();
           }
           toast(state.lang==='th'?'⚡ ขั้น 2/2 — กำลังอัปโหลดรูป + เสียง…':'⚡ Step 2/2 — uploading image + audio…');
+          // ── Force GREEN background on the source image ─────────────────
+          // Wav2Lip + LatentSync render the output with whatever bg the
+          // input image had — transparent input → BLACK output (the model
+          // fills alpha=0 with #000000). Then PostPost's chroma detector
+          // sees black corners, picks black-key mode, and matts out dark
+          // Asian hair (lum 15-25 is in the black-key range).
+          //
+          // Per user request "ใช้ background สีเขียว": composite the avatar
+          // onto a flat #00FF00 canvas before uploading. The lipsync output
+          // then comes back with green bg → chroma detects GREEN → green-key
+          // ignores hair entirely (green-key gate: g > r*1.15, hair has g<r).
+          // Works for ANY avatar (transparent, green, or with real bg).
+          var greenBgImage = await new Promise(function(resolve, reject){
+            var img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = function(){
+              try {
+                var w = img.naturalWidth || 512;
+                var h = img.naturalHeight || 512;
+                var cv2 = document.createElement('canvas');
+                cv2.width = w; cv2.height = h;
+                var cx2 = cv2.getContext('2d');
+                cx2.fillStyle = '#00FF00';
+                cx2.fillRect(0, 0, w, h);
+                cx2.drawImage(img, 0, 0, w, h);
+                resolve(cv2.toDataURL('image/png'));
+              } catch(e){ reject(e); }
+            };
+            img.onerror = function(){ reject(new Error('image decode failed')); };
+            img.src = picked2.image;
+          });
+          console.log('[hflipsync] composited avatar onto green bg for chroma-key safety');
           var r = await api('/api/ai/get-asset-urls', { method:'POST', body:{
-            image_b64: picked2.image,
+            image_b64: greenBgImage,
             audio_b64: state.ttsAudio,
           }});
           if (!r || !r.image_url || !r.audio_url) {
