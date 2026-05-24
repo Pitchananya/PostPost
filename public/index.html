@@ -1178,7 +1178,7 @@ render();
      ES-module graph instead of serving a stale index.html that calls old code.
      Critical for billing-fix rollouts (see commit e043a18) — stale cache here
      means the user keeps clicking "free" while old code keeps calling fal.ai. -->
-<script type="module" src="/js/main.js?v=hair-fix"></script>
+<script type="module" src="/js/main.js?v=lower-avatar"></script>
 
 <!-- ============================================================ -->
 <!-- PostPost backend wiring — API client + real auth             -->
@@ -2843,7 +2843,7 @@ render();
         // clip (their backgrounds vary, circle hides the original setting).
         var bigR = Math.floor(W * 0.30);     // radius ≈ 324 px on 1080-wide canvas
         var bigX = W / 2;
-        var bigY = Math.floor(H * 0.50);     // ~50% from top — moved down for fuller presence (user feedback)
+        var bigY = Math.floor(H * 0.58);     // ~58% from top — moved further down (user feedback "ขยับคนลงมาอีก")
 
         // ── Live motion for static avatars (Audio-reactive mode) ──
         // Real lipsync mode bypasses these — its video frames already include
