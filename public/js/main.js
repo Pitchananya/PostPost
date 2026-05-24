@@ -54,6 +54,7 @@ import { pageTopics } from './pages/topics.js';
 import { pageLibrary } from './pages/library.js';
 import { pageCaption } from './pages/caption.js';
 import { pageCreative } from './pages/creative.js';
+import { pageProfile } from './pages/profile.js';
 
 // ── Step 1+2: sync state from inline → module on every render ──
 // The inline <script> holds its own `const state = {…}` — every inline page
@@ -181,6 +182,7 @@ if (PAGES) {
   PAGES.library = pageLibrary;
   PAGES.caption = pageCaption;
   PAGES.creative = pageCreative;
+  PAGES.profile = pageProfile;
 }
 if (window.PP && typeof window.PP.render === 'function') {
   window.PP.render();
