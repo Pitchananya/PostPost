@@ -41,7 +41,7 @@ const DEFAULTS = {
   genTab: 'caption',
   selectedHook: 1,
   avatar: 'mintra',
-  avatarMode: 'real',
+  avatarMode: 'free',      // ⚠️ DEFAULT SAFE — 'free' (no fal.ai charge). User explicitly opts-in to 'real' to enable lipsync.
   avatarLipsyncModel: 'fal-ai/bytedance/omnihuman/v1.5',  // default: OmniHuman v1.5 (face + body gestures, $0.50) — Infinitalk = face only
   ttvStyle: 0,                                          // index into the styles[] array on the Text-to-Video page (0 = Creator/UGC)
   ttvModel: 'fal-ai/wan/v2.2-a14b/text-to-video',       // default to Wan 2.2 — cheapest reliable ($0.30/clip, no quota gamble)

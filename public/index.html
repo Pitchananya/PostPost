@@ -38,7 +38,7 @@ window.PP.state = window.PP.state || {
   genTab: 'caption',
   selectedHook: 1,
   avatar: 'mintra',
-  avatarMode: 'real',
+  avatarMode: 'free',      // ⚠️ DEFAULT SAFE — 'free' (no fal.ai charge). User must explicitly click "Real lip-sync" to opt-in.
   avatarLipsyncModel: 'fal-ai/bytedance/omnihuman/v1.5',  // default: OmniHuman v1.5 (face + body gestures, $0.50) — Infinitalk = face only
   ttvStyle: 0,                                          // index into the styles[] array on the Text-to-Video page (0 = Creator/UGC)
   ttvModel: 'fal-ai/wan/v2.2-a14b/text-to-video',       // default to Wan 2.2 — cheapest reliable ($0.30/clip, no quota gamble)
@@ -1174,7 +1174,11 @@ render();
 <!-- Phase-2 ES module bootstrap: loads /js/main.js which swaps the landing
      and login renderers for their module versions. Deferred by default,
      so it runs after the inline script above has finished the first paint. -->
-<script type="module" src="/js/main.js"></script>
+<!-- Cache-buster query — bumps every commit to force browsers to refetch the
+     ES-module graph instead of serving a stale index.html that calls old code.
+     Critical for billing-fix rollouts (see commit e043a18) — stale cache here
+     means the user keeps clicking "free" while old code keeps calling fal.ai. -->
+<script type="module" src="/js/main.js?v=e443c1f-billing-guard"></script>
 
 <!-- ============================================================ -->
 <!-- PostPost backend wiring — API client + real auth             -->
@@ -2326,15 +2330,28 @@ render();
       // state.avatarLipsyncRawVideo and uses it as the avatar source.
     } else if (state.avatarMode !== 'real') {
       // ── BYPASS B: Audio-reactive mode → DO NOT call fal.ai ──────────
-      // 🚨 CRITICAL BILLING FIX: previously this function ALWAYS tried fal.ai
-      // first regardless of avatarMode, so users who picked "Audio-reactive
-      // (free)" were silently billed for OmniHuman v1.5 ($0.50) every render.
-      // User reported draining their fal.ai credits in this mode — that's why.
-      // Now Audio-reactive falls straight through to the canvas compositor
-      // (static portrait + breathing/audio-bob motion + Pexels bg). Zero fal.ai
-      // calls = zero charges.
-      console.log('[avatar-video] Audio-reactive mode — skipping fal.ai, going straight to canvas');
+      console.log('[avatar-video] ✅ Audio-reactive mode (state.avatarMode=' + state.avatarMode + ') — SKIPPING fal.ai, going straight to canvas (FREE)');
     } else {
+      // ── HARD GUARD: avatarMode === 'real' here. Confirm with user
+      //    once per session that they accept fal.ai charges before
+      //    actually submitting. Stops accidental billing if they
+      //    clicked "Real lip-sync" by mistake. Confirmation is sticky
+      //    per session so they're not nagged after the first OK.
+      if (!window.__falChargeConfirmed) {
+        var lipsyncCost = (state.avatarLipsyncModel || '').indexOf('omnihuman') >= 0 ? '$0.50' : '$0.20';
+        var ok = confirm(state.lang==='th'
+          ? '⚠️ ยืนยันใช้ Real lip-sync?\n\n• โมเดล: ' + (state.avatarLipsyncModel || 'fal-ai/infinitalk').split('/').pop() + '\n• ค่าใช้จ่ายต่อคลิป ~' + lipsyncCost + ' (หัก fal.ai balance)\n• กด OK เพื่อยอมรับ + เริ่ม render\n• กด Cancel เพื่อกลับไป Audio-reactive (ฟรี)'
+          : '⚠️ Confirm Real lip-sync?\n\n• Model: ' + (state.avatarLipsyncModel || 'fal-ai/infinitalk').split('/').pop() + '\n• Cost per clip ~' + lipsyncCost + ' (charged to fal.ai balance)\n• OK = proceed + render\n• Cancel = back to Audio-reactive (free)');
+        if (!ok) {
+          state.avatarMode = 'free';
+          state.avatarVideoLoading = false;
+          render();
+          toast(state.lang==='th'?'กลับไป Audio-reactive (ฟรี)':'Reverted to Audio-reactive (free)','success');
+          return;
+        }
+        window.__falChargeConfirmed = true;
+      }
+      console.log('[avatar-video] 💰 Real lip-sync mode — calling fal.ai (' + (state.avatarLipsyncModel || 'fal-ai/infinitalk') + ')');
 
     // ── Try fal.ai lip-sync first ──────────────────────────────────────────
     // Backend uploads image+audio to Supabase Storage → submits to fal.ai queue,
