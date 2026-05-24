@@ -10,21 +10,17 @@
 //   state.page = 'topics';
 //   render();   // (from window.PP for now)
 //
-// PHASE-3 NOTE — DUAL-COPY TRANSITION
-// -----------------------------------
-// The inline <script> in index.html still declares its own `const state = {…}`
-// that the 11 unextracted pages still read. We keep BOTH copies alive during
-// Phase 3 and sync them on boot from main.js (`Object.assign(window.PP.state,
-// state)` copies the inline values into the module copy). The two references
-// converge after main.js runs, but mutation made by inline code after that
-// point WILL NOT propagate to the module copy — and vice versa.
-//
-// Mitigation: the module copy IS the one window.PP.state points to (main.js
-// reassigns the bridge), so any inline code that already routes through
-// window.PP (Phase-2 pattern) ends up writing to the module copy. The few
-// inline files that still hold the original `state` reference directly are
-// scheduled for extraction in Phase 3c-f, at which point this dual-copy
-// hack disappears.
+// PHASE-3e — SINGLE CANONICAL REF
+// --------------------------------
+// The inline <script> in index.html no longer declares its own state. It
+// hoists window.PP.state from a tiny pre-boot IIFE that runs BEFORE any
+// other script, and `const state = window.PP.state` is the inline binding.
+// This module mirrors that pattern: if a window.PP.state already exists
+// (set up by inline pre-boot), we adopt it as our own export. Otherwise
+// we create the defaults here and publish them onto window.PP.state so
+// the inline code can adopt OURS. Either way, ONE object reference is
+// shared across every importer + every inline call site — no more dual
+// copy, no more sync wrapper, no more mirrorToInline() bandaid.
 //
 // `loadState()` / `saveStateField()` are minimal façades for the boot-time
 // localStorage rehydration (last-active brand, drafts list, custom avatars).
@@ -32,7 +28,7 @@
 // boot block already persists. As more pages migrate, persisted-key list
 // grows here and shrinks inline.
 
-export const state = {
+const DEFAULTS = {
   page: 'landing',         // landing | login | onboarding | profile | topics | caption | creative | avatar | textvideo | automation | analytics | calendar | library
   lang: 'th',              // th | en
   onboardStep: 1,          // 1-3
@@ -87,6 +83,42 @@ export const state = {
   sidebarOpen: false,      // mobile drawer state (≤768px) — toggled by the hamburger button
   profileMenuOpen: false,  // topbar profile dropdown — opened by clicking the .profilePill
 };
+
+// If a pre-boot IIFE in index.html already published window.PP.state, adopt
+// THAT reference so the inline script + the modules share one object. If
+// not (e.g. running in a test environment or before the inline pre-boot
+// landed), create the defaults here and publish them so the inline boot
+// adopts ours when it runs. Either branch ends with a single shared ref.
+// Deep-clone the defaults so mutations to state.channels / state.voice / …
+// don't leak back into DEFAULTS (which would corrupt a second _initState()
+// call in a fresh test harness). structuredClone handles nested objects
+// + arrays uniformly; falls back to JSON for older runtimes.
+function _cloneDefaults() {
+  if (typeof structuredClone === 'function') return structuredClone(DEFAULTS);
+  return JSON.parse(JSON.stringify(DEFAULTS));
+}
+
+function _initState() {
+  if (typeof window !== 'undefined') {
+    window.PP = window.PP || {};
+    if (window.PP.state && typeof window.PP.state === 'object') {
+      // Pre-boot already created the canonical object. Fill in any missing
+      // defaults (so a forgotten key on the inline side doesn't break us)
+      // and adopt the reference.
+      for (const k in DEFAULTS) {
+        if (!(k in window.PP.state)) window.PP.state[k] = _cloneDefaults()[k];
+      }
+      return window.PP.state;
+    }
+    // No pre-boot — we own the canonical object. Publish it.
+    const fresh = _cloneDefaults();
+    window.PP.state = fresh;
+    return fresh;
+  }
+  return _cloneDefaults();
+}
+
+export const state = _initState();
 
 // Boot-time localStorage rehydration. Mirrors the inline IIFE in index.html
 // (postpost_active_brand, postpost_drafts, postpost_custom_avatars). The

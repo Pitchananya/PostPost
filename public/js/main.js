@@ -1,31 +1,23 @@
 // public/js/main.js
 //
-// Phase-3 bootstrap. Loads every extracted module, syncs the module-side
-// state copy with the inline-script copy (dual-copy bridge — see state.js
-// for the long story), repaints the page, and publishes everything on
-// window.PP for the unextracted inline pages to keep finding.
+// Phase-3e bootstrap. Loads every extracted module and wires the
+// remaining inline glue together. The dual-copy state hack is GONE —
+// inline + modules now share the SAME window.PP.state object (see
+// state.js _initState()). This file only has to:
+//   1. Bind i18n to the canonical state ref.
+//   2. Sync the mutable arrays (BRANDS, TOPICS, PRODUCTS) from inline
+//      into the module copies so any localStorage rehydration the
+//      inline boot did is reflected in our module-side arrays. This is
+//      still needed because the inline script reassigns those `let`
+//      bindings (e.g. `BRANDS = _pb.map(normalizeBrand)`) — a separate
+//      Phase 3e step removes the inline arrays too.
+//   3. Publish helpers on window.PP for the remaining inline call sites.
+//   4. Swap renderers in PAGES so module pages take over.
+//   5. Repaint.
 //
 // Load order: this file is <script type="module">, so it runs AFTER the
-// inline classic script has booted (declared its own state/T/I/BRANDS/…
-// and called render() once). That means when we get here:
-//   - window.PP.state already exists (the INLINE state)
-//   - window.PP.PAGES / window.PP.render already exist
-//   - the page has been rendered once with inline functions
-//
-// What we do, in order:
-//   1. Sync the inline state INTO the module state (so any persisted
-//      values — last brand, lang preference — survive the bridge).
-//   2. Repoint window.PP.state at the MODULE state, so future writes by
-//      Phase-2/3 code go to the module copy.
-//   3. Bind i18n to the module state.
-//   4. Sync mutable arrays (BRANDS, TOPICS, PRODUCTS) from inline to
-//      module so any localStorage rehydration the inline boot did is
-//      reflected in our module copies.
-//   5. Publish everything on window.PP so:
-//      a) Inline page functions can read modules via window.PP.X
-//      b) Extracted pages can directly import from the modules.
-//   6. Swap landing + login renderers for the module versions and
-//      re-render.
+// two inline classic scripts have booted (state already canonical via
+// the pre-boot IIFE in script 1; PAGES/render already populated).
 
 import { html, raw, escape } from './html.js';
 import { escText } from './escape.js';
@@ -63,61 +55,13 @@ import { pageProfile } from './pages/profile.js';
 import { pageTextVideo } from './pages/textvideo.js';
 import { pageAvatar } from './pages/avatar.js';
 
-// ── Step 1+2: sync state from inline → module on every render ──
-// The inline <script> holds its own `const state = {…}` — every inline page
-// function + event handler reads/writes that object directly. Extracted
-// modules (landing/login, future pages) read from THIS module's state. To
-// keep both views consistent we:
-//   a) one-shot copy inline → module right now so the module starts with
-//      any persisted values (last brand, lang preference) the inline boot
-//      block restored from localStorage,
-//   b) wrap render() so every subsequent re-render syncs inline → module
-//      first — that way an inline lang-button click that mutates inline
-//      state.lang is visible to the module's landing page when it renders.
-//
-// Module-side mutations DON'T propagate back to inline. That's fine for
-// Phase 3 because the only module pages so far (landing, login) are
-// read-only renderers — every mutation still happens inline. Future
-// extracted pages will start writing to the module copy; at that point
-// we'll add a two-way sync (or finish the inline-state removal).
-const inlineState = (window.PP && window.PP.state) || null;
-if (inlineState) {
-  // Stash the inline-state reference so module pages that mutate state
-  // from their render path (e.g. pages/avatar.js caching the voice list
-  // onto state.avatarVoices) can mirror the write back to inline. Without
-  // this, the inline event handlers (genTts, genAvatarScript, …) would
-  // read undefined off the inline state copy and revert to defaults.
-  // Phase 3e removes the dual-copy entirely.
-  window.PP._inlineState = inlineState;
-  Object.assign(state, inlineState);
-  // Wrap the GLOBAL render() (function declaration in the inline script —
-  // already-wrapped once by the auth-wiring block to inject login form
-  // pre-fill). We wrap it again to sync inline → module state on every
-  // tick. Both window.render (called by inline event handlers) and
-  // window.PP.render (called by module code) get the same wrapper so
-  // state stays in sync regardless of who triggers the render.
-  if (typeof window.render === 'function') {
-    const prevGlobalRender = window.render;
-    window.render = function () {
-      try { Object.assign(state, inlineState); } catch (_) {}
-      return prevGlobalRender.apply(this, arguments);
-    };
-    window.PP.render = window.render;
-  } else if (typeof window.PP.render === 'function') {
-    // Fallback: if window.render wasn't exposed (some boot-order edge),
-    // at least wrap window.PP.render so module-triggered renders sync.
-    const prevPpRender = window.PP.render;
-    window.PP.render = function () {
-      try { Object.assign(state, inlineState); } catch (_) {}
-      return prevPpRender.apply(this, arguments);
-    };
-  }
-}
-
-// ── Step 3: bind i18n to the (now-synced) module state ──
+// ── Step 1: bind i18n to the (now-canonical) state ──
+// state.js's _initState() already returned the same object the inline
+// pre-boot stashed on window.PP.state, so i18n's lang lookups + every
+// module's state writes hit the SAME ref the inline router reads from.
 i18n.bindState(state);
 
-// ── Step 4: sync the mutable arrays from inline → module ──
+// ── Step 2: sync the mutable arrays from inline → module ──
 // The inline boot block runs `BRANDS = _pb.map(normalizeBrand)` reassignment
 // — it builds a NEW array, not in-place mutation. So our module's BRANDS
 // has the SEED list while the inline copy has the persisted list. Copy in
@@ -149,7 +93,7 @@ try {
 // safeguard for the case where the inline boot skipped this field.
 if (!Array.isArray(state.customAvatars)) loadCustomAvatars();
 
-// ── Step 5: publish the FULL bridge on window.PP ──
+// ── Step 3: publish the FULL bridge on window.PP ──
 // Both the new modules AND the inline functions still need access.
 // window.PP is the single bridge object — inline code reads helpers off it,
 // the extracted pages do the same. Once every page is extracted we delete
@@ -166,7 +110,7 @@ window.PP = Object.assign(window.PP || {}, {
   // expose the OLD shape too so the inline /api/auth wiring keeps working
   token: { get: getTok, set: setTok },
   api, apiAt, API_BASE,
-  state,            // ← module state replaces inline state
+  state,            // canonical state ref — already on window.PP.state since pre-boot
   loadState, saveStateField,
   // data (Phase 3b)
   BRANDS, MAX_BRANDS, normalizeBrand, saveBrands, loadBrands,
@@ -189,7 +133,7 @@ window.PP = Object.assign(window.PP || {}, {
   // (The inline script wrote these onto window.PP during its own boot block.)
 });
 
-// ── Step 6: swap landing + login + extracted-page renderers, repaint ──
+// ── Step 4: swap landing + login + extracted-page renderers, repaint ──
 const PAGES = window.PP && window.PP.PAGES;
 if (PAGES) {
   PAGES.landing = pageLanding;

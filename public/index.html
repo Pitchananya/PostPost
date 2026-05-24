@@ -19,7 +19,13 @@
 // ====================================================================
 // STATE & I18N
 // ====================================================================
-const state = {
+// PHASE-3e — single canonical state ref. The inline script + every ES
+// module (via state.js) share the SAME `window.PP.state` object. The
+// pre-boot IIFE below seeds it with the full default shape; state.js's
+// _initState() adopts this reference when imported. Result: no dual
+// copy, no sync wrapper, no mirrorToInline() bandaid.
+window.PP = window.PP || {};
+window.PP.state = window.PP.state || {
   page: 'landing',         // landing | login | onboarding | profile | topics | caption | creative | avatar | textvideo | automation | analytics | calendar | library
   lang: 'th',              // th | en
   onboardStep: 1,          // 1-3
@@ -74,6 +80,7 @@ const state = {
   sidebarOpen: false,      // mobile drawer state (≤768px) — toggled by the hamburger button
   profileMenuOpen: false,  // topbar profile dropdown — opened by clicking the .profilePill
 };
+const state = window.PP.state;
 
 const T = (th, en) => state.lang === 'th' ? th : en;
 const t = (obj) => typeof obj === 'object' ? (state.lang === 'th' ? obj.th : obj.en) : obj;
