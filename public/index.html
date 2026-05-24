@@ -1041,16 +1041,26 @@ document.addEventListener('click', (e) => {
   if (voiceEl) {
     e.preventDefault();
     const v = voiceEl.dataset.voice;
+    if (!Array.isArray(state.voice)) state.voice = [];   // defensive — initialize if cloud-pull dropped it
     const i = state.voice.indexOf(v);
-    if (i >= 0) state.voice.splice(i, 1);
+    const wasSelected = i >= 0;
+    if (wasSelected) state.voice.splice(i, 1);
     else if (state.voice.length < 3) state.voice.push(v);
+    else {
+      // Already 3 selected → toast a hint instead of silent no-op
+      if (typeof toast === 'function') toast(state.lang==='th'?'เลือกได้สูงสุด 3 โทน — เอาออก 1 ก่อน':'Max 3 voices — remove one first','error');
+      return;
+    }
+    console.log('[voice] toggled:', v, wasSelected ? 'OFF' : 'ON', '→ state.voice =', JSON.stringify(state.voice));
     // Auto-persist to the active brand so Brand Voice survives page reload + cloud-sync.
     // saveBrands lives in module scope (data/brands.js) — reach it through the
     // window.PP bridge so this inline event handler can call it without ReferenceError.
     const _vab = BRANDS.find(b => b.id === state.brand);
     if (_vab) {
       _vab.voice = state.voice.slice();
-      try { (window.PP && window.PP.saveBrands || function(){})(); } catch(_){}
+      try { (window.PP && window.PP.saveBrands || function(){})(); } catch(saveErr){ console.warn('[voice] saveBrands failed:', saveErr.message); }
+    } else {
+      console.warn('[voice] no active brand to save voice into — state.brand =', state.brand);
     }
     render();
     return;
@@ -1094,11 +1104,14 @@ document.addEventListener('click', (e) => {
   if (archeEl) {
     e.preventDefault();
     state.archetype = archeEl.dataset.archetype;
+    console.log('[archetype] picked:', state.archetype);
     // Auto-persist via window.PP.saveBrands (module-scope fn — same as Brand Voice handler).
     const _aab = BRANDS.find(b => b.id === state.brand);
     if (_aab) {
       _aab.archetype = state.archetype;
-      try { (window.PP && window.PP.saveBrands || function(){})(); } catch(_){}
+      try { (window.PP && window.PP.saveBrands || function(){})(); } catch(saveErr){ console.warn('[archetype] saveBrands failed:', saveErr.message); }
+    } else {
+      console.warn('[archetype] no active brand — state.brand =', state.brand);
     }
     render();
     return;
