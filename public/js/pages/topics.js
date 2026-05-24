@@ -16,6 +16,8 @@ import { I } from '../icons.js';
 import { head } from '../components/head.js';
 import { TOPICS } from '../data/topics.js';
 import { BRANDS } from '../data/brands.js';
+import { ARCHETYPES } from '../data/archetypes.js';
+import { VOICES } from '../data/voices.js';
 
 const KIND_MAP = {
   knowledge: { th: 'ให้ความรู้', en: 'Knowledge', pill: 'blue'     },
@@ -81,17 +83,52 @@ export function pageTopics() {
     <span class="pill" style="height:34px">${raw(T('ใช้ไปแล้ว', 'Used'))} <b>${TOPICS.filter((tp) => tp.used).length}</b> / ${TOPICS.length}</span>
   </div>
 
-  <!-- Topics grid OR empty state for brands without topics yet -->
-  ${TOPICS.length === 0 ? raw(`
-    <div style="padding:60px 24px;text-align:center;background:var(--cream2);border-radius:18px;border:1px dashed var(--line3)">
-      ${I('sparkles', 48, '#9C8BB8')}
-      <div style="font-size:17px;font-weight:800;color:var(--ink);margin:14px 0 6px">${T('ยังไม่มีหัวข้อสำหรับ ' + (BRANDS.find(b => b.id === state.brand)?.name || ''), 'No topics yet for ' + (BRANDS.find(b => b.id === state.brand)?.name || ''))}</div>
-      <div style="font-size:13px;color:var(--muted);max-width:480px;margin:0 auto 22px;line-height:1.6">${T('แต่ละแบรนด์มีหัวข้อของตัวเอง — กดปุ่มด้านล่างให้ AI วางแผน 30 หัวข้อตามแบรนด์ จุดมุ่งหมาย และธีมที่ตั้งไว้ข้างบน', 'Each brand has its own topics — hit the button below to let AI plan 30 topics matched to this brand, its goals, and the theme above')}</div>
-      <button class="btn primary" data-gentopics="1" ${state.topicGenLoading ? 'disabled' : ''} style="padding:12px 28px;font-size:14px">
-        ${I('sparkles', 16)} ${state.topicGenLoading ? T('AI กำลังสร้าง…', 'Generating…') : T('🪄 ให้ AI สร้างหัวข้อให้แบรนด์นี้', '🪄 Generate topics for this brand')}
-      </button>
-    </div>
-  `) : raw(`
+  <!-- Topics grid OR empty state with brand-profile preview -->
+  ${TOPICS.length === 0 ? raw((() => {
+    const ab = BRANDS.find(b => b.id === state.brand) || {};
+    const archObj = ARCHETYPES.find(a => a.id === state.archetype);
+    const voiceLabels = (state.voice || []).map(id => {
+      const v = VOICES.find(x => x.id === id);
+      return v ? (state.lang === 'th' ? v.th : v.en) : id;
+    });
+    // Field row helper — green check if filled, yellow ⚠ if missing
+    const row = (label_th, label_en, value, isImportant) => {
+      const filled = value && String(value).trim();
+      const icon = filled ? '<span style="color:#10B981">✓</span>' : (isImportant ? '<span style="color:#F59E0B">⚠</span>' : '<span style="color:var(--muted)">○</span>');
+      return `<div style="display:flex;align-items:flex-start;gap:8px;padding:8px 0;border-bottom:1px solid var(--line);font-size:12.5px;line-height:1.5">
+        <div style="width:18px;flex-shrink:0;text-align:center">${icon}</div>
+        <div style="width:130px;color:var(--muted);flex-shrink:0">${T(label_th, label_en)}</div>
+        <div style="flex:1;color:${filled ? 'var(--ink)' : '#F59E0B'};font-weight:${filled ? '600' : '500'}">${filled ? value : T('— ยังไม่ได้ตั้ง (แนะนำให้ใส่ใน /profile)', '— not set (recommended in /profile)')}</div>
+      </div>`;
+    };
+    const hasAllImportant = ab.name && ab.bizType && (ab.desc || '').trim();
+    return `
+    <div style="background:linear-gradient(135deg,#FFF7ED,#FAE8FF);border-radius:18px;padding:28px;border:1px solid var(--line)">
+      <div style="text-align:center;margin-bottom:20px">
+        ${I('sparkles', 42, '#9C8BB8')}
+        <div style="font-size:18px;font-weight:800;color:var(--ink);margin:10px 0 4px">${T('ยังไม่มีหัวข้อสำหรับ', 'No topics yet for')} <span style="color:var(--orange)">${ab.name || ''}</span></div>
+        <div style="font-size:12.5px;color:var(--muted);max-width:520px;margin:0 auto;line-height:1.6">${T('AI จะวางแผน 30 หัวข้อโดยอิงจากโปรไฟล์แบรนด์ของคุณด้านล่าง — กรอกให้ครบเพื่อให้ผลลัพธ์แม่นและเข้ากับแบรนด์ที่สุด', 'AI will plan 30 topics from your brand profile below — fill them in for the most on-brand results')}</div>
+      </div>
+      <div style="background:#fff;border-radius:12px;padding:14px 18px;margin-bottom:18px">
+        <div style="font-size:10.5px;font-weight:800;color:var(--purple);letter-spacing:.05em;text-transform:uppercase;margin-bottom:8px">${T('AI จะใช้ข้อมูลพวกนี้', "What AI will use")}</div>
+        ${row('ชื่อแบรนด์', 'Brand name', ab.name, true)}
+        ${row('ประเภทธุรกิจ', 'Business type', ab.bizType, true)}
+        ${row('คำอธิบายแบรนด์', 'Brand description', (ab.desc || '').slice(0, 80) + ((ab.desc || '').length > 80 ? '…' : ''), true)}
+        ${row('Brand Voice', 'Brand Voice', voiceLabels.join(', '), false)}
+        ${row('Brand Archetype', 'Brand Archetype', archObj ? (state.lang === 'th' ? archObj.th : archObj.en) : '', false)}
+        ${row('ธีมเดือนนี้', 'Theme', state.topicTheme || '', false)}
+      </div>
+      ${!hasAllImportant ? `<div style="background:#FEF3C7;border:1px solid #FDE68A;border-radius:10px;padding:10px 13px;margin-bottom:14px;font-size:11.5px;color:#92400E;line-height:1.5;display:flex;align-items:flex-start;gap:8px">
+        ${I('info', 14, '#92400E')}
+        <div><b>${T('ยังกรอกไม่ครบ', 'Profile incomplete')}</b> — ${T('AI สามารถสร้างได้ แต่หัวข้อจะกว้างและทั่วไปขึ้น แนะนำเปิด', 'AI can still generate but topics will be more generic — recommend opening')} <a href="#" data-go="profile" style="color:var(--purple);font-weight:800">/profile</a> ${T('กรอกเพิ่มก่อน', 'first')}</div>
+      </div>` : ''}
+      <div style="display:flex;justify-content:center">
+        <button class="btn primary" data-gentopics="1" ${state.topicGenLoading ? 'disabled' : ''} style="padding:13px 32px;font-size:14px">
+          ${I('sparkles', 16)} ${state.topicGenLoading ? T('AI กำลังสร้าง…', 'Generating…') : T('🪄 ให้ AI สร้างหัวข้อให้แบรนด์นี้', '🪄 Generate topics for this brand')}
+        </button>
+      </div>
+    </div>`;
+  })()) : raw(`
     <div class="grid g3">
       ${filtered.map((tp) => {
         const k = KIND_MAP[tp.kind];
