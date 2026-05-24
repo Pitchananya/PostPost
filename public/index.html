@@ -1269,7 +1269,7 @@ render();
      ES-module graph instead of serving a stale index.html that calls old code.
      Critical for billing-fix rollouts (see commit e043a18) — stale cache here
      means the user keeps clicking "free" while old code keeps calling fal.ai. -->
-<script type="module" src="/js/main.js?v=hf-autochain"></script>
+<script type="module" src="/js/main.js?v=keep-green-bg"></script>
 
 <!-- ============================================================ -->
 <!-- PostPost backend wiring — API client + real auth             -->
@@ -2730,15 +2730,27 @@ render();
             chromaCx.getImageData(2, chromaCanvas.height-3, 1, 1).data,
             chromaCx.getImageData(chromaCanvas.width-3, chromaCanvas.height-3, 1, 1).data,
           ];
-          var greenCount = 0, blackCount = 0;
+          var greenCount = 0, blackCount = 0, transparentCount = 0;
           for (var si = 0; si < samples.length; si++) {
-            var pr = samples[si][0], pg = samples[si][1], pb = samples[si][2];
+            var pr = samples[si][0], pg = samples[si][1], pb = samples[si][2], pa = samples[si][3];
+            // Skip transparent corners — they're a CG cutout (e.g. birefnet
+            // output) where the alpha channel already encodes the matte. If we
+            // counted these as "black" (since the dropped RGB is often 0,0,0),
+            // the black-keyer would chew through dark Asian hair on the next
+            // frames. Track them in a separate bucket so we can branch later.
+            if (pa < 50) { transparentCount++; continue; }
             if (pg > 110 && pg > pr * 1.3 && pg > pb * 1.3) greenCount++;
             if (pr < 25 && pg < 25 && pb < 25) blackCount++;
           }
           if (greenCount >= 3) chromaMode = 'green';
           else if (blackCount >= 3) chromaMode = 'black';
-          console.log('[avatar-video] Avatar bg detected: ' + chromaMode + ' (green='+greenCount+', black='+blackCount+')');
+          // Transparent-bg PNG → route through the SAME large-rect compositor
+          // as green/black, but skip the per-pixel keying (the source's own
+          // alpha channel is the matte). 'transparent' mode → glKeyer/CPU
+          // path runs cover-fit only + the shader's else-branch passes RGBA
+          // straight through. Avoids the circle-clip path which crops hair.
+          else if (transparentCount >= 3) chromaMode = 'transparent';
+          console.log('[avatar-video] Avatar bg detected: ' + chromaMode + ' (green='+greenCount+', black='+blackCount+', transparent='+transparentCount+')');
         }
       } catch (e) {
         console.warn('[avatar-video] chroma detection failed:', e.message);
@@ -3431,16 +3443,27 @@ render();
         image: imgSrc, isCustom: true,
       };
       await addCustomAvatar(avatar);
-      // Stage 2 — auto-remove background so the presenter is immediately ready
-      // for compositing/lipsync without a second click. Skipping is fine if it
-      // fails (the gen prompt already targets a plain studio bg).
-      toast(state.lang==='th'?('สร้างผู้บรรยายเสร็จ — กำลังลบพื้นหลังให้อัตโนมัติ…'):('Presenter created — auto-removing background…'));
-      try {
-        await removeAvatarBg(avatar.id);
-      } catch (_) { /* RM-BG is a bonus, not required — leave the portrait as-is */ }
-      // saveCustomAvatars() runs inside both addCustomAvatar + removeAvatarBg —
-      // localStorage hook also fires schedCloudPush() so it lands on every device.
-      toast(state.lang==='th'?('บันทึก "'+name+'" ไว้ในคลังพรีเซนเตอร์แล้ว ✓ (ใช้ได้ทันที + ครั้งต่อไป)'):('"'+name+'" saved to presenter library ✓ (ready now + next session)'),'success');
+      // ⚠ Intentionally NOT calling removeAvatarBg here anymore.
+      //
+      // We USED to auto-remove the bg right after gen so static previews
+      // looked clean. But fal.ai/birefnet returns transparent PNGs with
+      // RGB=(0,0,0) at the alpha=0 corners — the chroma-key detector
+      // (line ~2719) samples corners ignoring alpha, sees pure black,
+      // and switches to BLACK chroma mode. The black-keyer then nukes
+      // any pixel with luminance < 18 — which is exactly the range of
+      // dark Asian hair. Result: avatars rendered for lipsync had their
+      // hair eaten off.
+      //
+      // Per user feedback ("ใช้ background สีเขียว เพราะหน้าไม่เห็นผมเลย"):
+      // keeping the saturated #00FF00 bg the gen-prompt requests means
+      // chroma detection picks GREEN mode + the green-keyer ignores hair
+      // entirely (hair has g < r in RGB terms — fails the g>r*1.15 gate).
+      //
+      // Users who DO want a transparent PNG can still hit the manual
+      // RM-BG chip in the avatar gallery (data-rmbgavatar) per-avatar.
+      // saveCustomAvatars() ran inside addCustomAvatar — localStorage hook
+      // also fires schedCloudPush() so it lands on every device.
+      toast(state.lang==='th'?('บันทึก "'+name+'" ไว้ในคลังพรีเซนเตอร์แล้ว ✓ (พื้นหลังเขียวเพื่อ chroma-key คลีนๆ — กดปุ่ม "ลบ bg" ในคลังถ้าอยากให้โปร่งใส)'):('"'+name+'" saved to presenter library ✓ (kept green bg for clean chroma-key — hit RM-BG in gallery if you want transparent)'),'success');
     } catch(e){
       toast((state.lang==='th'?'สร้างไม่สำเร็จ: ':'Failed: ')+(e.message||''),'error');
     } finally {
