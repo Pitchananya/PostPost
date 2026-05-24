@@ -2304,13 +2304,23 @@ render();
     try { var _prevA = document.getElementById('ppTtsAudio'); if (_prevA) { _prevA.pause(); _prevA.currentTime = 0; } } catch(_){}
     render();
 
-    // ── BYPASS: user already pasted a fal.ai output URL ─────────────────
+    // ── BYPASS A: user already pasted a fal.ai output URL ───────────────
     // Skip the entire backend lipsync-submit + poll loop. Jump straight to
     // the canvas compositor (which reads state.avatarLipsyncRawVideo).
     if (state.avatarLipsyncRawVideo && /^https?:\/\//.test(state.avatarLipsyncRawVideo)) {
       toast(state.lang==='th'?'⚡ ใช้ URL ที่วางไว้ — ข้าม fal.ai backend ไปประกอบกับ bg เลย':'⚡ Using pasted URL — skipping backend, going straight to bg composite','success');
       // Fall through — the canvas compositor below already checks
       // state.avatarLipsyncRawVideo and uses it as the avatar source.
+    } else if (state.avatarMode !== 'real') {
+      // ── BYPASS B: Audio-reactive mode → DO NOT call fal.ai ──────────
+      // 🚨 CRITICAL BILLING FIX: previously this function ALWAYS tried fal.ai
+      // first regardless of avatarMode, so users who picked "Audio-reactive
+      // (free)" were silently billed for OmniHuman v1.5 ($0.50) every render.
+      // User reported draining their fal.ai credits in this mode — that's why.
+      // Now Audio-reactive falls straight through to the canvas compositor
+      // (static portrait + breathing/audio-bob motion + Pexels bg). Zero fal.ai
+      // calls = zero charges.
+      console.log('[avatar-video] Audio-reactive mode — skipping fal.ai, going straight to canvas');
     } else {
 
     // ── Try fal.ai lip-sync first ──────────────────────────────────────────
