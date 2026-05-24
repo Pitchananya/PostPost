@@ -1101,6 +1101,14 @@ document.addEventListener('click', (e) => {
     e.preventDefault();
     const [k, v] = tabEl.dataset.set.split('=');
     state[k] = isNaN(+v) ? v : +v;
+    // When user switches Talking-Avatar mode from Real → Audio-reactive,
+    // clear any cached fal.ai lipsync URL — otherwise the canvas compositor
+    // keeps using the stale URL and the user wonders why a "free" render
+    // still produces a chroma-keyed lipsync output. (Reported by user
+    // looking at audio-reactive mode but seeing the fal.ai composite reused.)
+    if (k === 'avatarMode' && v === 'free') {
+      state.avatarLipsyncRawVideo = '';
+    }
     render();
     return;
   }
@@ -2598,10 +2606,16 @@ render();
             }
           }
         } else if (chromaMode === 'black') {
+          // Tightened from (22, 50) → (35, 60) to kill the shadow silhouette the
+          // user reported (frame at 2s showed a darker copy of the man behind him).
+          // That bleed came from fal.ai output's anti-aliased hair edges + soft
+          // bg gradient being just dark enough to fall in the ramp window. Raising
+          // the cutoff zaps those pixels cleanly without eating skin (skin lum
+          // > 70 even in shadowed cheeks).
           for (var i2 = 0; i2 < d.length; i2 += 4) {
             var lum = 0.299 * d[i2] + 0.587 * d[i2+1] + 0.114 * d[i2+2];
-            if (lum < 22)      d[i2+3] = 0;
-            else if (lum < 50) d[i2+3] = Math.round((lum - 22) / 28 * 255);
+            if (lum < 35)      d[i2+3] = 0;
+            else if (lum < 60) d[i2+3] = Math.round((lum - 35) / 25 * 255);
           }
         }
         chromaCx.putImageData(imgData, 0, 0);
@@ -2766,7 +2780,7 @@ render();
         // clip (their backgrounds vary, circle hides the original setting).
         var bigR = Math.floor(W * 0.30);     // radius ≈ 324 px on 1080-wide canvas
         var bigX = W / 2;
-        var bigY = Math.floor(H * 0.40);     // ~40% from top — talking-head sweet spot
+        var bigY = Math.floor(H * 0.50);     // ~50% from top — moved down for fuller presence (user feedback)
 
         // ── Live motion for static avatars (Audio-reactive mode) ──
         // Real lipsync mode bypasses these — its video frames already include
@@ -2803,9 +2817,13 @@ render();
           // Target rect: ~750 px wide (about 70% of W), aligned so feet/shoulders
           // sit just above the caption card. Square because chromaKeyFrame works
           // at chromaWorkW × chromaWorkH (480×480 square).
-          var avW = 780, avH = 780;
+          // Bigger + lower-centered. Was 780×780 with face at bigY*0.45 above center
+          // → user feedback "เอาหน้าคนลงไปข้างล่างอีก เอาหน้าเต็มๆ" — bumped to 950×950
+          // and shifted so the face sits near bigY (no upward bias). Result: avatar
+          // fills more of the frame + chin/shoulders extend toward the caption card.
+          var avW = 950, avH = 950;
           var avX = (W - avW) / 2 + motionDx;
-          var avY = bigY - avH * 0.45 + motionDy;        // face roughly at bigY
+          var avY = bigY - avH * 0.55 + motionDy;        // face/chin centered around bigY (50% from top)
           cx.save();
           cx.translate(avX + avW/2, avY + avH/2);
           cx.scale(motionScale, motionScale * blinkSquish);
