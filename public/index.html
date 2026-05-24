@@ -967,7 +967,13 @@ function setupAvatarBgRotation() {
 // ====================================================================
 // EVENT DELEGATION
 // ====================================================================
+console.log('[boot] PostPost ready · page=' + (state && state.page) + ' · lang=' + (state && state.lang) + ' · build=login-fix-v2');
 document.addEventListener('click', (e) => {
+  // Diagnostic — log every data-go click so we can verify the navigation
+  // chain actually fires. User reported "เข้าสู่ระบบไม่ได้" — if this log
+  // doesn't appear when they click Sign in, the click handler isn't binding.
+  var _diagGo = e.target.closest('[data-go]');
+  if (_diagGo) console.log('[click] data-go="' + _diagGo.dataset.go + '" target=', e.target.tagName);
   // Mobile drawer — hamburger toggles open/close, backdrop closes
   if (e.target.closest('[data-mobilemenu]')) {
     e.preventDefault();
@@ -1178,7 +1184,7 @@ render();
      ES-module graph instead of serving a stale index.html that calls old code.
      Critical for billing-fix rollouts (see commit e043a18) — stale cache here
      means the user keeps clicking "free" while old code keeps calling fal.ai. -->
-<script type="module" src="/js/main.js?v=login-fix"></script>
+<script type="module" src="/js/main.js?v=login-fix-v2"></script>
 
 <!-- ============================================================ -->
 <!-- PostPost backend wiring — API client + real auth             -->
