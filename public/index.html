@@ -964,6 +964,49 @@ function setupAvatarBgRotation() {
   }
 }
 
+// ────────────────────────────────────────────────────────────────────
+// One-shot migration — wipe stale skincare-demo topics that got saved
+// to non-HappyPrice brands BEFORE the brand-aware-fallback fix (0f187b4).
+// User's คุรุเทพ brand had `topics` filled with the 18 skincare demo
+// topics from before the fix, and they kept showing even after the
+// fallback was added (because nb.topics existed → fallback skipped).
+// Detect by: NOT happyprice + topics list matches DEMO_TOPICS length
+// (18) AND first topic mentions a known skincare keyword.
+// ────────────────────────────────────────────────────────────────────
+(function migrateStaleSkinTopics(){
+  try {
+    var SKIN_KW = /Marine Collagen|สกินแคร์|skincare|ผิวบอบบาง|Sheet Mask|Rose Repair|Bio Astin|Bovine Collagen|Toner Pad|คอลลาเจน|เซรั่ม|Beauty Trio/i;
+    var PROD_KW = /Marine Collagen|iCON|BellaCare|Amado|CmaX|JOJU|Linhzhimin|Kumiko/i;
+    var changed = false;
+    BRANDS.forEach(function(b){
+      if (b.id === 'happyprice') return;        // seed brand keeps its demo
+      if (Array.isArray(b.topics) && b.topics.length) {
+        var firstTopic = b.topics[0];
+        var sample = (firstTopic && (firstTopic.th || firstTopic.en)) || '';
+        if (SKIN_KW.test(sample)) {
+          console.log('[migrate] wiping stale skincare topics from brand:', b.id);
+          b.topics = [];
+          changed = true;
+        }
+      }
+      if (Array.isArray(b.products) && b.products.length) {
+        var firstProd = b.products[0];
+        var pname = (firstProd && (firstProd.name_th || firstProd.name_en || firstProd.name)) || '';
+        if (PROD_KW.test(pname)) {
+          console.log('[migrate] wiping stale skincare products from brand:', b.id);
+          b.products = [];
+          changed = true;
+        }
+      }
+    });
+    if (changed) {
+      try { localStorage.setItem('postpost_brands', JSON.stringify(BRANDS)); } catch(_){}
+      if (typeof schedCloudPush === 'function') schedCloudPush();
+      console.log('[migrate] BRANDS cleaned — refresh page to see fresh empty state');
+    }
+  } catch(e){ console.warn('[migrate] skincare cleanup failed:', e.message); }
+})();
+
 // ====================================================================
 // EVENT DELEGATION
 // ====================================================================
@@ -1184,7 +1227,7 @@ render();
      ES-module graph instead of serving a stale index.html that calls old code.
      Critical for billing-fix rollouts (see commit e043a18) — stale cache here
      means the user keeps clicking "free" while old code keeps calling fal.ai. -->
-<script type="module" src="/js/main.js?v=avatar-syntax-fix"></script>
+<script type="module" src="/js/main.js?v=topic-cleanup"></script>
 
 <!-- ============================================================ -->
 <!-- PostPost backend wiring — API client + real auth             -->
