@@ -1044,6 +1044,10 @@ document.addEventListener('click', (e) => {
     const i = state.voice.indexOf(v);
     if (i >= 0) state.voice.splice(i, 1);
     else if (state.voice.length < 3) state.voice.push(v);
+    // Auto-persist to the active brand so Brand Voice survives page reload + cloud-sync
+    // (no manual "บันทึก" required for a 3-pill toggle — too easy to forget).
+    const _vab = BRANDS.find(b => b.id === state.brand);
+    if (_vab) { _vab.voice = state.voice.slice(); saveBrands(); }
     render();
     return;
   }
@@ -1086,6 +1090,9 @@ document.addEventListener('click', (e) => {
   if (archeEl) {
     e.preventDefault();
     state.archetype = archeEl.dataset.archetype;
+    // Auto-persist to the active brand — same reason as Brand Voice above.
+    const _aab = BRANDS.find(b => b.id === state.brand);
+    if (_aab) { _aab.archetype = state.archetype; saveBrands(); }
     render();
     return;
   }
@@ -1522,8 +1529,16 @@ render();
 
   // Keep the brand-profile form in sync as the user types/selects, so a
   // re-render (e.g. clicking "AI write") never wipes unsaved field values.
-  // In-memory only — localStorage is written by the Save button.
+  // Auto-persist via debounced saveBrands() — no manual "บันทึก" needed.
   function liveBrand(){ return BRANDS.filter(function(b){ return b.id===state.brand; })[0]; }
+  // Debounced brand-save — fires 600ms after the last keystroke. Avoids
+  // hammering localStorage + cloud-sync on every character typed but still
+  // persists fast enough that switching brand can't lose unsaved edits.
+  var _brandSaveTimer = null;
+  function scheduleBrandSave(){
+    if (_brandSaveTimer) clearTimeout(_brandSaveTimer);
+    _brandSaveTimer = setTimeout(function(){ try { saveBrands(); } catch(_){} }, 600);
+  }
   document.addEventListener('input', function(e){
     var t = e.target; if (!t || !t.id) return;
     if (t.id==='ppTopicTheme') { state.topicTheme = t.value; return; }
@@ -1533,12 +1548,20 @@ render();
     if (t.id==='ppAvatarBgSearch') { state.avatarBgSearch = t.value; return; }
     if (t.id==='ppTtvPrompt') { state.ttvPrompt = t.value; return; }
     var ab = liveBrand(); if (!ab) return;
-    if (t.id==='ppBrandNameEdit') ab.name = t.value;
-    else if (t.id==='ppBrandDesc') { ab.desc = t.value; state.brandDesc = t.value; }
+    if (t.id==='ppBrandNameEdit') { ab.name = t.value; scheduleBrandSave(); }
+    else if (t.id==='ppBrandDesc') { ab.desc = t.value; state.brandDesc = t.value; scheduleBrandSave(); }
   });
   document.addEventListener('change', function(e){
     var t = e.target;
-    if (t && t.id==='ppBizType') { var ab = liveBrand(); if (ab) ab.bizType = t.value; return; }
+    if (t && t.id==='ppBizType') {
+      var ab = liveBrand();
+      if (ab) {
+        ab.bizType = t.value;
+        // bizType is a select → fires once on change, save immediately (no debounce needed)
+        try { saveBrands(); } catch(_){}
+      }
+      return;
+    }
     if (t && t.id==='ppGenTone') { state.genTone = t.value; return; }
     if (t && t.id==='ppGenLang') { state.genLang = t.value; return; }
     if (t && t.id==='ppGenLength') { state.genLength = t.value; return; }
