@@ -43,6 +43,7 @@ import { NAV } from './data/nav.js';
 import { ARCHETYPES, findArchetype } from './data/archetypes.js';
 import { BUSINESS_TYPES } from './data/business-types.js';
 import { TOPICS, PRODUCTS, DEMO_TOPICS, DEMO_PRODUCTS } from './data/topics.js';
+import { VIDEO_MODELS, VIDEO_STYLES } from './data/video-models.js';
 import { idbPutImage, idbGetImage, idbDeleteImage, compressImageDataUrl } from './idb.js';
 import { pageLanding } from './pages/landing.js';
 import { pageLogin } from './pages/login.js';
@@ -55,6 +56,7 @@ import { pageLibrary } from './pages/library.js';
 import { pageCaption } from './pages/caption.js';
 import { pageCreative } from './pages/creative.js';
 import { pageProfile } from './pages/profile.js';
+import { pageTextVideo } from './pages/textvideo.js';
 
 // ── Step 1+2: sync state from inline → module on every render ──
 // The inline <script> holds its own `const state = {…}` — every inline page
@@ -162,6 +164,8 @@ window.PP = Object.assign(window.PP || {}, {
   ARCHETYPES, findArchetype,
   BUSINESS_TYPES,
   TOPICS, PRODUCTS, DEMO_TOPICS, DEMO_PRODUCTS,
+  // Phase 3d — video model catalog (Veo + fal-ai t2v) + style presets
+  VIDEO_MODELS, VIDEO_STYLES,
   idbPutImage, idbGetImage, idbDeleteImage, compressImageDataUrl,
   // PAGES + render survive from inline; we re-export here so future page
   // modules can grab them off window.PP without poking at globals.
@@ -183,6 +187,8 @@ if (PAGES) {
   PAGES.caption = pageCaption;
   PAGES.creative = pageCreative;
   PAGES.profile = pageProfile;
+  // Phase 3d — text-to-video page (smaller, less coupled).
+  PAGES.textvideo = pageTextVideo;
 }
 if (window.PP && typeof window.PP.render === 'function') {
   window.PP.render();
