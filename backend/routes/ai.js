@@ -2715,15 +2715,33 @@ router.post('/lipsync-submit', async (req, res) => {
   // wonders why nothing renders). Pick a generic talking-head prompt unless the caller overrode.
   const prompt = String(promptIn || 'A person talking naturally to camera with friendly expression, smooth lip-sync, slight head movement, professional lighting');
 
+  // Step-tagged diagnostics so 500s aren't opaque. Every stage logs + tags
+  // its error so the frontend toast tells the user EXACTLY which step failed:
+  //   1 = Supabase image upload
+  //   2 = Supabase audio upload
+  //   3 = fal.ai submit POST
+  //   4 = fal.ai response parse
+  let stage = 'init';
   try {
     // 1) Make sure both inputs are public URLs (fal.ai pulls from URL — no file upload API)
     let image_url = imageUrlIn || null;
     let audio_url = audioUrlIn || null;
     if (!image_url) {
+      stage = 'upload_image';
       await ensureLipsyncBucket();
+      // Helpful size check — Vercel serverless has a 4.5MB body limit and
+      // Supabase has a 50MB upload limit per request. Either side blows up = 500.
+      const approxBytes = Math.ceil((image_b64.length * 3) / 4);
+      if (approxBytes > 4_000_000) {
+        return res.status(413).json({ error: 'image_too_large',
+          message: `รูปอวตารใหญ่เกินไป (${Math.round(approxBytes/1024)}KB) — Vercel จำกัด 4.5MB ลองอัพโหลดรูปขนาดเล็กลง หรือกด "🪄 ลบ bg" ที่ tile (จะ compress ให้)`,
+          bytes: approxBytes,
+        });
+      }
       image_url = await uploadDataUrlToBucket(image_b64, 'av-img', 'png');
     }
     if (!audio_url) {
+      stage = 'upload_audio';
       await ensureLipsyncBucket();
       audio_url = await uploadDataUrlToBucket(audio_b64, 'av-aud', 'mp3');
     }
@@ -2737,6 +2755,7 @@ router.post('/lipsync-submit', async (req, res) => {
       'veed/fabric-1.0':                        { image_url, audio_url, resolution: '720p' },
       'fal-ai/infinitalk':                      { image_url, audio_url, prompt },
     };
+    stage = 'fal_submit';
     const inputBody = FAL_INPUT[model] || { image_url, audio_url, prompt };
     const r = await fetch(`https://queue.fal.run/${model}`, {
       method: 'POST',
@@ -2766,8 +2785,21 @@ router.post('/lipsync-submit', async (req, res) => {
       response_url: submitData.response_url || `https://queue.fal.run/${model}/requests/${request_id}`,
     });
   } catch (e) {
-    console.error('[lipsync-submit]', e.message);
-    res.status(500).json({ error: e.message });
+    // Tag the error with the stage it died at — frontend toast tells the user
+    // exactly which step failed (Supabase upload vs fal.ai submit vs parse).
+    console.error('[lipsync-submit] stage=' + stage, e.message, e.stack?.split('\n')[1] || '');
+    const stageHints = {
+      upload_image: 'อัพโหลดรูปอวตารขึ้น Supabase ไม่ได้ (ตรวจ SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY บน Vercel)',
+      upload_audio: 'อัพโหลดเสียง TTS ขึ้น Supabase ไม่ได้',
+      fal_submit:   'ส่งงานไป fal.ai ไม่สำเร็จ (network / FAL_KEY ผิด)',
+      init:         'init error',
+    };
+    res.status(500).json({
+      error: 'lipsync_' + stage,
+      stage: stage,
+      message: (stageHints[stage] || stage) + ' — ' + (e.message || ''),
+      detail: e.message,
+    });
   }
 });
 
