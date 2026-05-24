@@ -44,6 +44,10 @@ import { ARCHETYPES, findArchetype } from './data/archetypes.js';
 import { BUSINESS_TYPES } from './data/business-types.js';
 import { TOPICS, PRODUCTS, DEMO_TOPICS, DEMO_PRODUCTS } from './data/topics.js';
 import { VIDEO_MODELS, VIDEO_STYLES } from './data/video-models.js';
+import { AVATAR_BG_SCENES } from './data/avatar-bg-scenes.js';
+import { resolveAvatarBgQuery, fetchAvatarBg, setupAvatarBgRotation } from './components/avatar-bg.js';
+import { splitScriptIntoChunks } from './components/storyboard.js';
+import { detectChromaMode, makeChromaKeyer } from './components/chroma-key.js';
 import { idbPutImage, idbGetImage, idbDeleteImage, compressImageDataUrl } from './idb.js';
 import { pageLanding } from './pages/landing.js';
 import { pageLogin } from './pages/login.js';
@@ -166,6 +170,11 @@ window.PP = Object.assign(window.PP || {}, {
   TOPICS, PRODUCTS, DEMO_TOPICS, DEMO_PRODUCTS,
   // Phase 3d — video model catalog (Veo + fal-ai t2v) + style presets
   VIDEO_MODELS, VIDEO_STYLES,
+  // Phase 3d — Talking-Avatar supporting helpers (data + bg + storyboard + chroma)
+  AVATAR_BG_SCENES,
+  resolveAvatarBgQuery, fetchAvatarBg, setupAvatarBgRotation,
+  splitScriptIntoChunks,
+  detectChromaMode, makeChromaKeyer,
   idbPutImage, idbGetImage, idbDeleteImage, compressImageDataUrl,
   // PAGES + render survive from inline; we re-export here so future page
   // modules can grab them off window.PP without poking at globals.
