@@ -1269,7 +1269,7 @@ render();
      ES-module graph instead of serving a stale index.html that calls old code.
      Critical for billing-fix rollouts (see commit e043a18) — stale cache here
      means the user keeps clicking "free" while old code keeps calling fal.ai. -->
-<script type="module" src="/js/main.js?v=latentsync-oneclick"></script>
+<script type="module" src="/js/main.js?v=hf-autochain"></script>
 
 <!-- ============================================================ -->
 <!-- PostPost backend wiring — API client + real auth             -->
@@ -4003,19 +4003,39 @@ render();
       };
       (async function(){
         if (state.hfLipsyncLoading) return;
-        if (!state.ttsAudio) {
-          toast(state.lang==='th'?'กด "ฟังเสียง" ก่อน — ต้องมีไฟล์เสียง TTS':'Press "Listen" first — needs TTS audio','error');
-          return;
-        }
         var all2 = (typeof AVATARS!=='undefined'?AVATARS:[]).concat(state.customAvatars||[]);
         var picked2 = all2.filter(function(a){ return a.id===state.avatar; })[0];
         if (!picked2 || !picked2.image) {
           toast(state.lang==='th'?'เลือก avatar ที่มีรูป (ไม่ใช่ตัวอักษร) ก่อน':'Pick an avatar with a real image first','error');
           return;
         }
+        // ── Smart auto-chain ────────────────────────────────────────────
+        // If TTS audio isn't ready yet, generate it inline first. genTts()
+        // is defined in this same script-2 IIFE (line ~2389) — reuse it
+        // so the user doesn't have to bounce to Step 5 → "ฟังเสียง" first.
+        // genTts already validates script + voice, throws toast on failure.
         state.hfLipsyncLoading = true; render();
         try {
-          toast(state.lang==='th'?'กำลังอัปโหลดรูป + เสียง…':'Uploading image + audio…');
+          if (!state.ttsAudio) {
+            var scriptElCheck = document.getElementById('ppAvatarScript');
+            var scriptText = ((scriptElCheck ? scriptElCheck.value : (state.avatarScript||'')) || '').trim();
+            if (!scriptText) {
+              toast(state.lang==='th'?'เขียนสคริปต์ก่อน (Step 5 · สคริปต์)':'Write a script first (Step 5 · Script)','error');
+              state.hfLipsyncLoading = false; render();
+              return;
+            }
+            toast(state.lang==='th'?'⚡ ขั้น 1/2 — กำลังสร้างเสียง TTS ก่อน…':'⚡ Step 1/2 — generating TTS audio first…');
+            await genTts();
+            if (!state.ttsAudio) {
+              // genTts already toasted the error (no script / Azure key missing / etc.)
+              state.hfLipsyncLoading = false; render();
+              return;
+            }
+            // genTts() re-renders multiple times — make sure the "Uploading…" label
+            // is still shown after the awaited render flush
+            render();
+          }
+          toast(state.lang==='th'?'⚡ ขั้น 2/2 — กำลังอัปโหลดรูป + เสียง…':'⚡ Step 2/2 — uploading image + audio…');
           var r = await api('/api/ai/get-asset-urls', { method:'POST', body:{
             image_b64: picked2.image,
             audio_b64: state.ttsAudio,
