@@ -1178,7 +1178,7 @@ render();
      ES-module graph instead of serving a stale index.html that calls old code.
      Critical for billing-fix rollouts (see commit e043a18) — stale cache here
      means the user keeps clicking "free" while old code keeps calling fal.ai. -->
-<script type="module" src="/js/main.js?v=e443c1f-billing-guard"></script>
+<script type="module" src="/js/main.js?v=hair-fix"></script>
 
 <!-- ============================================================ -->
 <!-- PostPost backend wiring — API client + real auth             -->
@@ -2655,16 +2655,18 @@ render();
             }
           }
         } else if (chromaMode === 'black') {
-          // Tightened from (22, 50) → (35, 60) to kill the shadow silhouette the
-          // user reported (frame at 2s showed a darker copy of the man behind him).
-          // That bleed came from fal.ai output's anti-aliased hair edges + soft
-          // bg gradient being just dark enough to fall in the ramp window. Raising
-          // the cutoff zaps those pixels cleanly without eating skin (skin lum
-          // > 70 even in shadowed cheeks).
+          // 🚨 LOWERED back from (35, 60) → (18, 38) — user reported "หัวคนหาย
+          // ส่วนผม" — Asian dark hair on a near-black bg has lum ~28-45, the old
+          // tighter threshold was eating it. The new threshold preserves hair
+          // (lum > 18 stays solid; ramp 18-38 catches only pure-shadow edges).
+          // Tradeoff: slightly more shadow bleed than the 35-cutoff version,
+          // but the user can SEE THE WHOLE HEAD now — that's strictly better
+          // than a clean silhouette of half the face. Background is now fully
+          // black for the previous shadow concern? Adjust input lighting then.
           for (var i2 = 0; i2 < d.length; i2 += 4) {
             var lum = 0.299 * d[i2] + 0.587 * d[i2+1] + 0.114 * d[i2+2];
-            if (lum < 35)      d[i2+3] = 0;
-            else if (lum < 60) d[i2+3] = Math.round((lum - 35) / 25 * 255);
+            if (lum < 18)      d[i2+3] = 0;
+            else if (lum < 38) d[i2+3] = Math.round((lum - 18) / 20 * 255);
           }
         }
         chromaCx.putImageData(imgData, 0, 0);
@@ -2878,13 +2880,12 @@ render();
           // Target rect: ~750 px wide (about 70% of W), aligned so feet/shoulders
           // sit just above the caption card. Square because chromaKeyFrame works
           // at chromaWorkW × chromaWorkH (480×480 square).
-          // Bigger + lower-centered. Was 780×780 with face at bigY*0.45 above center
-          // → user feedback "เอาหน้าคนลงไปข้างล่างอีก เอาหน้าเต็มๆ" — bumped to 950×950
-          // and shifted so the face sits near bigY (no upward bias). Result: avatar
-          // fills more of the frame + chin/shoulders extend toward the caption card.
-          var avW = 950, avH = 950;
+          // 3rd iteration: user wants the WHOLE head visible (top of hair included)
+          // and the face centered in the visible area. Slightly smaller than 950
+          // (was clipping hair at the top) + centered around bigY exactly.
+          var avW = 880, avH = 880;
           var avX = (W - avW) / 2 + motionDx;
-          var avY = bigY - avH * 0.55 + motionDy;        // face/chin centered around bigY (50% from top)
+          var avY = bigY - avH * 0.50 + motionDy;        // face center sits AT bigY (no up/down bias)
           cx.save();
           cx.translate(avX + avW/2, avY + avH/2);
           cx.scale(motionScale, motionScale * blinkSquish);
