@@ -46,6 +46,10 @@ import { TOPICS, PRODUCTS, DEMO_TOPICS, DEMO_PRODUCTS } from './data/topics.js';
 import { idbPutImage, idbGetImage, idbDeleteImage, compressImageDataUrl } from './idb.js';
 import { pageLanding } from './pages/landing.js';
 import { pageLogin } from './pages/login.js';
+import { pageOnboarding } from './pages/onboarding.js';
+import { pageAutomation } from './pages/automation.js';
+import { pageAnalytics } from './pages/analytics.js';
+import { pageCalendar } from './pages/calendar.js';
 
 // ── Step 1+2: sync state from inline → module on every render ──
 // The inline <script> holds its own `const state = {…}` — every inline page
@@ -159,11 +163,16 @@ window.PP = Object.assign(window.PP || {}, {
   // (The inline script wrote these onto window.PP during its own boot block.)
 });
 
-// ── Step 6: swap landing + login renderers, repaint ──
+// ── Step 6: swap landing + login + extracted-page renderers, repaint ──
 const PAGES = window.PP && window.PP.PAGES;
 if (PAGES) {
   PAGES.landing = pageLanding;
   PAGES.login = pageLogin;
+  // Phase 3c — simple read-only / data-display pages.
+  PAGES.onboarding = pageOnboarding;
+  PAGES.automation = pageAutomation;
+  PAGES.analytics = pageAnalytics;
+  PAGES.calendar = pageCalendar;
 }
 if (window.PP && typeof window.PP.render === 'function') {
   window.PP.render();
