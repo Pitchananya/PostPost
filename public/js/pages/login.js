@@ -31,14 +31,14 @@ export function pageLogin() {
 
       <div class="field">
         <label class="label">${raw(T('อีเมล','Email'))}</label>
-        <input class="input" type="email" value="poy@happyprice.sh" />
+        <input class="input" type="email" placeholder="you@example.com" autocomplete="email" />
       </div>
       <div class="field">
         <div style="display:flex;justify-content:space-between;align-items:baseline">
           <label class="label">${raw(T('รหัสผ่าน','Password'))}</label>
           <a style="font-size:11.5px;font-weight:700;color:var(--orange);cursor:pointer">${raw(T('ลืมรหัสผ่าน?','Forgot?'))}</a>
         </div>
-        <input class="input" type="password" value="••••••••••" />
+        <input class="input" type="password" placeholder="${T('รหัสผ่าน','Password')}" autocomplete="current-password" />
       </div>
       <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink2);margin:0 0 22px;cursor:pointer">
         <span class="check on"></span>

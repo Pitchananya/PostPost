@@ -1178,7 +1178,7 @@ render();
      ES-module graph instead of serving a stale index.html that calls old code.
      Critical for billing-fix rollouts (see commit e043a18) — stale cache here
      means the user keeps clicking "free" while old code keeps calling fal.ai. -->
-<script type="module" src="/js/main.js?v=gpu-chroma"></script>
+<script type="module" src="/js/main.js?v=login-fix"></script>
 
 <!-- ============================================================ -->
 <!-- PostPost backend wiring — API client + real auth             -->
@@ -1250,14 +1250,29 @@ render();
     var f = document.querySelector('.authForm'); if (!f) return;
     var em = (f.querySelector('input[type=email]') || {}).value || '';
     var pw = (f.querySelector('input[type=password]') || {}).value || '';
-    if (!em || !pw || pw.indexOf('•') >= 0) { toast('กรอกอีเมลและรหัสผ่านก่อน', 'error'); return; }
-    toast('กำลังเข้าสู่ระบบ…');
+    // Validate inputs with SPECIFIC messages so the user knows what's missing
+    if (!em) { toast(state.lang==='th'?'⚠ กรอกอีเมลก่อน':'⚠ Enter your email first', 'error'); return; }
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)) { toast(state.lang==='th'?'⚠ รูปแบบอีเมลไม่ถูกต้อง':'⚠ Invalid email format', 'error'); return; }
+    if (!pw) { toast(state.lang==='th'?'⚠ กรอกรหัสผ่านก่อน':'⚠ Enter your password first', 'error'); return; }
+    if (pw.indexOf('•') >= 0) { toast(state.lang==='th'?'⚠ รหัสผ่านยังเป็นจุดๆ — ลบออกแล้วพิมพ์รหัสจริง':'⚠ Password still has placeholder dots — clear and type real password', 'error'); return; }
+    if (pw.length < 4) { toast(state.lang==='th'?'⚠ รหัสผ่านสั้นเกินไป (>=4 ตัว)':'⚠ Password too short (>=4 chars)', 'error'); return; }
+    toast(state.lang==='th'?'⏳ กำลังเข้าสู่ระบบ…':'⏳ Signing in…');
     try {
       var d = await api('/api/auth/login', { method:'POST', body:{ email: em, password: pw } });
+      if (!d || !d.token) throw new Error('no token in response');
       setTok(d.token);
       state.page = 'profile'; render();
-      toast('เข้าสู่ระบบสำเร็จ', 'success');
-    } catch(e){ toast('เข้าสู่ระบบไม่สำเร็จ: ' + e.message, 'error'); }
+      toast(state.lang==='th'?'✓ เข้าสู่ระบบสำเร็จ':'✓ Signed in','success');
+    } catch(e){
+      console.error('[login] failed:', e);
+      var msg = e.message || 'unknown error';
+      // Common backend errors — surface friendlier hints
+      if (/401|unauthor/i.test(msg)) msg = state.lang==='th'?'อีเมลหรือรหัสผ่านไม่ถูกต้อง':'Wrong email or password';
+      else if (/404/.test(msg)) msg = state.lang==='th'?'ยังไม่มีบัญชี — กดสมัครก่อน':'No account yet — sign up first';
+      else if (/500|502|503/.test(msg)) msg = state.lang==='th'?'เซิร์ฟเวอร์มีปัญหา — ลองอีกครั้งใน 1 นาที':'Server issue — try again in 1 min';
+      else if (/network|fetch/i.test(msg)) msg = state.lang==='th'?'เน็ตขัด หรือ Vercel ตอบไม่ทัน':'Network issue or Vercel timeout';
+      toast((state.lang==='th'?'✗ เข้าสู่ระบบไม่สำเร็จ — ':'✗ Sign-in failed: ') + msg, 'error');
+    }
   }
 
   // capture-phase click — intercept auth before the prototype router runs
