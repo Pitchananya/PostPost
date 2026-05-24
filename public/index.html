@@ -1905,106 +1905,28 @@ const AVATARS = [
   { id:'wuth', name_th:'อาจารย์วุฒิ', name_en:'Wuth', sub_th:'อาวุโส 55', sub_en:'Senior · 55', bg:'linear-gradient(180deg,#FEF3C7,#92400E)', initial_th:'ว', initial_en:'W' },
 ];
 
-// Scene presets for the Talking Avatar background. The 'auto' query is derived
-// from the brand's bizType; the rest are fixed Pexels queries. 'off' shows just
-// the themed gradient; 'upload' uses state.avatarBgUploadUrl.
-// Scene presets — `local` field points to a bundled mp4 in /assets/avatar-bg/.
-// Local files take priority over Pexels API (no fetch needed, no PEXELS_API_KEY required,
-// faster load + smaller bandwidth). If no local file is mapped, we fall back to Pexels.
-const AVATAR_BG_SCENES = [
-  { id:'auto',     th:'อัตโนมัติ', en:'Auto',     icon:'sparkles' },
-  { id:'studio',   th:'สตูดิโอ',   en:'Studio',   icon:'image',     q:'minimal studio backdrop neutral' },
-  { id:'cafe',     th:'คาเฟ่',     en:'Cafe',     icon:'store',     q:'cafe coffee warm bokeh' },
-  { id:'beach',    th:'ทะเล',     en:'Beach',    icon:'zap',       q:'beach ocean sunset slow' },
-  { id:'beauty',   th:'บิวตี้',    en:'Beauty',   icon:'wand',      q:'skincare beauty pink soft' },
-  { id:'mystical', th:'สายมู',     en:'Mystical', icon:'lightbulb', q:'mystical candle dark smoke',
-    local:'/assets/avatar-bg/mystical-portrait.mp4' },                                // bundled: dark mystical 9:16, 15s loop, ~800KB
-  { id:'altar',    th:'แท่นบูชา',  en:'Altar',    icon:'lightbulb',
-    local:'/assets/avatar-bg/mystical-square.mp4' },                                  // bundled: square mystical, 30s loop, ~650KB
-  { id:'off',      th:'ปิด BG',    en:'Off',      icon:'x' },
-  { id:'upload',   th:'อัปโหลด',   en:'Upload',   icon:'upload' },
-];
-
-// Resolve the Pexels query for the current picked scene. 'auto' falls back to
-// bizType detection (preserves the original behavior), preset scenes use their q.
-// Free-text avatarBgSearch ALWAYS wins when set.
-function resolveAvatarBgQuery() {
-  var custom = (state.avatarBgSearch || '').trim();
-  if (custom) return custom;
-  var sceneId = state.avatarBgScene || 'auto';
-  if (sceneId === 'auto') {
-    var ab = BRANDS.filter(function(b){ return b.id===state.brand; })[0] || BRANDS[0];
-    var biz = (ab && ab.bizType || '').toLowerCase();
-    return /ดูดวง|สายมู|tarot/.test(biz) ? 'mystical candle dark'
-         : /สกินแคร์|ความงาม|beauty/.test(biz) ? 'skincare beauty pink'
-         : /อาหาร|food|กาแฟ|coffee/.test(biz) ? 'cafe coffee warm'
-         : /ฟิตเนส|fit|sport/.test(biz) ? 'gym workout fitness'
-         : 'lifestyle aesthetic';
-  }
-  var sc = AVATAR_BG_SCENES.filter(function(s){ return s.id===sceneId; })[0];
-  return sc && sc.q || 'lifestyle aesthetic';
-}
-
-// Fetch a new Pexels video for the current picked scene and update state.
-// Called on scene change (and lazily on first render). Stores the full
-// candidate list (avatarBgCandidates) so the OEM-style thumbnail picker can
-// render a grid of options — and the user can lock a specific clip.
+// Phase-3e: AVATAR_BG_SCENES / resolveAvatarBgQuery / fetchAvatarBg are the
+// canonical implementations in public/js/components/avatar-bg.js +
+// public/js/data/avatar-bg-scenes.js. The inline pageAvatar (dead after
+// main.js swaps in pageAvatar from pages/avatar.js) and the click handlers
+// below reach them through window.PP.* — single source of truth.
+//
+// The shim names below preserve the inline call sites (`fetchAvatarBg()` etc.)
+// while delegating to the module. They no-op safely before main.js runs.
 function fetchAvatarBg(opts) {
-  opts = opts || {};
-  if (!window.PP) return;
-  var sceneId = state.avatarBgScene || 'auto';
-  if (sceneId === 'off' || sceneId === 'upload') return;
-  var hasCustom = !!(state.avatarBgSearch || '').trim();
-
-  // ── Step 1: Set local bundled file as INSTANT first candidate (no flicker) ──
-  // We still fetch Pexels candidates below so the user gets a richer picker grid
-  // + can use rotation. The local clip stays as candidate #0 (LOCAL badge).
-  var localPin = null;
-  if (!hasCustom) {
-    var sc = AVATAR_BG_SCENES.filter(function(s){ return s.id===sceneId; })[0];
-    if (sc && sc.local) {
-      localPin = { url: sc.local, preview: '', user: 'PostPost', page: '', isLocal: true,
-        label_th: sc.th, label_en: sc.en, duration: 0 };
-    } else if (sceneId === 'auto') {
-      var ab = BRANDS.filter(function(b){ return b.id===state.brand; })[0] || BRANDS[0];
-      var biz = (ab && ab.bizType || '').toLowerCase();
-      if (/ดูดวง|สายมู|tarot/.test(biz)) {
-        localPin = { url:'/assets/avatar-bg/mystical-portrait.mp4', preview:'',
-          user:'PostPost', page:'', isLocal:true,
-          label_th:'สายมู (built-in)', label_en:'Mystical (built-in)', duration:0 };
-      }
-    }
+  if (window.PP && typeof window.PP.fetchAvatarBg === 'function') {
+    return window.PP.fetchAvatarBg(opts);
   }
-  // Set immediately so the preview phone shows something while Pexels fetch runs
-  if (localPin) {
-    state.avatarPreviewBgUrl = localPin.url;
-    if (!opts.keepPicked) state.avatarBgPickedUrl = '';
-    state.avatarBgCandidates = [localPin];
-  }
-
-  // ── Step 2: Fetch 8 Pexels candidates (always — even when local pin exists) ──
-  state.avatarBgLoading = true;
-  var query = resolveAvatarBgQuery();
-  window.PP.api('/api/ai/pexels-video-search?q=' + encodeURIComponent(query) + '&per_page=8&orientation=portrait')
-    .then(function(r){
-      var vids = (r && r.videos) || [];
-      // Combine: local pin first (if any), then Pexels results
-      state.avatarBgCandidates = localPin ? [localPin].concat(vids) : vids;
-      if (!state.avatarBgCandidates.length) {
-        state.avatarPreviewBgUrl = '/assets/avatar-bg/mystical-portrait.mp4';
-      } else if (!opts.keepPicked && !state.avatarBgPickedUrl) {
-        state.avatarPreviewBgUrl = state.avatarBgCandidates[0].url;
-      }
-    })
-    .catch(function(){
-      // Pexels failed — keep just the local pin (or fall back to bundled mystical)
-      if (!state.avatarBgCandidates.length) {
-        state.avatarBgCandidates = localPin ? [localPin] : [];
-        state.avatarPreviewBgUrl = (localPin && localPin.url) || '/assets/avatar-bg/mystical-portrait.mp4';
-      }
-    })
-    .then(function(){ state.avatarBgLoading = false; render(); });
 }
+function resolveAvatarBgQuery() {
+  if (window.PP && typeof window.PP.resolveAvatarBgQuery === 'function') {
+    return window.PP.resolveAvatarBgQuery();
+  }
+  return 'lifestyle aesthetic';
+}
+// AVATAR_BG_SCENES has no remaining inline call site — pageAvatar (the only
+// reader of the inline copy) is now the module version. The module export
+// in data/avatar-bg-scenes.js is the single source of truth.
 
 function pageAvatar() {
   // Lazy-fetch a looping Pexels stock video for the phone preview background on
