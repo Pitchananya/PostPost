@@ -20,12 +20,22 @@ import { ARCHETYPES } from '../data/archetypes.js';
 import { VOICES } from '../data/voices.js';
 
 const KIND_MAP = {
-  knowledge: { th: 'ให้ความรู้', en: 'Knowledge', pill: 'blue'     },
-  promo:     { th: 'ขายตรง',     en: 'Promo',     pill: 'orange'   },
-  review:    { th: 'รีวิว',       en: 'Review',    pill: 'green'    },
-  story:     { th: 'เล่าเรื่อง',   en: 'Story',     pill: 'yellow'   },
-  tip:       { th: 'Tip',         en: 'Tip',       pill: 'lavender' },
-  engage:    { th: 'ถาม-ตอบ',    en: 'Engage',    pill: ''         },
+  // Core 6 (เดิม)
+  knowledge: { th: 'ให้ความรู้',     en: 'Knowledge',  pill: 'blue'     },
+  promo:     { th: 'ขายตรง',         en: 'Promo',      pill: 'orange'   },
+  review:    { th: 'รีวิว',           en: 'Review',     pill: 'green'    },
+  story:     { th: 'เล่าเรื่อง',       en: 'Story',      pill: 'yellow'   },
+  tip:       { th: 'Tip',             en: 'Tip',        pill: 'lavender' },
+  engage:    { th: 'ถาม-ตอบ',        en: 'Engage',     pill: ''         },
+  // 8 ใหม่ — ครอบ angle เนื้อหาที่หลากหลายขึ้น
+  myth:      { th: 'ไขความเชื่อ',     en: 'Myth-bust',  pill: 'blue'     },  // debunk misconceptions
+  case:      { th: 'เคสจริง',         en: 'Case study', pill: 'green'    },  // customer transformations
+  howto:     { th: 'How-to',          en: 'How-to',     pill: 'lavender' },  // step-by-step tutorial
+  list:      { th: 'ลิสต์/อันดับ',     en: 'Listicle',   pill: 'yellow'   },  // top 5/10 rankings
+  trend:     { th: 'เทรนด์',          en: 'Trend',      pill: 'orange'   },  // what's hot now
+  behind:    { th: 'เบื้องหลัง',       en: 'BTS',        pill: 'yellow'   },  // behind-the-scenes
+  compare:   { th: 'เปรียบเทียบ',     en: 'Compare',    pill: 'blue'     },  // vs / before-after
+  inspire:   { th: 'แรงบันดาลใจ',     en: 'Inspire',    pill: 'green'    },  // quotes / motivational
 };
 
 export function pageTopics() {
