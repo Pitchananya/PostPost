@@ -3364,6 +3364,11 @@ document.addEventListener('click', (e) => {
 window.PP = Object.assign(window.PP || {}, {
   state, T, t, I, LOGO_ICON, PAGES, render,
   BRANDS, TOPICS, PRODUCTS,
+  // Phase 3c — shared HTML helpers + Caption/Creative cards. Extracted
+  // page modules (caption.js, creative.js, profile.js) call these via the
+  // bridge until Phase 3e/3f moves the cards into component modules.
+  escText, head, brandMark, productImgHTML, businessOptions,
+  productPickerHTML, generateInputHTML, postPreviewHTML, publishCardHTML,
 });
 // --------------------------------------------------------------------------
 render();
