@@ -95,10 +95,10 @@ export function pageCreative() {
               <div style="font-size:11px;color:var(--muted);margin-top:6px;line-height:1.45;max-height:50px;overflow:hidden">${escText((state.genImagePrompts || [])[i] || '')}</div>
             </div>`).join('')}
           </div>`)
-          : html`<div style="padding:32px 20px;text-align:center;color:var(--muted)">
+          : raw(`<div style="padding:32px 20px;text-align:center;color:var(--muted)">
             <div style="font-size:28px;margin-bottom:8px">🖼️</div>
             <div style="font-size:13px;line-height:1.6">${state.genLoading ? T('AI กำลังคิด prompt และสร้างรูป…', 'AI is writing prompts and generating images…') : T('กด "สร้างทั้งหมด" ด้านบน — AI จะคิด prompt แต่ละสไลด์แล้วสร้างรูปอัตโนมัติ', 'Hit "Generate All" — AI writes a prompt per slide and generates images')}</div>
-          </div>`}
+          </div>`)}
       </div>
     </div>
 

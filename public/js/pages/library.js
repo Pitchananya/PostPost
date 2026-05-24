@@ -101,11 +101,11 @@ export function pageLibrary() {
 
   <!-- Grid -->
   ${filtered.length === 0
-    ? html`<div style="padding:48px 24px;text-align:center;background:var(--cream2);border-radius:16px;border:1px dashed var(--line3)">
-        ${raw(I('library', 36, '#A39BAE'))}
+    ? raw(`<div style="padding:48px 24px;text-align:center;background:var(--cream2);border-radius:16px;border:1px dashed var(--line3)">
+        ${I('library', 36, '#A39BAE')}
         <div style="font-size:14px;font-weight:700;color:var(--ink);margin:10px 0 4px">${T('ยังไม่มีคอนเทนต์', 'No content yet')}</div>
         <div class="micro">${T('สร้างคอนเทนต์แล้วกด "Draft" — จะมาแสดงที่นี่', 'Generate content and hit "Draft" — it shows up here')}</div>
-      </div>`
+      </div>`)
     : raw(`<div class="grid g4">
       ${filtered.map((a) => {
         const statusPill = a.status === 'published' ? 'green' : a.status === 'scheduled' ? 'blue' : 'orange';

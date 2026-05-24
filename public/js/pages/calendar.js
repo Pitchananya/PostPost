@@ -91,7 +91,7 @@ export function pageCalendar() {
           <div>
             <div class="eyebrow" style="color:var(--orange);margin-bottom:4px">${T(weekdays_th[dayOfWeek], weekdays_en[dayOfWeek])}</div>
             <h3 class="cardTitle" style="font-size:22px;margin:0">${state.calDay} ${T('พ.ย.', 'Nov')} 2026</h3>
-            ${state.calDay === today ? html`<span style="font-size:12px;color:var(--orange);font-weight:700">${T('วันนี้', 'Today')}</span>` : ''}
+            ${state.calDay === today ? raw(`<span style="font-size:12px;color:var(--orange);font-weight:700">${T('วันนี้', 'Today')}</span>`) : ''}
           </div>
           <button class="btn primary sm" data-addtoday="1">${raw(I('plus', 13))} ${raw(T('เพิ่มโพสต์', 'Add'))}</button>
         </div>
@@ -105,10 +105,10 @@ export function pageCalendar() {
       <div class="card">
         <div class="cardHeader" style="margin-bottom:10px">
           <h3 class="cardTitle">${raw(T('โพสต์ในวันนี้', 'Posts on this day'))}</h3>
-          ${dayEvents.length ? html`<span class="micro">${dayEvents.length} ${T('โพสต์', 'posts')}</span>` : ''}
+          ${dayEvents.length ? raw(`<span class="micro">${dayEvents.length} ${T('โพสต์', 'posts')}</span>`) : ''}
         </div>
         ${dayEvents.length === 0
-          ? html`<div style="padding:32px 24px;text-align:center;background:var(--cream2);border-radius:12px;border:1px dashed var(--line3)">${raw(I('calendar', 32, '#A39BAE'))}<div style="font-size:13px;font-weight:600;color:var(--ink);margin:8px 0 4px">${T('ยังไม่มีโพสต์ในวันนี้', 'No posts scheduled')}</div><div class="micro">${T('ลากโพสต์ Draft มาวางวันนี้', 'Drag a draft here')}</div></div>`
+          ? raw(`<div style="padding:32px 24px;text-align:center;background:var(--cream2);border-radius:12px;border:1px dashed var(--line3)">${I('calendar', 32, '#A39BAE')}<div style="font-size:13px;font-weight:600;color:var(--ink);margin:8px 0 4px">${T('ยังไม่มีโพสต์ในวันนี้', 'No posts scheduled')}</div><div class="micro">${T('ลากโพสต์ Draft มาวางวันนี้', 'Drag a draft here')}</div></div>`)
           : raw(`<div style="display:flex;flex-direction:column;gap:8px">${dayEvents.map((e) => {
               const s = STATUS_MAP[e.status];
               const chColor = e.ch === 'facebook' ? '#1877F2' : e.ch === 'instagram' ? '#E1306C' : '#0F172A';
@@ -149,7 +149,7 @@ export function pageCalendar() {
                 <button class="btn outline sm" data-schedule="${d.id}:${(state.calDay || today) + 1}" style="height:28px;font-size:11.5px">${T('พรุ่งนี้', 'Day +1')}</button>
               </div>
             </div>`).join(''))
-            : html`<div style="padding:22px;text-align:center;color:var(--muted);font-size:12px">${T('ยังไม่มีดราฟ — สร้างคอนเทนต์แล้วกดปุ่ม Draft', 'No drafts yet — generate content, then hit Draft')}</div>`}
+            : raw(`<div style="padding:22px;text-align:center;color:var(--muted);font-size:12px">${T('ยังไม่มีดราฟ — สร้างคอนเทนต์แล้วกดปุ่ม Draft', 'No drafts yet — generate content, then hit Draft')}</div>`)}
         </div>
       </div>
     </div>
