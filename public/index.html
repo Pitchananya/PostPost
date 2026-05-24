@@ -1027,7 +1027,7 @@ function setupAvatarBgRotation() {
 // ====================================================================
 // EVENT DELEGATION
 // ====================================================================
-console.log('[boot] PostPost ready · page=' + (state && state.page) + ' · lang=' + (state && state.lang) + ' · build=re-enable-rmbg');
+console.log('[boot] PostPost ready · page=' + (state && state.page) + ' · lang=' + (state && state.lang) + ' · build=lipsync-grid');
 document.addEventListener('click', (e) => {
   // Diagnostic — log every data-go click so we can verify the navigation
   // chain actually fires. User reported "เข้าสู่ระบบไม่ได้" — if this log
@@ -1269,7 +1269,7 @@ render();
      ES-module graph instead of serving a stale index.html that calls old code.
      Critical for billing-fix rollouts (see commit e043a18) — stale cache here
      means the user keeps clicking "free" while old code keeps calling fal.ai. -->
-<script type="module" src="/js/main.js?v=re-enable-rmbg"></script>
+<script type="module" src="/js/main.js?v=lipsync-grid"></script>
 
 <!-- ============================================================ -->
 <!-- PostPost backend wiring — API client + real auth             -->
@@ -4095,22 +4095,45 @@ render();
     if (hfEl) {
       e.preventDefault();
       var hfKind = (hfEl.getAttribute('data-hflipsync') || 'wav2lip').toLowerCase();
-      // Each model gets its own Space URL + tone-adjusted toast text.
-      // LatentSync needs the user to bump lips_expression to 1.8-2.0 for Thai
-      // — surface that as a follow-up tip so they don't miss it.
-      var hfConfig = (hfKind === 'latent') ? {
-        spaceUrl: 'https://huggingface.co/spaces/fffiloni/LatentSync',
-        labelTh: 'LatentSync 1.5',
-        labelEn: 'LatentSync 1.5',
-        tipTh: '⭐ TIP: ใน Settings → ปรับ "lips_expression" เป็น 1.8-2.0 เพื่อให้ปากเปิดชัดสำหรับเสียงไทย',
-        tipEn: '⭐ TIP: In Settings → set "lips_expression" to 1.8-2.0 for clearer mouth motion on Thai voice',
-      } : {
-        spaceUrl: 'https://huggingface.co/spaces/manavisrani07/gradio-lipsync-wav2lip',
-        labelTh: 'Wav2Lip',
-        labelEn: 'Wav2Lip',
-        tipTh: '⭐ TIP: เลือก Checkpoint = wav2lip_gan + Pad Bottom = 15-20 (เพื่อให้รวมคาง)',
-        tipEn: '⭐ TIP: pick Checkpoint = wav2lip_gan + Pad Bottom = 15-20 (to include the chin)',
+      // Each model gets its own Space URL + tone-adjusted toast text +
+      // a model-specific tuning tip surfaced as a follow-up toast 1.5s
+      // after the success toast so the user doesn't miss it.
+      // Registry: add a new lipsync model = add a hfKind branch here +
+      // a card in avatar.js. Backend endpoint (/api/ai/get-asset-urls)
+      // is identical — only the destination Space + tips differ.
+      var HF_REGISTRY = {
+        joyhallo: {
+          spaceUrl: 'https://huggingface.co/spaces/jdh-algo/JoyHallo',
+          labelTh: 'JoyHallo', labelEn: 'JoyHallo',
+          tipTh: '🌏 TIP: JoyHallo เก่งภาษาไทย/จีน/เกาหลีโดยเฉพาะ · queue 10-20 นาที',
+          tipEn: '🌏 TIP: JoyHallo specializes in Thai/Chinese/Korean · queue 10-20 min',
+        },
+        musetalk: {
+          spaceUrl: 'https://huggingface.co/spaces/TMElyralab/MuseTalk',
+          labelTh: 'MuseTalk', labelEn: 'MuseTalk',
+          tipTh: '⚡ TIP: MuseTalk เร็วสุด (~1-3 นาที) · Tencent · Chinese-trained',
+          tipEn: '⚡ TIP: MuseTalk is fastest (~1-3 min) · Tencent · Chinese-trained',
+        },
+        hallo3: {
+          spaceUrl: 'https://huggingface.co/spaces/fffiloni/hallo3',
+          labelTh: 'Hallo3', labelEn: 'Hallo3',
+          tipTh: '✨ TIP: Hallo3 = diffusion-based คุณภาพสูงสุด · ช้า 15-30 นาที · expression detail สูง',
+          tipEn: '✨ TIP: Hallo3 = diffusion-based highest quality · slow 15-30 min · rich expression',
+        },
+        latent: {
+          spaceUrl: 'https://huggingface.co/spaces/fffiloni/LatentSync',
+          labelTh: 'LatentSync 1.5', labelEn: 'LatentSync 1.5',
+          tipTh: '⭐ TIP: ใน Settings → ปรับ "lips_expression" เป็น 1.8-2.0 เพื่อให้ปากเปิดชัดสำหรับเสียงไทย',
+          tipEn: '⭐ TIP: In Settings → set "lips_expression" to 1.8-2.0 for clearer mouth motion on Thai voice',
+        },
+        wav2lip: {
+          spaceUrl: 'https://huggingface.co/spaces/manavisrani07/gradio-lipsync-wav2lip',
+          labelTh: 'Wav2Lip', labelEn: 'Wav2Lip',
+          tipTh: '⭐ TIP: เลือก Checkpoint = wav2lip_gan + Pad Bottom = 15-20 (เพื่อให้รวมคาง)',
+          tipEn: '⭐ TIP: pick Checkpoint = wav2lip_gan + Pad Bottom = 15-20 (to include the chin)',
+        },
       };
+      var hfConfig = HF_REGISTRY[hfKind] || HF_REGISTRY.wav2lip;
       (async function(){
         if (state.hfLipsyncLoading) return;
         var all2 = (typeof AVATARS!=='undefined'?AVATARS:[]).concat(state.customAvatars||[]);
