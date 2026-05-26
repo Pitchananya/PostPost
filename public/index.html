@@ -1975,6 +1975,11 @@ render();
     };
     saveBrands();
     render();
+    // TikTok backend save happens server-side in /oauth/callback (auto-save
+    // via saveTokenResponse — see backend/routes/tiktok.js). The brand-id
+    // scope key is encoded in the OAuth `state` param so the callback knows
+    // which scope to save under. No extra POST needed from here.
+    try { window.PP && window.PP.track && window.PP.track('channel_connected', { brandId: ab.id, channel: 'tiktok' }); } catch(_){}
     toast(L('เชื่อม TikTok กับ '+ab.name+' แล้ว ✓','Connected TikTok to '+ab.name+' ✓'),'success');
   }
   document.addEventListener('click', function(e){
@@ -2005,6 +2010,13 @@ render();
           api('/api/facebook/credentials?course=' + encodeURIComponent(ab.id), { method:'DELETE' })
             .then(function(r){ console.log('[fb-disconnect] backend cleared:', r); })
             .catch(function(e){ console.warn('[fb-disconnect] backend clear failed:', e.message); });
+        } catch(_){}
+      }
+      if (key === 'tiktok') {
+        try {
+          api('/api/tiktok/credentials?course=' + encodeURIComponent(ab.id), { method:'DELETE' })
+            .then(function(r){ console.log('[tt-disconnect] backend cleared:', r); })
+            .catch(function(e){ console.warn('[tt-disconnect] backend clear failed:', e.message); });
         } catch(_){}
       }
       try { window.PP && window.PP.track && window.PP.track('channel_disconnected', { brandId: ab.id, channel: key }); } catch(_){}

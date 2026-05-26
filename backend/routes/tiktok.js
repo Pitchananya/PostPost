@@ -73,11 +73,17 @@ router.get('/oauth/callback', async (req, res) => {
   if (oauthError) return res.status(400).send(`TikTok OAuth error: ${oauthError}`);
   if (!code) return res.status(400).send('Missing code');
 
-  // recover course จาก state (format: "<nonce>[.COURSE][.POPUP][.BRAND:<id>]")
-  // — search all parts because POPUP/BRAND extensions may also live in the state suffix
+  // recover scope key จาก state (format: "<nonce>[.COURSE][.POPUP][.BRAND:<id>]")
+  // — prefer .BRAND:<id> (multi-tenant brands like kuru, happyprice) over the
+  // legacy PFB/PHE/GURU course tags. Falls back to null = default scope.
   const stateParts = (state || '').split('.');
+  const brandHit = state && state.includes('.BRAND:')
+    ? decodeURIComponent(state.split('.BRAND:')[1].split('.')[0])
+    : '';
   const courseHit = stateParts.find(p => ['PFB', 'PHE', 'GURU'].includes(p.toUpperCase()));
-  const validCourse = courseHit ? courseHit.toUpperCase() : null;
+  const validCourse = brandHit && /^[A-Za-z0-9_-]{1,32}$/.test(brandHit)
+    ? brandHit                            // brand id wins when present
+    : (courseHit ? courseHit.toUpperCase() : null);
 
   const { clientKey, clientSecret, redirectUri } = await getCreds();
   if (!clientKey || !clientSecret) return res.status(500).send('TikTok credentials missing');
@@ -104,9 +110,8 @@ router.get('/oauth/callback', async (req, res) => {
     // popup mode — if state contains ".POPUP" suffix, render a thin page that
     // postMessage's the result back to opener + closes itself (PostPost UI flow).
     const isPopup = state && state.includes('.POPUP');
-    const brand = state && state.includes('.BRAND:') ? decodeURIComponent(state.split('.BRAND:')[1].split('.')[0]) : '';
     if (isPopup) {
-      const payload = { brand, open_id: data.open_id || '', expires_at: expiresAt, course: courseLabel };
+      const payload = { brand: brandHit, open_id: data.open_id || '', expires_at: expiresAt, course: courseLabel };
       return res.send(`<!DOCTYPE html><html lang="th"><head><meta charset="utf-8"/>
 <title>เชื่อมต่อ TikTok สำเร็จ</title>
 <style>body{font-family:system-ui,Prompt,sans-serif;padding:40px;text-align:center;background:#FFF8F0;color:#1E1B3A}
@@ -150,6 +155,30 @@ h1{font-size:22px;margin:6px 0 4px;color:#6B21A8}.ok{font-size:60px}.muted{color
 
 // ============== POST API (require auth) ==============
 router.use(requireAuth);
+
+// DELETE /api/tiktok/credentials?course=<brand-id>
+// Clear TT creds for one scope — called by the frontend "ยกเลิก" button so the
+// backend doesn't keep posting with a stale access_token after the user
+// disconnects the brand's TikTok account.
+router.delete('/credentials', async (req, res) => {
+  const course = req.query.course || null;
+  if (course && !/^[A-Za-z0-9_-]{1,32}$/.test(String(course))) {
+    return res.status(400).json({ error: 'course/brand id ต้องเป็นตัวอักษร/ตัวเลข/dash/underscore' });
+  }
+  try {
+    const c = (course || '').toLowerCase();
+    const suffix = c ? `_${c}` : '';
+    const patch = {};
+    ['tt_access_token', 'tt_refresh_token', 'tt_open_id', 'tt_expires_at'].forEach((k) => {
+      patch[k + suffix] = '';
+    });
+    patch[`tt_creds_cleared_at${suffix}`] = new Date().toISOString();
+    await db.settings.set(patch);
+    res.json({ ok: true, course: course || 'default', cleared_at: patch[`tt_creds_cleared_at${suffix}`] });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 
 // GET /api/tiktok/connection?course=PFB|PHE|GURU — ตรวจการเชื่อมต่อ
 router.get('/connection', async (req, res) => {
