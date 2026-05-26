@@ -573,6 +573,7 @@ router.post('/topics-brand', async (req, res) => {
     brandName = '', businessType = '', brandDesc = '',
     voices = [], archetype = '', products = [],
     theme = '', goals = [], count = 15,
+    exclude = [],
   } = req.body || {};
   // Vercel function timeout is 60s — large counts (n≥25) frequently 504 on
   // Haiku 4.5 with verbose Thai output. Clamp to 25 server-side and require
@@ -580,6 +581,13 @@ router.post('/topics-brand', async (req, res) => {
   const n = Math.max(1, Math.min(25, parseInt(count, 10) || 15));
   const prodLines = (Array.isArray(products) ? products : []).slice(0, 15)
     .map(p => `- ${p.name || ''}${p.price ? ' (฿' + p.price + ')' : ''}`).filter(s => s.trim() !== '-').join('\n');
+
+  // exclusion list — re-gen sends existing topics so AI produces fresh angles
+  const excludeArr = Array.isArray(exclude) ? exclude.slice(0, 40) : [];
+  const exclusionBlock = excludeArr.length
+    ? '\n⛔ หัวข้อที่เคยสร้างไปแล้ว (ห้ามซ้ำหรือใกล้เคียง — ต้องหามุมใหม่):\n'
+      + excludeArr.map((t, i) => `  ${i+1}. [${t.kind || '?'}] ${(t.th || t.topic || '').slice(0, 80)}`).join('\n')
+    : '';
 
   const system = `คุณคือนักวางแผนคอนเทนต์โซเชียลมีเดียมืออาชีพ ภาษาไทย
 หน้าที่: วางแผนหัวข้อคอนเทนต์ทั้งเดือนให้แบรนด์ โดยอิงจากโปรไฟล์แบรนด์ที่ให้มา**อย่างเคร่งครัด**
@@ -610,7 +618,7 @@ router.post('/topics-brand', async (req, res) => {
 ${prodLines || '(ไม่มีสินค้า — โฟกัสที่บริการ/ความเชี่ยวชาญแทน)'}
 🎯  ธีมเดือนนี้: ${theme || '(กระจายให้หลากหลาย)'}
 🚀  จุดมุ่งหมาย: ${goals.length ? goals.join(', ') : 'ทั่วไป'}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${exclusionBlock}
 
 📋 สร้างหัวข้อ ${n} หัวข้อสำหรับเดือนนี้ ที่:
 ✅ ⚠️ ต้องครบ ${n} หัวข้อ ไม่น้อยกว่านี้ (ห้ามตอบแค่บางส่วน เช่น ขอ 30 ได้ 18 = ผิด)

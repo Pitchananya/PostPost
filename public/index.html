@@ -2090,19 +2090,28 @@ render();
     var goals = (state.topicGoals||['sales','awareness']).map(function(k){ return goalMap[k]||k; });
     var theme = (state.topicTheme||'').trim();
     var count = parseInt(state.topicCount,10) || 15;
+    // Send the existing topics as an exclusion list so a re-gen produces
+    // fresh angles instead of re-suggesting variations of what's already
+    // in the Topic Bank. Cap at 60 to keep the prompt size sane (older
+    // topics fall off — AI's "do not repeat" memory has a budget).
+    var existing = Array.isArray(TOPICS) ? TOPICS.slice(0, 60).map(function(t){
+      return { th: (t && t.th) || '', kind: (t && t.kind) || '' };
+    }).filter(function(t){ return t.th; }) : [];
     state.topicGenLoading = true; render();
-    toast(state.lang==='th'?'AI กำลังวางแผนหัวข้อจากโปรไฟล์แบรนด์…':'AI is planning topics…');
+    toast(state.lang==='th'?(existing.length?'AI กำลังหามุมใหม่ที่ไม่ซ้ำของเดิม…':'AI กำลังวางแผนหัวข้อจากโปรไฟล์แบรนด์…')
+                            :(existing.length?'AI is finding fresh angles…':'AI is planning topics…'));
     try {
       var j = await api('/api/ai/topics-brand', { method:'POST', body:{
         brandName: ab.name, businessType: ab.bizType||'', brandDesc: ab.desc||state.brandDesc||'',
         voices: voiceLabels, archetype: archLabel, products: prods,
-        theme: theme, goals: goals, count: count
+        theme: theme, goals: goals, count: count,
+        exclude: existing,
       }});
       if (j && j.topics && j.topics.length) {
         TOPICS = j.topics;
         // Mirror reassignment to module's array (Topic Bank page reads it).
         try { window.PP && window.PP.setTopics && window.PP.setTopics(TOPICS); } catch(_){}
-        try { window.PP && window.PP.track && window.PP.track('topics_generated', { count: j.topics.length, brandId: state.brand }); } catch(_){}
+        try { window.PP && window.PP.track && window.PP.track('topics_generated', { count: j.topics.length, brandId: state.brand, regen: existing.length > 0, excluded: existing.length }); } catch(_){}
         state.topicFilter = 'all';
         var _tb = BRANDS.filter(function(b){ return b.id===state.brand; })[0];
         if (_tb) { _tb.topics = TOPICS; saveBrands(); }
