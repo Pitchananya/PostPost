@@ -81,14 +81,18 @@ try {
   }
 } catch (_) {}
 // Same dance for TOPICS / PRODUCTS — inline reassigns on brand-switch.
+// ⚠ Sync UNCONDITIONALLY (including the empty-array case). The previous
+// "only sync if inline has items" guard left the module's seed skincare
+// DEMO_TOPICS/DEMO_PRODUCTS in place for brands that legitimately start
+// empty (e.g. ครุเทพ / any non-HappyPrice brand). Result: the Topic Bank
+// page (rendered from the module) showed Marine Collagen / Rose Repair
+// for a fortune-telling brand. Now: if inline says "empty", module is empty.
 try {
-  const inlineTOPICS = (window.PP && window.PP.TOPICS) || null;
-  if (Array.isArray(inlineTOPICS) && inlineTOPICS.length) {
-    TOPICS.splice(0, TOPICS.length, ...inlineTOPICS);
+  if (window.PP && Array.isArray(window.PP.TOPICS)) {
+    TOPICS.splice(0, TOPICS.length, ...window.PP.TOPICS);
   }
-  const inlinePRODUCTS = (window.PP && window.PP.PRODUCTS) || null;
-  if (Array.isArray(inlinePRODUCTS) && inlinePRODUCTS.length) {
-    PRODUCTS.splice(0, PRODUCTS.length, ...inlinePRODUCTS);
+  if (window.PP && Array.isArray(window.PP.PRODUCTS)) {
+    PRODUCTS.splice(0, PRODUCTS.length, ...window.PP.PRODUCTS);
   }
 } catch (_) {}
 // Custom avatars live on state.customAvatars; inline already loaded them.
@@ -141,6 +145,21 @@ window.PP = Object.assign(window.PP || {}, {
   // can still call window.PP.render() / window.render() by name.
   render, PAGES, PUBLIC_PAGES,
 });
+
+// Inline still reassigns its local `let TOPICS = …` / `let PRODUCTS = …`
+// on brand-switch + after gen. Reassignment doesn't propagate to this
+// module's TOPICS/PRODUCTS array reference — so pages rendered from the
+// module (Topic Bank, etc.) saw stale skincare demo data on non-HappyPrice
+// brands. Expose splice-based setters that inline calls right after each
+// reassignment to keep the module's array in lock-step.
+window.PP.setTopics = function(arr) {
+  const next = Array.isArray(arr) ? arr : [];
+  TOPICS.splice(0, TOPICS.length, ...next);
+};
+window.PP.setProducts = function(arr) {
+  const next = Array.isArray(arr) ? arr : [];
+  PRODUCTS.splice(0, PRODUCTS.length, ...next);
+};
 
 // Also expose render globally so the inline auth-wiring script can wrap
 // it (login-form pre-fill) AND so the inline event delegators that fire

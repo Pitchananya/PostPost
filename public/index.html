@@ -1183,6 +1183,11 @@ document.addEventListener('click', (e) => {
         return (saved && saved.length) ? saved : (nb.id === 'happyprice' ? DEMO_TOPICS : []);
       })();
       PRODUCTS = (Array.isArray(nb.products) && nb.products.length) ? nb.products : (nb.id === 'happyprice' ? DEMO_PRODUCTS : []);
+      // Mirror reassignment into the module's array (Topic Bank / pages
+      // imported from ./public/js/data/topics.js read THAT array — without
+      // this splice they'd keep the seed skincare demos for other brands).
+      try { window.PP && window.PP.setTopics && window.PP.setTopics(TOPICS); } catch(_){}
+      try { window.PP && window.PP.setProducts && window.PP.setProducts(PRODUCTS); } catch(_){}
       state.selectedProducts = PRODUCTS.map(function(p){ return p.id; });
       state.shopStats = nb.shopStats || null;
       state.shopUrl = nb.shopUrl || '';
@@ -1759,6 +1764,9 @@ render();
         return (saved && saved.length) ? saved : (nb.id === 'happyprice' ? DEMO_TOPICS : []);
       })();
         PRODUCTS = (Array.isArray(nb.products) && nb.products.length) ? nb.products : (nb.id === 'happyprice' ? DEMO_PRODUCTS : []);
+        // Mirror reassignment into module's array (see same comment above).
+        try { window.PP && window.PP.setTopics && window.PP.setTopics(TOPICS); } catch(_){}
+        try { window.PP && window.PP.setProducts && window.PP.setProducts(PRODUCTS); } catch(_){}
         state.selectedProducts = PRODUCTS.map(function(p){ return p.id; });
         state.shopStats = nb.shopStats || null;
         state.shopUrl = nb.shopUrl || '';
@@ -2021,6 +2029,8 @@ render();
       }});
       if (j && j.topics && j.topics.length) {
         TOPICS = j.topics;
+        // Mirror reassignment to module's array (Topic Bank page reads it).
+        try { window.PP && window.PP.setTopics && window.PP.setTopics(TOPICS); } catch(_){}
         state.topicFilter = 'all';
         var _tb = BRANDS.filter(function(b){ return b.id===state.brand; })[0];
         if (_tb) { _tb.topics = TOPICS; saveBrands(); }
