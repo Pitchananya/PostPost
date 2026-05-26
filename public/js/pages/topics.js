@@ -36,6 +36,11 @@ const KIND_MAP = {
   behind:    { th: 'เบื้องหลัง',       en: 'BTS',        pill: 'yellow'   },  // behind-the-scenes
   compare:   { th: 'เปรียบเทียบ',     en: 'Compare',    pill: 'blue'     },  // vs / before-after
   inspire:   { th: 'แรงบันดาลใจ',     en: 'Inspire',    pill: 'green'    },  // quotes / motivational
+  // 4 ใหม่ (เพิ่มเมื่อ 2026-05-26) — เน้น engagement + กระแสสังคม
+  fomo:      { th: 'FOMO',           en: 'FOMO',       pill: 'red'      },  // เร่งให้ตัดสินใจ "พลาดแล้วเสียดาย" — limited time/stock
+  viral:     { th: 'ฮิตติดเทรนด์',    en: 'Viral hook', pill: 'orange'   },  // เกาะกระแสไวรัล meme/clip ตอนนี้
+  satire:    { th: 'เสียดสีสังคม',    en: 'Satire',     pill: 'red'      },  // ประชดประชัน เสียดสีพฤติกรรมยุค
+  social:    { th: 'สะท้อนสังคม',     en: 'Social',     pill: 'lavender' },  // ชวนคิด/วิจารณ์ประเด็นสังคม
 };
 
 export function pageTopics() {
