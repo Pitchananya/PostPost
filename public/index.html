@@ -1912,6 +1912,26 @@ render();
         ? L('เชื่อม Facebook + Instagram กับ '+ab.name+' แล้ว ✓','Connected Facebook + Instagram to '+ab.name+' ✓')
         : L('เชื่อม Facebook กับ '+ab.name+' แล้ว ✓ (เพจนี้ไม่มี IG Business ผูกอยู่)','Connected Facebook to '+ab.name+' ✓ (no IG Business linked)');
       toast(msg,'success');
+      // Persist credentials to the backend (db.settings via db.fbCreds.save) — without
+      // this the channelInfo only lives in localStorage + cloud-sync and the backend
+      // post route (db.fbCreds.get) returns null → publish would silently fail.
+      // course = brand id so creds are scoped per brand (migration 016 dropped the
+      // PFB/PHE/GURU CHECK so any short identifier works).
+      try {
+        api('/api/facebook/save-credentials', { method:'POST', body:{
+          course: ab.id,
+          page_id: page.id,
+          page_token: page.access_token,
+          long_lived_user_token: payload.userToken || '',
+          ig_business_id: (ig && ig.id) || '',
+        }}).then(function(r){
+          console.log('[fb-oauth] backend creds saved:', r);
+          try { window.PP && window.PP.track && window.PP.track('channel_connected', { brandId: ab.id, channel: 'facebook', ig: !!(ig && ig.id) }); } catch(_){}
+        }).catch(function(e){
+          console.warn('[fb-oauth] backend save failed:', e.message);
+          toast(L('บันทึก credentials ฝั่ง server ไม่สำเร็จ — โพสต์อัตโนมัติอาจไม่ทำงาน: '+e.message,'Server save failed — autopost may not work: '+e.message),'error');
+        });
+      } catch(e){ console.warn('[fb-oauth] save call error:', e); }
     };
     if (pages.length === 1) { apply(pages[0]); return; }
     // Multiple pages → show picker
@@ -1969,8 +1989,25 @@ render();
       var i = ab.ch.indexOf(key);
       if (i >= 0) ab.ch.splice(i,1);
       if (ab.channelInfo) delete ab.channelInfo[key];
+      // Disconnecting Facebook also unhooks the linked Instagram (IG Business
+      // shares the Page Token — without FB the IG creds are useless too).
+      if (key === 'facebook') {
+        var ii = ab.ch.indexOf('instagram');
+        if (ii >= 0) ab.ch.splice(ii, 1);
+        if (ab.channelInfo) delete ab.channelInfo.instagram;
+      }
       saveBrands();
       render();
+      // Clear backend creds so a future post attempt doesn't reuse the stale
+      // page_token. Best-effort — UI already updated locally either way.
+      if (key === 'facebook' || key === 'instagram') {
+        try {
+          api('/api/facebook/credentials?course=' + encodeURIComponent(ab.id), { method:'DELETE' })
+            .then(function(r){ console.log('[fb-disconnect] backend cleared:', r); })
+            .catch(function(e){ console.warn('[fb-disconnect] backend clear failed:', e.message); });
+        } catch(_){}
+      }
+      try { window.PP && window.PP.track && window.PP.track('channel_disconnected', { brandId: ab.id, channel: key }); } catch(_){}
       toast(state.lang==='th'?'ยกเลิกการเชื่อมแล้ว':'Disconnected','success');
     }
   });

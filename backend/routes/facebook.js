@@ -319,14 +319,17 @@ router.post('/post', async (req, res) => {
 });
 
 // POST /api/facebook/save-credentials — เก็บ Page Token + IG ID ลง DB (ไม่ต้อง redeploy)
-// body.course (PFB/PHE/GURU) เก็บแยกตามหลักสูตร — เว้นว่าง = default
+// body.course เป็น scope key — รับได้ทั้งหลักสูตรเก่า (PFB/PHE/GURU) และ brand id ใหม่
+// (kuru, happyprice, etc.) ที่ frontend OAuth flow ส่งมาหลังจาก connect FB Page เสร็จ
 router.post('/save-credentials', async (req, res) => {
   const { course, page_id, page_token, long_lived_user_token, ig_business_id } = req.body || {};
   if (!page_token && !ig_business_id && !long_lived_user_token) {
     return res.status(400).json({ error: 'ต้องระบุอย่างน้อย 1 ตัว: page_token / ig_business_id / long_lived_user_token' });
   }
-  if (course && !['PFB', 'PHE', 'GURU'].includes(course)) {
-    return res.status(400).json({ error: 'course ต้องเป็น PFB / PHE / GURU' });
+  // Validate scope key — allow alphanumeric/dash/underscore (covers brand ids + legacy courses).
+  // Migration 016 dropped the contents.course CHECK constraint so brand ids work as scope keys.
+  if (course && !/^[A-Za-z0-9_-]{1,32}$/.test(String(course))) {
+    return res.status(400).json({ error: 'course/brand id ต้องเป็นตัวอักษร/ตัวเลข/dash/underscore (1-32 ตัว)' });
   }
   try {
     // Pre-flight: ถ้าให้ page_token มา → verify ว่าเป็น PAGE type จริง ๆ (กัน paste User Token ผิด)
@@ -356,6 +359,33 @@ router.post('/save-credentials', async (req, res) => {
         ? `ใช้ได้ทันทีสำหรับ course ${course} — ไม่ต้อง redeploy`
         : 'ใช้ได้ทันที (default) — ไม่ต้อง redeploy'
     });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// DELETE /api/facebook/credentials?course=<brand-id>
+// Clear FB/IG creds for one scope. Called by the frontend "ยกเลิก" button after
+// the user disconnects a brand's Facebook Page — without this the backend
+// would keep the stale page_token in db.settings and try to post with it.
+router.delete('/credentials', async (req, res) => {
+  const course = req.query.course || null;
+  if (course && !/^[A-Za-z0-9_-]{1,32}$/.test(String(course))) {
+    return res.status(400).json({ error: 'course/brand id ต้องเป็นตัวอักษร/ตัวเลข/dash/underscore' });
+  }
+  try {
+    const c = (course || '').toLowerCase();
+    const suffix = c ? `_${c}` : '';
+    // Overwrite with empty strings — db.settings.set ignores empty values for new
+    // keys, so write an explicit null/'' to clear.  Iterate the same key list
+    // that db.fbCreds.save writes to keep the two in lock-step.
+    const patch = {};
+    ['fb_page_id', 'fb_page_token', 'ig_business_id', 'fb_long_lived_user_token'].forEach((k) => {
+      patch[k + suffix] = '';
+    });
+    patch[`fb_creds_cleared_at${suffix}`] = new Date().toISOString();
+    await db.settings.set(patch);
+    res.json({ ok: true, course: course || 'default', cleared_at: patch[`fb_creds_cleared_at${suffix}`] });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
