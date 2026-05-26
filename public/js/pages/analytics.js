@@ -69,8 +69,13 @@ async function loadAnalyticsData(days) {
   if (window.PP._analyticsCache[days]) return;
   window.PP._analyticsCache[days] = { loading: true };
   try {
-    const r = await api(`/api/events/summary?days=${days}`);
-    window.PP._analyticsCache[days] = { loading: false, data: r };
+    // Fetch events summary + cost breakdown in parallel — the Analytics page
+    // shows both side-by-side, no point waterfalling them.
+    const [summary, costs] = await Promise.all([
+      api(`/api/events/summary?days=${days}`),
+      api(`/api/analytics/costs?days=${days}`).catch(() => null),  // costs is optional
+    ]);
+    window.PP._analyticsCache[days] = { loading: false, data: summary, costs };
   } catch (e) {
     window.PP._analyticsCache[days] = { loading: false, error: e.message };
   }
@@ -101,6 +106,7 @@ export function pageAnalytics() {
 
   const cache = (window.PP && window.PP._analyticsCache && window.PP._analyticsCache[days]) || { loading: true };
   const data = cache.data;
+  const costs = cache.costs;
 
   const total      = data ? data.total : 0;
   const byName     = data ? data.by_name : {};
@@ -196,6 +202,68 @@ export function pageAnalytics() {
       }).join('')}
     </div>
   </div>
+
+  ${costs ? `
+  <!-- AI Cost & Savings -->
+  <div class="card" style="margin-bottom:18px;background:linear-gradient(135deg,#FFF7ED 0%,#FFEDD5 100%);border-color:#FED7AA">
+    <div class="cardHeader">
+      <div>
+        <h3 class="cardTitle">💰 ${T('ค่าใช้จ่าย AI', 'AI Cost')}</h3>
+        <p class="cardSub">${T(days + ' วันล่าสุด · ' + (costs.contents_in_window || 0) + ' โพสต์', 'Last ' + days + ' days · ' + (costs.contents_in_window || 0) + ' posts')}</p>
+      </div>
+      ${costs.savings_vs_hedra_usd > 0.01 ? `<span class="pill green" style="height:28px;padding:0 12px;font-size:11.5px">
+        ${T('ประหยัด', 'Saved')} $${costs.savings_vs_hedra_usd} ${T('เทียบกับ Hedra', 'vs Hedra')}
+      </span>` : ''}
+    </div>
+
+    <div class="grid g4" style="gap:12px;margin-top:14px">
+      <!-- Total -->
+      <div style="padding:14px;border-radius:12px;background:#fff;border:2px solid var(--orange)">
+        <div class="micro" style="color:var(--muted);font-weight:700">${T('รวมทั้งหมด', 'Total')}</div>
+        <div style="font-size:28px;font-weight:900;color:var(--purple);line-height:1.1;margin-top:4px">
+          $${costs.total_usd}
+        </div>
+        <div class="micro" style="margin-top:2px;color:var(--muted)">฿${costs.total_thb.toLocaleString()}</div>
+      </div>
+      <!-- Per-category -->
+      ${[
+        { key: 'text',   icon: '📝', label_th: 'ข้อความ',  label_en: 'Text' },
+        { key: 'image',  icon: '🎨', label_th: 'รูปภาพ',   label_en: 'Image' },
+        { key: 'video',  icon: '🎬', label_th: 'วิดีโอ',   label_en: 'Video' },
+        { key: 'avatar', icon: '🗣',  label_th: 'Avatar',  label_en: 'Avatar' },
+      ].slice(0, 3).map((cat) => {
+        const b = costs.breakdown[cat.key] || { count: 0, cost: 0, unit: 0 };
+        return `<div style="padding:14px;border-radius:12px;background:#fff;border:1px solid var(--line)">
+          <div class="micro" style="color:var(--muted);font-weight:700">${cat.icon} ${t({ th: cat.label_th, en: cat.label_en })}</div>
+          <div style="font-size:18px;font-weight:800;color:var(--purple);line-height:1.1;margin-top:4px">
+            $${b.cost.toFixed(2)}
+          </div>
+          <div class="micro" style="margin-top:2px;color:var(--muted)">${b.count} × $${b.unit}</div>
+        </div>`;
+      }).join('')}
+    </div>
+
+    ${costs.breakdown.avatar && costs.breakdown.avatar.count > 0 ? `
+    <div style="margin-top:14px;padding:12px 14px;background:#fff;border:1px solid var(--line);border-radius:10px;display:flex;align-items:center;gap:12px">
+      <div style="font-size:24px">🗣</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:700;color:var(--purple)">
+          Avatar · ${costs.breakdown.avatar.count} ${T('คลิป', 'clips')}
+        </div>
+        <div class="micro" style="color:var(--muted)">
+          ${T('ใช้ fal-ai/infinitalk @ $0.20/30s · ถ้าใช้ Hedra Avatar จะแพงกว่า 10x ($2.10/30s)', 'Using fal-ai/infinitalk @ $0.20/30s · Hedra Avatar would be 10x more ($2.10/30s)')}
+        </div>
+      </div>
+      <div style="font-size:16px;font-weight:800;color:var(--green)">
+        $${costs.breakdown.avatar.cost.toFixed(2)}
+      </div>
+    </div>` : ''}
+
+    <div class="micro" style="margin-top:10px;color:var(--muted);font-size:10.5px">
+      💡 ${T('ราคาประเมินจาก provider ที่ใช้จริง (Claude Haiku / Gemini / fal.ai). ตัวเลขจริงอาจต่างเล็กน้อยจากการสลับ model', 'Estimates use the cheapest provider per category (Claude Haiku / Gemini / fal.ai). Actual cost may vary if model is switched.')}
+    </div>
+  </div>
+  ` : ''}
 
   <!-- Top features + recent activity -->
   <div class="grid" style="grid-template-columns:1fr 1fr;gap:18px">

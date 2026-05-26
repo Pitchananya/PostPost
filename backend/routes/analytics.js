@@ -189,31 +189,64 @@ router.get('/top', async (req, res) => {
 });
 
 // ================= COSTS =================
-// GET /api/analytics/costs — ประมาณการค่าใช้จ่าย AI gen ทั้งเดือน
+// GET /api/analytics/costs?days=30
+// ประมาณการค่าใช้จ่าย AI gen แยกตาม category — ดึงจาก contents table แล้วจำแนกด้วย
+// kind/media_url/platforms. รองรับช่วงเวลาผ่าน query string (default 30 days).
 router.get('/costs', async (req, res) => {
   try {
+    const days = Math.max(1, Math.min(365, parseInt(req.query.days, 10) || 30));
+    const since = new Date(Date.now() - days * 86_400_000);
     const all = await db.contents.list();
-    const now = new Date();
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const thisMonth = all.filter(c => new Date(c.created_at) >= monthStart);
+    const window = all.filter((c) => new Date(c.created_at) >= since);
 
-    // ราคาประมาณการ (USD) — ปรับตามจริงได้
+    // ราคาประมาณการ (USD) — ใช้ provider ที่ถูกที่สุดของแต่ละ category ตามที่ PostPost
+    // เลือกใช้จริง (claude haiku สำหรับ text, fal.ai สำหรับ avatar/video, gemini
+    // สำหรับ image). ปรับได้ตามที่ผู้ใช้สลับ provider จริง.
     const PRICES = {
-      text_per_post: 0.001,    // claude haiku ~$0.001/post
-      image_gemini: 0.04,
-      image_gpt: 0.17,
-      image_dalle: 0.04,
+      text_per_post:        0.001,   // claude haiku (caption + hashtags + article)
+      image_per_unit:       0.04,    // gemini nano banana / replicate flux pro
+      avatar_per_clip_30s:  0.20,    // fal-ai/infinitalk 30s clip (default)
+      video_per_clip:       0.30,    // fal-ai/wan-v2.2-t2v (default ttv model)
     };
 
-    const textCost = thisMonth.length * PRICES.text_per_post;
-    const imageCost = thisMonth.filter(c => c.media_url || c.image_base64).length * PRICES.image_gemini;
-    const total = textCost + imageCost;
+    // จัดประเภทแต่ละ row
+    let textOnly = 0, withImage = 0, withVideo = 0, withAvatar = 0;
+    for (const c of window) {
+      const hasImg = !!c.media_url && !c.video_url;
+      const isVideo = !!c.video_url || (c.media_url || '').match(/\.(mp4|mov|webm)/i);
+      const isAvatar = !!c.kind && /avatar|talking/i.test(c.kind);
+      if (isAvatar) withAvatar++;
+      else if (isVideo) withVideo++;
+      else if (hasImg) withImage++;
+      else textOnly++;
+    }
+
+    // คำนวณค่าใช้จ่ายแต่ละ bucket
+    const breakdown = {
+      text:   { count: textOnly + withImage + withVideo + withAvatar, unit: PRICES.text_per_post,        cost: (textOnly + withImage + withVideo + withAvatar) * PRICES.text_per_post },
+      image:  { count: withImage,                                       unit: PRICES.image_per_unit,       cost: withImage * PRICES.image_per_unit },
+      video:  { count: withVideo,                                       unit: PRICES.video_per_clip,       cost: withVideo * PRICES.video_per_clip },
+      avatar: { count: withAvatar,                                      unit: PRICES.avatar_per_clip_30s,  cost: withAvatar * PRICES.avatar_per_clip_30s },
+    };
+    const totalUsd = Object.values(breakdown).reduce((s, b) => s + b.cost, 0);
+
+    // เทียบกับ Hedra-equivalent เพื่อให้ user เห็นเงินที่ประหยัดได้
+    const HEDRA_PRICES = { text: 0.001, image: 0.07, video: 0.20, avatar: 2.10 };
+    const hedraEquivalent =
+      breakdown.text.count   * HEDRA_PRICES.text   +
+      breakdown.image.count  * HEDRA_PRICES.image  +
+      breakdown.video.count  * HEDRA_PRICES.video  +
+      breakdown.avatar.count * HEDRA_PRICES.avatar;
 
     res.json({
-      month: monthStart.toISOString().slice(0, 7),
-      contents_this_month: thisMonth.length,
-      estimated_cost_usd: { text: textCost, image: imageCost, total },
-      estimated_cost_thb: { total: Math.round(total * 36) },
+      days,
+      since: since.toISOString(),
+      contents_in_window: window.length,
+      breakdown,
+      total_usd: Math.round(totalUsd * 100) / 100,
+      total_thb: Math.round(totalUsd * 36),
+      hedra_equivalent_usd: Math.round(hedraEquivalent * 100) / 100,
+      savings_vs_hedra_usd: Math.round((hedraEquivalent - totalUsd) * 100) / 100,
       pricing_notes: PRICES,
     });
   } catch (e) {
