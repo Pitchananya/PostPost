@@ -1,140 +1,236 @@
 // public/js/pages/analytics.js
 //
-// Analytics dashboard — KPI cards, daily bar chart, channel breakdown,
-// Top-5 posts. Mirrors the inline pageAnalytics() exactly; the data is
-// hand-rolled mock data (also matches the inline copy). When Phase 4 pulls
-// real metrics from FB/IG/TikTok this becomes a fetch().
+// Analytics dashboard — replaces the Phase-3 hand-rolled mock with real
+// data from /api/events/summary. Three views:
 //
-// All HTML-emitting helpers (I, head, sparkPath) wrapped in raw() per the
-// html`` safety model.
+//   • 4 KPI cards: total events, unique pages, top event, top page
+//   • Events-per-day bar chart (last N days)
+//   • "Most used features" leaderboard (event-name counts)
+//   • Recent activity feed (last 50 raw events)
+//
+// Data flow:
+//   render() → empty shell with loading state
+//   loadAnalyticsData() → fetch + cache in window.PP._analyticsCache
+//                      → trigger a re-render so values fill in
+//
+// The cache is keyed by the time-window selector (7 / 30 / 90 days) so
+// switching windows doesn't refetch when we already have the data.
 
 import { html, raw } from '../html.js';
 import { T, t } from '../i18n.js';
 import { I } from '../icons.js';
 import { head } from '../components/head.js';
+import { state } from '../state.js';
+import { api } from '../api.js';
+
+// Human-friendly labels for the event names emitted by track().
+// New event types fall back to the snake_case name.
+const EVENT_LABELS = {
+  page_view:           { th: 'เปิดหน้า',              en: 'Page view' },
+  brand_switched:      { th: 'สลับแบรนด์',             en: 'Brand switched' },
+  voice_changed:       { th: 'เปลี่ยน Brand Voice',     en: 'Voice changed' },
+  archetype_changed:   { th: 'เปลี่ยน Archetype',       en: 'Archetype changed' },
+  topics_generated:    { th: 'AI สร้างหัวข้อ',          en: 'Topics generated' },
+  topic_used:          { th: 'ใช้หัวข้อจาก Topic Bank',  en: 'Topic used' },
+  content_generated:   { th: 'สร้างคอนเทนต์',           en: 'Content generated' },
+  post_published:      { th: 'โพสต์ออก',                en: 'Post published' },
+  post_scheduled:      { th: 'ตั้งเวลาโพสต์',           en: 'Post scheduled' },
+};
+
+const PAGE_LABELS = {
+  profile:    { th: 'โปรไฟล์',           en: 'Profile' },
+  topics:     { th: 'Topic Bank',        en: 'Topic Bank' },
+  caption:    { th: 'สร้าง Caption',     en: 'Caption' },
+  creative:   { th: 'สร้าง Creative',    en: 'Creative' },
+  avatar:     { th: 'Talking Avatar',    en: 'Talking Avatar' },
+  textvideo:  { th: 'Text to Video',     en: 'Text to Video' },
+  automation: { th: 'Automation Log',    en: 'Automation' },
+  analytics:  { th: 'Analytics',         en: 'Analytics' },
+  calendar:   { th: 'ปฏิทิน',            en: 'Calendar' },
+  library:    { th: 'คลังคอนเทนต์',       en: 'Library' },
+};
+
+function labelEvent(name) {
+  const e = EVENT_LABELS[name];
+  return e ? t(e) : name;
+}
+function labelPage(page) {
+  const p = PAGE_LABELS[page];
+  return p ? t(p) : (page || '—');
+}
+
+// ── Data fetching ───────────────────────────────────────────────────
+// Kicks off a fetch IF we don't already have data for the chosen window.
+// Re-renders when the response lands. Tolerant of API failure → leaves
+// the cached state empty so the UI shows the "no data yet" empty state.
+async function loadAnalyticsData(days) {
+  window.PP = window.PP || {};
+  window.PP._analyticsCache = window.PP._analyticsCache || {};
+  if (window.PP._analyticsCache[days]) return;
+  window.PP._analyticsCache[days] = { loading: true };
+  try {
+    const r = await api(`/api/events/summary?days=${days}`);
+    window.PP._analyticsCache[days] = { loading: false, data: r };
+  } catch (e) {
+    window.PP._analyticsCache[days] = { loading: false, error: e.message };
+  }
+  // Re-render only if we're still on the Analytics page when the fetch lands.
+  try { if (state.page === 'analytics' && typeof window.render === 'function') window.render(); } catch (_) {}
+}
+
+function topEntries(obj, n) {
+  return Object.entries(obj || {})
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, n);
+}
+
+function relativeTime(iso) {
+  const d = new Date(iso);
+  const s = Math.floor((Date.now() - d.getTime()) / 1000);
+  if (s < 60) return s + 's';
+  if (s < 3600) return Math.floor(s / 60) + 'm';
+  if (s < 86400) return Math.floor(s / 3600) + 'h';
+  return Math.floor(s / 86400) + 'd';
+}
 
 export function pageAnalytics() {
-  const sparkPath = (data, color, h = 36, w = 100) => {
-    const max = Math.max(...data), min = Math.min(...data);
-    const pts = data.map((v, i) => { const x = (i / (data.length - 1)) * w; const y = h - ((v - min) / (max - min || 1)) * (h - 4) - 2; return `${x},${y}`; }).join(' ');
-    return `<svg width="${w}" height="${h}" style="overflow:visible">
-      <polygon points="0,${h} ${pts} ${w},${h}" fill="${color}22"/>
-      <polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
-    </svg>`;
-  };
+  const days = state.analyticsDays || 7;
 
-  const days = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11'];
-  const fb = [12, 8, 16, 14, 22, 18, 20, 26, 32, 28, 38];
-  const ig = [8, 6, 10, 12, 14, 11, 14, 18, 22, 21, 27];
-  const tt = [2, 3, 4, 5, 6, 4, 8, 9, 12, 14, 19];
-  const maxAll = Math.max(...fb, ...ig, ...tt) * 1.2;
+  // Kick off the fetch (idempotent — won't re-fire if data already cached).
+  loadAnalyticsData(days);
 
-  const actions = `<button class="btn outline sm">${I('calendar', 14)} ${T('30 วันล่าสุด', 'Last 30 days')} ${I('chev_down', 12)}</button>
-     <button class="btn outline sm">${I('download', 14)} Export</button>`;
+  const cache = (window.PP && window.PP._analyticsCache && window.PP._analyticsCache[days]) || { loading: true };
+  const data = cache.data;
+
+  const total      = data ? data.total : 0;
+  const byName     = data ? data.by_name : {};
+  const byDay      = data ? data.by_day : {};
+  const byPage     = data ? data.by_page : {};
+  const recent     = data ? data.recent : [];
+  const uniquePages = Object.keys(byPage).length;
+  const topEventEntry = topEntries(byName, 1)[0];
+  const topPageEntry  = topEntries(byPage, 1)[0];
+
+  // Build a continuous date axis (oldest → newest), filling missing days w/ 0.
+  const dayKeys = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(Date.now() - i * 86_400_000);
+    dayKeys.push(d.toISOString().slice(0, 10));
+  }
+  const dayValues = dayKeys.map((k) => byDay[k] || 0);
+  const maxDay = Math.max(1, ...dayValues);
+
+  const actions = `
+    <div style="display:flex;gap:6px">
+      ${[7, 30, 90].map((d) => `<button class="btn ${d === days ? 'outline' : 'ghost'} sm" data-analytics-days="${d}">
+        ${T(d + ' วัน', d + 'd')}
+      </button>`).join('')}
+    </div>
+  `;
+
+  const empty = !cache.loading && total === 0;
 
   return html`${raw(head('OPERATIONS', 'Analytics',
-    T('ภาพรวมประสิทธิภาพคอนเทนต์ · ดึงข้อมูลจาก FB/IG/TikTok โดยตรง', 'Content performance · pulled directly from FB/IG/TikTok'),
-    actions
+    T('ภาพรวมการใช้งานจริง — เก็บจากปุ่มกด/หน้าที่เปิดในแอป', 'Real usage — tracked from in-app actions'),
+    raw(actions)
   ))}
 
+  ${cache.loading ? raw(`<div class="card" style="text-align:center;padding:32px;color:var(--muted)">
+    ⏳ ${T('กำลังโหลดข้อมูล…', 'Loading…')}
+  </div>`) : ''}
+
+  ${cache.error ? raw(`<div class="card" style="background:#FEE2E2;border-color:#FCA5A5;color:#991B1B;padding:14px">
+    ⚠ ${T('โหลดข้อมูลไม่สำเร็จ', 'Failed to load')}: ${cache.error}
+  </div>`) : ''}
+
+  ${empty ? raw(`<div class="card" style="text-align:center;padding:40px 24px">
+    <div style="font-size:42px;margin-bottom:8px">📊</div>
+    <h3 class="cardTitle" style="margin-bottom:6px">${T('ยังไม่มีข้อมูลกิจกรรม', 'No activity yet')}</h3>
+    <p class="cardSub" style="max-width:420px;margin:0 auto">
+      ${T('ระบบเพิ่งเริ่มเก็บ events — ลองใช้ฟีเจอร์ต่างๆ (สลับแบรนด์ · เปลี่ยน Voice · ปั่นหัวข้อ · ใช้หัวข้อ) แล้วกลับมาดูใหม่ในไม่กี่นาที',
+         'Tracking just started — use a few features (switch brand, change voice, generate topics, use a topic), then refresh.')}
+    </p>
+  </div>`) : ''}
+
+  ${data && total > 0 ? raw(`
   <div class="grid g4" style="margin-bottom:20px">
-    ${raw([
-      { v: '124.8k', l_th: 'การเข้าถึง (Reach)', l_en: 'Reach',       delta: '+18.4%', color: '#FF7A1A', data: [22, 28, 24, 31, 36, 33, 42, 48, 52, 58, 64] },
-      { v: '8,420',  l_th: 'Engagement',          l_en: 'Engagement',  delta: '+22.1%', color: '#2563EB', data: [14, 18, 16, 20, 22, 24, 26, 28, 32, 36, 42] },
-      { v: '2,184',  l_th: 'คลิกที่ลิงก์',          l_en: 'Link clicks', delta: '+4.2%',  color: '#16A34A', data: [10, 12, 11, 14, 12, 15, 14, 17, 18, 19, 20] },
-      { v: '218',    l_th: 'โพสต์ทั้งหมด',         l_en: 'Total posts', delta: '-2.3%',  color: '#94A3B8', down: true, data: [22, 20, 24, 22, 26, 24, 22, 20, 22, 21, 20] },
+    ${[
+      { v: total.toLocaleString(),         l_th: 'กิจกรรมทั้งหมด',  l_en: 'Total events',  color: '#FF7A1A', icon: 'sparkles' },
+      { v: uniquePages.toLocaleString(),   l_th: 'หน้าที่เข้าใช้',   l_en: 'Unique pages',  color: '#2563EB', icon: 'home' },
+      { v: topEventEntry ? labelEvent(topEventEntry[0]) : '—',
+        sub: topEventEntry ? (topEventEntry[1] + ' ครั้ง') : '',
+        l_th: 'กิจกรรมที่ใช้บ่อยสุด', l_en: 'Top event',     color: '#16A34A', icon: 'trending' },
+      { v: topPageEntry ? labelPage(topPageEntry[0]) : '—',
+        sub: topPageEntry ? (topPageEntry[1] + ' ครั้ง') : '',
+        l_th: 'หน้าที่เข้ามากสุด',     l_en: 'Top page',      color: '#9F1239', icon: 'chart' },
     ].map((k) => `<div class="card">
-      <div class="split" style="align-items:flex-start">
-        <div>
-          <div class="metricLab">${t({ th: k.l_th, en: k.l_en })}</div>
-          <div class="metricVal" style="font-size:32px;margin-top:4px">${k.v}</div>
-          <div class="delta ${k.down ? 'down' : 'up'}">${I(k.down ? 'chev_down' : 'chev_up', 12)} ${k.delta}</div>
-        </div>
-        <div class="sparkBox">${sparkPath(k.data, k.color)}</div>
+      <div style="display:flex;align-items:center;gap:8px;color:${k.color};margin-bottom:6px">
+        ${I(k.icon, 14, k.color)}
+        <div class="metricLab">${t({ th: k.l_th, en: k.l_en })}</div>
       </div>
-    </div>`).join(''))}
+      <div class="metricVal" style="font-size:26px;line-height:1.2;color:var(--purple);word-break:break-word">${k.v}</div>
+      ${k.sub ? `<div class="micro" style="margin-top:4px;color:var(--muted)">${k.sub}</div>` : ''}
+    </div>`).join('')}
   </div>
 
-  <div class="grid" style="grid-template-columns:1.5fr 1fr;gap:18px;margin-bottom:18px">
-    <!-- bar chart -->
-    <div class="card">
-      <div class="cardHeader">
-        <div>
-          <h3 class="cardTitle">${raw(T('โพสต์ต่อวัน · แยกช่องทาง', 'Posts per day · by channel'))}</h3>
-          <p class="cardSub">${raw(T('1–11 พ.ย. 2026', 'Nov 1–11, 2026'))}</p>
-        </div>
-        <div style="display:flex;gap:12px;font-size:12px">
-          <span style="display:inline-flex;align-items:center;gap:6px"><span class="dot" style="background:#1877F2;width:8px;height:8px"></span>Facebook</span>
-          <span style="display:inline-flex;align-items:center;gap:6px"><span class="dot" style="background:#E1306C;width:8px;height:8px"></span>Instagram</span>
-          <span style="display:inline-flex;align-items:center;gap:6px"><span class="dot" style="background:#0F172A;width:8px;height:8px"></span>TikTok</span>
-        </div>
-      </div>
-      <div style="display:flex;align-items:flex-end;gap:14px;height:200px;padding:0 4px">
-        ${raw(days.map((d, i) => `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px">
-          <div style="flex:1;display:flex;align-items:flex-end;gap:3px;width:100%;justify-content:center">
-            <div style="width:10px;height:${(fb[i] / maxAll) * 100}%;background:#1877F2;border-radius:4px 4px 0 0"></div>
-            <div style="width:10px;height:${(ig[i] / maxAll) * 100}%;background:#E1306C;border-radius:4px 4px 0 0"></div>
-            <div style="width:10px;height:${(tt[i] / maxAll) * 100}%;background:#0F172A;border-radius:4px 4px 0 0"></div>
-          </div>
-          <span style="font-size:11px;color:${i === 10 ? 'var(--orange)' : 'var(--muted)'};font-weight:${i === 10 ? 800 : 500}">${d}</span>
-        </div>`).join(''))}
-      </div>
-    </div>
-
-    <!-- engagement by channel -->
-    <div class="card">
-      <h3 class="cardTitle" style="margin-bottom:16px">${raw(T('การมีส่วนร่วมตามช่องทาง', 'Engagement by channel'))}</h3>
-      ${raw([
-        { icon: 'facebook',  name: 'Facebook',  v: '4,820', pct: 57, color: '#1877F2' },
-        { icon: 'instagram', name: 'Instagram', v: '2,820', pct: 33, color: '#E1306C' },
-        { icon: 'tiktok',    name: 'TikTok',    v: '780',   pct: 10, color: '#0F172A' },
-      ].map((p) => `<div style="margin-bottom:14px">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-          ${I(p.icon, 18, p.color)}
-          <span style="font-size:13px;font-weight:700;color:var(--purple)">${p.name}</span>
-          <span style="margin-left:auto;font-size:14px;font-weight:800;color:var(--purple)">${p.v}</span>
-          <span style="font-size:11px;color:var(--muted);width:36px;text-align:right">${p.pct}%</span>
-        </div>
-        <div style="height:8px;background:var(--cream2);border-radius:99px;overflow:hidden"><div style="width:${p.pct}%;height:100%;background:${p.color};border-radius:99px"></div></div>
-      </div>`).join(''))}
-      <hr class="divider"/>
-      <h3 class="cardTitle" style="font-size:13.5px;margin-bottom:10px">${raw(T('ประเภทคอนเทนต์ที่ทำผลงานดี', 'Top-performing content types'))}</h3>
-      ${raw([
-        { l_th: 'Reels (Talking Avatar)',     l_en: 'Reels (Talking Avatar)',     v: '38%', color: '#FF7A1A' },
-        { l_th: 'อัลบั้ม / Carousel',          l_en: 'Album / Carousel',           v: '32%', color: '#2563EB' },
-        { l_th: 'รูปเดี่ยว + แคปยาว',          l_en: 'Single image + long caption', v: '22%', color: '#16A34A' },
-        { l_th: 'Story',                      l_en: 'Story',                       v: '8%',  color: '#94A3B8' },
-      ].map((t2) => `<div style="display:flex;align-items:center;gap:10px;padding:6px 0;font-size:13px">
-        <span class="dot" style="background:${t2.color};width:8px;height:8px"></span>
-        <span style="flex:1;color:var(--ink)">${t({ th: t2.l_th, en: t2.l_en })}</span>
-        <b style="color:var(--purple)">${t2.v}</b>
-      </div>`).join(''))}
-    </div>
-  </div>
-
-  <!-- top posts -->
-  <div class="card">
+  <!-- Daily bar chart -->
+  <div class="card" style="margin-bottom:18px">
     <div class="cardHeader">
-      <h3 class="cardTitle">${raw(T('โพสต์ Top 5 — Engagement สูงสุด', 'Top 5 posts — highest engagement'))}</h3>
-      <button class="btn ghost sm">${raw(T('ดูทั้งหมด', 'View all'))}</button>
+      <div>
+        <h3 class="cardTitle">${T('กิจกรรมรายวัน', 'Events per day')}</h3>
+        <p class="cardSub">${T(days + ' วันล่าสุด', 'Last ' + days + ' days')}</p>
+      </div>
     </div>
-    <div style="display:flex;flex-direction:column;gap:8px">
-      ${raw([
-        { rank: 1, topic_th: 'รีวิวจริง: ผิวบอบบาง 10 ปี เจอตัวช่วย',          topic_en: 'Real review: 10 years sensitive skin, finally fixed', ch: 'facebook',  reach: '38.2k', eng: '4.2k', clicks: '892' },
-        { rank: 2, topic_th: 'อัลบั้ม Before/After 7 วัน Rose Repair',         topic_en: 'Before/After album · 7 days of Rose Repair',           ch: 'instagram', reach: '24.1k', eng: '2.8k', clicks: '512' },
-        { rank: 3, topic_th: 'Reels: คุยกับน้องโรส — ส่วนผสมลับใน 30 วิ',     topic_en: 'Reels: Rose talks · 30-sec secret ingredient',         ch: 'tiktok',    reach: '21.6k', eng: '2.1k', clicks: '—', kind: 'avatar' },
-        { rank: 4, topic_th: '11.11 Marine Collagen ลด 50%',                topic_en: '11.11 Marine Collagen 50% off',                        ch: 'facebook',  reach: '19.4k', eng: '1.8k', clicks: '724' },
-        { rank: 5, topic_th: 'Toner Pad · เคล็ดลับใช้ก่อนทาครีม',             topic_en: 'Toner Pad · the secret before cream',                  ch: 'instagram', reach: '14.2k', eng: '1.2k', clicks: '218' },
-      ].map((p) => `<div style="display:grid;grid-template-columns:40px 1fr 90px 90px 90px;align-items:center;gap:14px;padding:12px;border-radius:12px;background:var(--cream2);border:1px solid var(--line)">
-        <div style="font-size:24px;font-weight:800;color:var(--muted);letter-spacing:-.02em">${p.rank}</div>
-        <div style="display:flex;align-items:center;gap:10px;min-width:0">
-          ${I(p.ch, 18, p.ch === 'facebook' ? '#1877F2' : p.ch === 'instagram' ? '#E1306C' : '#0F172A')}
-          <div style="min-width:0">
-            <div style="font-size:13px;font-weight:600;color:var(--purple);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t({ th: p.topic_th, en: p.topic_en })} ${p.kind === 'avatar' ? '<span class="pill blue" style="margin-left:6px;height:18px;font-size:10px">Avatar</span>' : ''}</div>
+    <div style="display:flex;align-items:flex-end;gap:6px;height:180px;padding:8px 4px;overflow-x:auto">
+      ${dayKeys.map((k, i) => {
+        const v = dayValues[i];
+        const h = (v / maxDay) * 100;
+        const isLast = (i === dayKeys.length - 1);
+        return `<div style="flex:1;min-width:14px;display:flex;flex-direction:column;align-items:center;gap:4px">
+          <div class="micro" style="font-weight:700;color:${isLast ? 'var(--orange)' : 'var(--muted)'}">${v || ''}</div>
+          <div style="flex:1;width:100%;display:flex;align-items:flex-end">
+            <div style="width:100%;height:${h}%;background:linear-gradient(180deg, var(--orange), #F97316);border-radius:4px 4px 0 0;min-height:${v > 0 ? 2 : 0}px"></div>
           </div>
-        </div>
-        ${[['Reach', p.reach], ['Engagement', p.eng], ['Clicks', p.clicks]].map(([l, v]) => `<div style="text-align:center"><div style="font-size:14px;font-weight:800;color:var(--purple)">${v}</div><div style="font-size:10px;color:var(--muted)">${l}</div></div>`).join('')}
-      </div>`).join(''))}
+          <span style="font-size:10px;color:${isLast ? 'var(--orange)' : 'var(--muted)'};font-weight:${isLast ? 800 : 500};white-space:nowrap">${k.slice(5)}</span>
+        </div>`;
+      }).join('')}
     </div>
-  </div>`;
+  </div>
+
+  <!-- Top features + recent activity -->
+  <div class="grid" style="grid-template-columns:1fr 1fr;gap:18px">
+    <div class="card">
+      <h3 class="cardTitle" style="margin-bottom:14px">${T('ฟีเจอร์ที่ใช้บ่อยสุด', 'Most used features')}</h3>
+      ${topEntries(byName, 8).map(([name, count]) => {
+        const pct = Math.round((count / total) * 100);
+        return `<div style="margin-bottom:10px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+            <span style="font-size:12.5px;color:var(--purple);font-weight:700;flex:1">${labelEvent(name)}</span>
+            <span style="font-size:13px;font-weight:800;color:var(--purple)">${count}</span>
+            <span style="font-size:10.5px;color:var(--muted);width:38px;text-align:right">${pct}%</span>
+          </div>
+          <div style="height:6px;background:var(--cream2);border-radius:99px;overflow:hidden">
+            <div style="width:${pct}%;height:100%;background:var(--orange);border-radius:99px"></div>
+          </div>
+        </div>`;
+      }).join('')}
+      ${topEntries(byName, 8).length === 0 ? '<div class="micro" style="color:var(--muted);text-align:center;padding:20px">—</div>' : ''}
+    </div>
+
+    <div class="card">
+      <h3 class="cardTitle" style="margin-bottom:14px">${T('กิจกรรมล่าสุด', 'Recent activity')}</h3>
+      <div style="display:flex;flex-direction:column;gap:8px;max-height:340px;overflow-y:auto">
+        ${(recent || []).slice(0, 30).map((ev) => `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;background:var(--cream2);font-size:12px">
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:700;color:var(--purple);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${labelEvent(ev.name)}</div>
+            <div class="micro" style="color:var(--muted)">${ev.page ? labelPage(ev.page) : ''}</div>
+          </div>
+          <span class="micro" style="color:var(--muted);white-space:nowrap">${relativeTime(ev.created_at)}</span>
+        </div>`).join('')}
+        ${(!recent || recent.length === 0) ? '<div class="micro" style="color:var(--muted);text-align:center;padding:20px">—</div>' : ''}
+      </div>
+    </div>
+  </div>
+  `) : ''}
+  `;
 }

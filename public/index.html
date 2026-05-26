@@ -1139,6 +1139,7 @@ document.addEventListener('click', (e) => {
         window.__ppDirtyFields[_vab.id] = window.__ppDirtyFields[_vab.id] || {};
         window.__ppDirtyFields[_vab.id].voice = true;
       } catch(_) {}
+      try { window.PP && window.PP.track && window.PP.track('voice_changed', { brandId: _vab.id, voice: _vab.voice.slice(0, 3) }); } catch(_){}
       console.log('[voice] mutated brand', _vab.id, '· _vab.voice =', JSON.stringify(_vab.voice));
       try {
         localStorage.setItem('postpost_brands', JSON.stringify(BRANDS));
@@ -1157,6 +1158,7 @@ document.addEventListener('click', (e) => {
   if (brandEl) {
     e.preventDefault();
     state.brand = brandEl.dataset.brand;
+    try { window.PP && window.PP.track && window.PP.track('brand_switched', { brandId: state.brand }); } catch(_){}
     // Brand changed → reset the cached Pexels bg so the avatar preview re-fetches one
     // matching the new brand's bizType (e.g. mystical for ดูดวง, pink for beauty)
     state.avatarPreviewBgUrl = '';
@@ -1225,6 +1227,7 @@ document.addEventListener('click', (e) => {
         window.__ppDirtyFields[_aab.id] = window.__ppDirtyFields[_aab.id] || {};
         window.__ppDirtyFields[_aab.id].archetype = true;
       } catch(_) {}
+      try { window.PP && window.PP.track && window.PP.track('archetype_changed', { brandId: _aab.id, archetype: _aab.archetype }); } catch(_){}
       console.log('[archetype] mutated brand', _aab.id, '· _aab.archetype =', _aab.archetype);
       try {
         localStorage.setItem('postpost_brands', JSON.stringify(BRANDS));
@@ -2050,6 +2053,7 @@ render();
         TOPICS = j.topics;
         // Mirror reassignment to module's array (Topic Bank page reads it).
         try { window.PP && window.PP.setTopics && window.PP.setTopics(TOPICS); } catch(_){}
+        try { window.PP && window.PP.track && window.PP.track('topics_generated', { count: j.topics.length, brandId: state.brand }); } catch(_){}
         state.topicFilter = 'all';
         var _tb = BRANDS.filter(function(b){ return b.id===state.brand; })[0];
         if (_tb) { _tb.topics = TOPICS; saveBrands(); }
@@ -2068,7 +2072,10 @@ render();
     if (ut) {
       e.preventDefault();
       var tp = TOPICS[parseInt(ut.dataset.usetopic,10)];
-      if (tp) state.selectedTopic = (state.lang==='th' ? tp.th : tp.en);
+      if (tp) {
+        state.selectedTopic = (state.lang==='th' ? tp.th : tp.en);
+        try { window.PP && window.PP.track && window.PP.track('topic_used', { kind: tp.kind || '', f: tp.f || '' }); } catch(_){}
+      }
       state.page = 'caption';
       render();
       toast(state.lang==='th'?'นำหัวข้อมาที่หน้าสร้างคอนเทนต์แล้ว':'Topic loaded into the content page','success');
@@ -2081,6 +2088,13 @@ render();
       if (!Array.isArray(state.topicGoals)) state.topicGoals = ['sales','awareness'];
       var k = gp.dataset.topicgoal, gi = state.topicGoals.indexOf(k);
       if (gi >= 0) state.topicGoals.splice(gi,1); else state.topicGoals.push(k);
+      render();
+    }
+    // Analytics page — time-window switcher (7 / 30 / 90 days).
+    var adEl = e.target.closest('[data-analytics-days]');
+    if (adEl) {
+      e.preventDefault();
+      state.analyticsDays = parseInt(adEl.dataset.analyticsDays, 10) || 7;
       render();
     }
   });
@@ -5283,7 +5297,8 @@ render();
     + '[data-gentopics],[data-topicgoal],'
     + '[data-saveproduct],[data-newimgclear],[data-newimg],[data-proddelete],[data-usetopic],[data-genall],[data-savedraft],[data-savevideodraft],[data-saveavatardraft],[data-editdraft],[data-deletedraft],[data-schedule],[data-avatarscript],[data-veogen],[data-newavatar],[data-rmbgavatar],'
     + '[data-uploadavatar],[data-uploadref],[data-clearref],[data-pickrefproduct],[data-refclose],[data-refpick],[data-genvideoprompt],[data-delavatar],[data-addtoday],[data-pickdraft],[data-pickdraftclose],[data-pickdraftgo],[data-tts],[data-pickfbpage],[data-avatarvideo],[data-pastevideourl],[data-pastelipsyncurl],[data-clearlipsyncurl],[data-hflipsync],[data-locallocaltoggle],[data-bgscene],[data-bgpick],[data-bgsearch],[data-bgsearchclear],[data-bginterval],[data-clipdur],[data-avatarabort],[data-genstoryboard],[data-slottoggle],[data-slotsearch],[data-slotpickurl],[data-mobilemenu],[data-mobilebackdrop],[data-profilemenu],[data-profileview],[data-profileclose],[data-signout],'
-    + '[data-previewaspect],[data-previewidx],[data-downloadpng]';
+    + '[data-previewaspect],[data-previewidx],[data-downloadpng],'
+    + '[data-analytics-days]';
   document.addEventListener('click', function(e){
     var b = e.target.closest('button, a');
     if (!b) return;
