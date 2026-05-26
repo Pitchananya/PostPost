@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>นโยบายความเป็นส่วนตัว — PostPost</title>
+<style>
+body{font-family:system-ui,-apple-system,'Segoe UI','Prompt',sans-serif;max-width:780px;margin:auto;padding:40px 24px 60px;color:#1E1B3A;background:#FFF8F0;line-height:1.7}
+h1{font-size:28px;color:#6B21A8;margin-bottom:6px}
+h2{font-size:18px;color:#6B21A8;margin-top:32px;margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid #FFEDD5}
+h3{font-size:14px;color:#7C7393;margin-top:18px;margin-bottom:4px}
+p,li{font-size:14.5px;color:#3F3A4F}
+ul{padding-left:22px}
+.meta{color:#7C7393;font-size:12.5px;margin-bottom:24px}
+.box{background:#fff;border:1px solid #FFEDD5;border-radius:12px;padding:16px 20px;margin:18px 0;font-size:13.5px}
+a{color:#FF7A1A;text-decoration:none}
+a:hover{text-decoration:underline}
+.small{font-size:12px;color:#7C7393}
+</style>
+</head>
+<body>
+
+<h1>นโยบายความเป็นส่วนตัว · Privacy Policy</h1>
+<p class="meta">มีผลตั้งแต่: 26 พฤษภาคม 2026 · ผู้ดูแลข้อมูล: PostPost · ติดต่อ: <a href="mailto:support@postpost.app">support@postpost.app</a></p>
+
+<div class="box">
+PostPost ("เรา") ให้ความสำคัญกับความเป็นส่วนตัวของคุณ นโยบายนี้อธิบายว่าเราเก็บข้อมูลอะไร ใช้ทำอะไร และคุณมีสิทธิอะไรบ้างเกี่ยวกับข้อมูลของคุณ
+</div>
+
+<h2>1. ข้อมูลที่เราเก็บ</h2>
+
+<h3>1.1 ข้อมูลบัญชี (Account data)</h3>
+<ul>
+  <li>อีเมล + ชื่อ ที่คุณใช้สมัครหรือ login</li>
+  <li>รหัสผ่าน (เก็บแบบ hash — เราไม่เห็น plaintext)</li>
+  <li>workspace / brand profile ที่คุณตั้งขึ้น (ชื่อ, คำอธิบาย, voice, archetype)</li>
+</ul>
+
+<h3>1.2 ข้อมูลจากบัญชีโซเชียลที่คุณเชื่อม</h3>
+<ul>
+  <li><b>Facebook Page:</b> Page ID, Page Access Token, ชื่อเพจ, จำนวน Followers (อ่านจาก Graph API หลังคุณกด Connect)</li>
+  <li><b>Instagram Business:</b> Instagram Business Account ID, username (อ่านจาก Graph API ผ่าน FB Page ที่ผูกอยู่)</li>
+  <li><b>TikTok:</b> Open ID, Access Token, Refresh Token (อ่านจาก TikTok API หลังคุณกด Connect)</li>
+</ul>
+<p>เราใช้ token พวกนี้เพื่อโพสต์เนื้อหาที่คุณสร้างขึ้น<b>เมื่อคุณกดเผยแพร่</b>เท่านั้น — เราไม่อ่านข้อความส่วนตัว ไม่ดูเพื่อน ไม่ดูคอมเมนต์เพื่อขายข้อมูล</p>
+
+<h3>1.3 ข้อมูลการใช้งาน (Usage data)</h3>
+<ul>
+  <li>เหตุการณ์ในแอป (page view, ปุ่มที่กด) เพื่อปรับปรุง UI</li>
+  <li>Error log (เมื่อเกิด crash) เพื่อแก้บั๊ก</li>
+  <li>เก็บไว้ 90 วัน แล้วลบอัตโนมัติ</li>
+</ul>
+
+<h3>1.4 เนื้อหาที่คุณสร้าง (Content data)</h3>
+<ul>
+  <li>caption / hook / hashtag / รูป / วิดีโอ ที่ AI ช่วยสร้างให้คุณ</li>
+  <li>สินค้าที่ดึงจาก Shopee/Lazada/TikTok Shop</li>
+  <li>เก็บไว้ใน workspace ของคุณเอง — workspace อื่นมองไม่เห็น (multi-tenant isolation)</li>
+</ul>
+
+<h2>2. เราใช้ข้อมูลทำอะไร</h2>
+<ul>
+  <li><b>โพสต์อัตโนมัติ</b> — เผยแพร่เนื้อหาที่คุณสั่งไปยังเพจ FB/IG/TikTok ที่คุณเชื่อม</li>
+  <li><b>AI Content Generation</b> — ส่ง brand profile + topic เข้า AI model (Claude, Gemini, fal.ai) เพื่อสร้างข้อความ/รูป/วิดีโอ</li>
+  <li><b>Analytics</b> — แสดงสถิติการโพสต์ของคุณ (engagement, reach) ดึงจาก Facebook Graph API</li>
+  <li><b>การปรับปรุงผลิตภัณฑ์</b> — วิเคราะห์ usage pattern (ไม่ระบุตัวบุคคล) เพื่อหา feature ที่ควรพัฒนา</li>
+</ul>
+
+<h2>3. เราแชร์ข้อมูลกับใคร</h2>
+<p><b>เราไม่ขาย</b>ข้อมูลคุณให้ใคร แต่จำเป็นต้องส่งบางข้อมูลให้ third party เพื่อให้บริการทำงานได้:</p>
+<ul>
+  <li><b>Meta (Facebook, Instagram)</b> — token + content เพื่อโพสต์ตามที่คุณสั่ง</li>
+  <li><b>TikTok</b> — token + video เพื่อโพสต์</li>
+  <li><b>OpenAI / Anthropic / Google (Gemini) / fal.ai</b> — text/image prompts เพื่อ AI generation</li>
+  <li><b>Supabase</b> — database hosting (EU region)</li>
+  <li><b>Vercel</b> — application hosting</li>
+</ul>
+
+<h2>4. การเก็บรักษาและความปลอดภัย</h2>
+<ul>
+  <li>Token ของ FB/IG/TT เก็บใน database ที่ encrypt at-rest (Supabase)</li>
+  <li>การเชื่อมต่อทั้งหมดผ่าน HTTPS</li>
+  <li>รหัสผ่าน hash ด้วย bcrypt</li>
+  <li>เข้าถึง database ผ่าน service role key เท่านั้น — staff ของเราไม่เห็น raw token</li>
+</ul>
+
+<h2>5. สิทธิของคุณ</h2>
+<ul>
+  <li><b>ดูข้อมูล</b> — ขอ export ข้อมูล workspace ทั้งหมดได้ผ่าน <a href="mailto:support@postpost.app">support@postpost.app</a></li>
+  <li><b>แก้ไข</b> — แก้ใน UI ของแอปได้เอง หรือขอผ่าน support</li>
+  <li><b>ลบ</b> — ลบ workspace + ทุกข้อมูลที่เกี่ยวข้องได้ผ่าน Settings → Delete Account
+    <ul><li>หรือใช้ Facebook Data Deletion: <a href="/api/facebook/data-deletion">/api/facebook/data-deletion</a></li></ul>
+  </li>
+  <li><b>ยกเลิกการเชื่อมต่อ FB/IG/TT</b> — กดปุ่ม "ยกเลิก" ที่ Profile page Token จะถูกลบทันที</li>
+</ul>
+
+<h2>6. Cookies</h2>
+<p>เราใช้ cookies เฉพาะที่จำเป็น:</p>
+<ul>
+  <li><b>postpost_token</b> — JWT ของ session ของคุณ (httpOnly: false เพราะ frontend ต้องอ่านได้)</li>
+  <li><b>pp_session_id</b> — ID ของ session สำหรับ analytics ไม่ระบุตัวบุคคล</li>
+</ul>
+<p>เราไม่ใช้ third-party tracking cookies (Google Analytics, Facebook Pixel ฯลฯ)</p>
+
+<h2>7. ผู้ใช้อายุต่ำกว่า 13</h2>
+<p>PostPost ไม่ให้บริการกับเด็กอายุต่ำกว่า 13 ปี ถ้าเราตรวจพบว่ามี user ที่อายุน้อยกว่านี้ บัญชีจะถูกลบทันที</p>
+
+<h2>8. การเปลี่ยนแปลงนโยบาย</h2>
+<p>ถ้านโยบายนี้เปลี่ยนแปลงสำคัญ เราจะแจ้งคุณผ่านอีเมล + แสดง notice ในแอป ก่อนมีผล 30 วัน</p>
+
+<h2>9. ติดต่อเรา</h2>
+<p>คำถาม / ขอใช้สิทธิ / แจ้งปัญหา: <a href="mailto:support@postpost.app">support@postpost.app</a></p>
+
+<p class="small" style="margin-top:40px;text-align:center">
+<a href="/">← กลับหน้าแรก</a> · <a href="/terms.html">เงื่อนไขการใช้งาน</a>
+</p>
+
+</body>
+</html>

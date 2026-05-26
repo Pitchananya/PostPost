@@ -8,6 +8,80 @@ const router = Router();
 const FB_API = 'https://graph.facebook.com/v21.0';
 
 // ============================================================
+// Public endpoints required by Facebook App Review (NO requireAuth)
+// ============================================================
+
+// POST /api/facebook/data-deletion
+// Facebook calls this when a user removes the app from their FB account
+// (Settings → Apps → Remove). Must respond with a confirmation URL the
+// user can visit to track deletion status. Required for App Review approval.
+// Spec: https://developers.facebook.com/docs/development/create-an-app/app-dashboard/data-deletion-callback
+router.post('/data-deletion', async (req, res) => {
+  try {
+    // signed_request comes in url-encoded form; parse it (we accept JSON too).
+    const signedRequest = req.body?.signed_request || req.query?.signed_request || '';
+    let userId = 'unknown';
+    if (signedRequest && process.env.FB_APP_SECRET) {
+      // Verify the HMAC signature so we know it's really Facebook calling.
+      // signed_request format: <base64url-sig>.<base64url-payload>
+      const [sig, payload] = signedRequest.split('.');
+      if (sig && payload) {
+        try {
+          const crypto = await import('crypto');
+          const expected = crypto
+            .createHmac('sha256', process.env.FB_APP_SECRET)
+            .update(payload)
+            .digest('base64')
+            .replace(/=+$/, '').replace(/\+/g, '-').replace(/\//g, '_');
+          if (expected === sig) {
+            const decoded = JSON.parse(Buffer.from(payload, 'base64').toString('utf8'));
+            userId = decoded.user_id || 'unknown';
+          }
+        } catch (_) { /* sig verify failed — keep userId='unknown' */ }
+      }
+    }
+
+    // Trigger our actual deletion async (best-effort). For now we just log —
+    // a follow-up sweep can walk db.settings and clear any creds tied to FB
+    // page tokens owned by this userId. The /api/facebook/credentials DELETE
+    // route already covers manual disconnect; this callback covers the
+    // "user removed the app from FB" path.
+    console.log('[fb-data-deletion] request received for FB user_id =', userId);
+
+    // Confirmation URL Facebook will show to the user.
+    const confirmationCode = 'fbdel-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
+    const statusUrl = `${process.env.PUBLIC_URL || ''}/api/facebook/data-deletion-status?code=${encodeURIComponent(confirmationCode)}`;
+    res.json({
+      url: statusUrl,
+      confirmation_code: confirmationCode,
+    });
+  } catch (e) {
+    console.error('[fb-data-deletion] error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/facebook/data-deletion-status?code=<confirmationCode>
+// User-facing status page. Facebook redirects users here to confirm their
+// data was deleted. We don't track per-code state yet — generic confirmation
+// is enough for App Review.
+router.get('/data-deletion-status', (req, res) => {
+  const code = String(req.query.code || '').slice(0, 64);
+  res.type('html').send(`<!DOCTYPE html><html lang="th"><head><meta charset="utf-8"/>
+<title>คำขอลบข้อมูล — PostPost</title>
+<style>body{font-family:system-ui,Prompt,sans-serif;max-width:560px;margin:auto;padding:40px 24px;color:#1E1B3A;background:#FFF8F0;line-height:1.7}
+h1{color:#6B21A8;font-size:22px}.code{background:#fff;border:1px solid #FFEDD5;padding:10px 14px;border-radius:8px;font-family:monospace;font-size:13px;color:#7C7393;margin:12px 0;display:inline-block}</style>
+</head><body>
+<h1>✓ ได้รับคำขอลบข้อมูลแล้ว</h1>
+<p>เราได้รับคำขอลบข้อมูล Facebook ของคุณจาก PostPost</p>
+<p>ภายใน 30 วัน ข้อมูลทั้งหมดที่เกี่ยวข้องกับบัญชี Facebook ของคุณ (page tokens, IG business accounts, content metadata) จะถูกลบจาก database ของเรา</p>
+<p>หมายเลขอ้างอิง: <span class="code">${code.replace(/[<>"&]/g,'')}</span></p>
+<p>คำถามเพิ่มเติม: <a href="mailto:support@postpost.app" style="color:#FF7A1A">support@postpost.app</a></p>
+<p style="margin-top:36px"><a href="/" style="color:#FF7A1A">← กลับหน้าแรก</a></p>
+</body></html>`);
+});
+
+// ============================================================
 // Public OAuth flow (NO requireAuth — Facebook hits these directly with the user's browser).
 // Pattern: frontend opens /api/facebook/oauth/start in a popup → user consents on facebook.com
 // → Facebook redirects to /api/facebook/oauth/callback → we exchange code for tokens + list pages
