@@ -93,21 +93,13 @@ export function pageAvatar() {
     { id: 'fal-ai/bytedance/omnihuman/v1.5',        name: 'OmniHuman v1.5',   price: '$0.50', desc_th: 'แนะนำ · หน้า+ตัว+มือ เหมือนคนพูดจริง', desc_en: 'Recommended · full body realistic talking', badge: 'BEST' },
   ];
 
-  // ── HF Spaces (one-click free) and manual-web catalogs ──
+  // ── HF Spaces (one-click free) catalog ──
   const oneClickHfModels = [
     { kind: 'joyhallo',  emoji: '🌏', name: 'JoyHallo',     stars: 5, speed: '🐢',     badge: { txt: 'BEST FOR THAI', bg: '#DC2626' }, descTh: 'Hallo + Chinese fine-tuning · ดีที่สุดสำหรับเสียงไทย · diffusion-based',  descEn: 'Hallo + Chinese fine-tuning · BEST for Thai voice · diffusion-based' },
     { kind: 'musetalk',  emoji: '⚡', name: 'MuseTalk',     stars: 4, speed: '⚡⚡⚡', badge: { txt: 'FASTEST',       bg: '#10B981' }, descTh: 'Tencent · real-time · Chinese-trained · เร็วสุด (~1-3 นาที)',           descEn: 'Tencent · real-time · Chinese-trained · fastest (~1-3 min)' },
     { kind: 'latent',    emoji: '⭐', name: 'LatentSync 1.5', stars: 4, speed: '⚡',    badge: { txt: 'BALANCED',      bg: '#7C3AED' }, descTh: 'ByteDance · คุณภาพดี · queue สั้น · Chinese training',                  descEn: 'ByteDance · solid quality · short queue · Chinese training' },
     { kind: 'hallo3',    emoji: '✨', name: 'Hallo3',       stars: 5, speed: '🐢🐢', badge: { txt: 'TOP QUALITY',   bg: '#9F1239' }, descTh: 'Diffusion · expression รายละเอียดสูงสุด · ช้า 15-30 นาที',              descEn: 'Diffusion · richest expression · slow 15-30 min' },
     { kind: 'wav2lip',   emoji: '🤗', name: 'Wav2Lip',      stars: 2, speed: '⚡⚡⚡', badge: { txt: 'QUICK',         bg: '#0EA5E9' }, descTh: 'เร็วมาก · ปากอย่างเดียว (ไม่ทั้งหน้า)',                                 descEn: 'Very fast · mouth-only (no face)' },
-  ];
-  const manualWebModels = [
-    { emoji: '🌟', name: 'Hedra',        url: 'https://www.hedra.com/app',                                  badge: { txt: '30 FREE/MO', bg: '#10B981' }, descTh: 'Web app · UI ง่ายสุด · 30 คลิป/เดือน · คุณภาพดีมาก',     descEn: 'Web app · easiest UI · 30 clips/mo · great quality' },
-    { emoji: '🎭', name: 'AniPortrait',  url: 'https://huggingface.co/spaces/ZJYang/AniPortrait_official',  badge: { txt: 'FREE',       bg: '#10B981' }, descTh: 'Tencent · ขยับทั้งใบหน้า + คาง + คอ',                  descEn: 'Tencent · animates full face + chin + neck' },
-    { emoji: '🎪', name: 'EchoMimic V2', url: 'https://huggingface.co/spaces/BadToBest/EchoMimicV2',        badge: { txt: 'FREE',       bg: '#10B981' }, descTh: 'Alibaba · ขยับครึ่งตัว + มือ (มี gestures)',           descEn: 'Alibaba · half-body + hand gestures' },
-    { emoji: '😢', name: 'SadTalker',    url: 'https://huggingface.co/spaces/vinthony/SadTalker',           badge: { txt: 'FREE',       bg: '#10B981' }, descTh: 'ปาก + หน้าเอียงนิดๆ · queue บางครั้งยาว',              descEn: 'Mouth + slight head tilt · queue can be slow' },
-    { emoji: '💧', name: 'Replicate',    url: 'https://replicate.com/zsxkib/latent-sync-1.5',               badge: { txt: '$5 TRIAL',   bg: '#F59E0B' }, descTh: '$5 free credit แรกสมัคร · API-style · เร็ว reliable',  descEn: '$5 free signup credit · API-style · fast reliable' },
-    { emoji: '🎬', name: 'D-ID',         url: 'https://studio.d-id.com/',                                   badge: { txt: '14d TRIAL',  bg: '#F59E0B' }, descTh: 'Premium · ฟรี 14 วันแรก · UI โปร',                    descEn: 'Premium · free 14 days · pro UI' },
   ];
 
   // โหมด 'free' (audio-reactive): แค่ note สั้นๆ บอกข้อจำกัด — ไม่ต้องซ่อนตัวเลือกฟรีจริงไว้ที่นี่อีก
@@ -149,28 +141,6 @@ export function pageAvatar() {
       </div>
       ${!state.ttsAudio ? `<div style="margin-top:10px;font-size:10.5px;color:#92400E;background:#FEF3C7;border:1px solid #FDE68A;border-radius:8px;padding:7px 10px;line-height:1.45">${T('💡 ยังไม่มีเสียง TTS? — ปุ่ม "ใช้เลย" จะสร้างให้อัตโนมัติก่อน (ต้องมีสคริปต์ที่ Step 5)','💡 No TTS yet? — Go button will auto-generate it first (needs a script at Step 5)')}</div>` : ''}
     </div>` : '';
-
-  // Manual web tools — collapsible เล็กๆ แสดงตลอด (ไม่ผูกกับโหมด)
-  const manualWebCollapsible = `
-    <details style="margin-top:14px;padding-top:14px;border-top:1px dashed var(--line)">
-      <summary style="font-size:12px;font-weight:700;color:var(--muted);cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;padding:4px 0">
-        🌐 ${T('ทำเองในเว็บอื่น (Hedra, D-ID, ฯลฯ)', 'Manual web tools (Hedra, D-ID, etc.)')}
-        <span style="margin-left:auto;background:var(--cream2);color:var(--muted);font-size:9px;padding:1px 7px;border-radius:99px;font-weight:800">${manualWebModels.length}</span>
-      </summary>
-      <div style="margin-top:10px;display:flex;flex-direction:column;gap:6px">
-        ${manualWebModels.map((m) => `<a href="${m.url}" target="_blank" rel="noopener" style="background:#fff;border-radius:10px;padding:9px 12px;border:1px solid #E5E7EB;display:flex;align-items:center;gap:10px;text-decoration:none;color:inherit">
-          <div style="font-size:20px;line-height:1;flex-shrink:0">${m.emoji}</div>
-          <div style="flex:1;min-width:0">
-            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:2px">
-              <b style="color:#374151;font-size:12px">${m.name}</b>
-              <span style="background:${m.badge.bg};color:#fff;font-size:8.5px;padding:1px 6px;border-radius:99px;font-weight:800;letter-spacing:.03em">${m.badge.txt}</span>
-            </div>
-            <div style="font-size:10.5px;color:#6B7280;line-height:1.4">${t({ th: m.descTh, en: m.descEn })}</div>
-          </div>
-          <span style="color:#9CA3AF;font-size:14px;flex-shrink:0">↗</span>
-        </a>`).join('')}
-      </div>
-    </details>`;
 
   // Paste-URL block — ใช้ได้ทั้ง 'hfree' (รับ URL จาก HF) และ 'real' (รับ URL จาก fal.ai playground)
   const pasteUrlBlock = (state.avatarMode === 'hfree' || state.avatarMode === 'real') ? `
@@ -251,7 +221,6 @@ export function pageAvatar() {
     ${modeHfreeSubpicker}
     ${modeRealSubpicker}
     ${pasteUrlBlock}
-    ${manualWebCollapsible}
   </div>`;
 
   // ── Step 2: Presenter gallery (built-ins + custom) + upload tile ────

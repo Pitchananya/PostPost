@@ -1130,6 +1130,15 @@ document.addEventListener('click', (e) => {
     const _vab = BRANDS.find(b => b.id === state.brand);
     if (_vab) {
       _vab.voice = state.voice.slice();
+      // Mark this brand's voice as user-touched this session so cloudPullOnBoot
+      // (which may complete AFTER this click) doesn't overwrite it with stale
+      // cloud data. Without this guard the user's click can be silently
+      // reverted by a slow pull that started before the click landed.
+      try {
+        window.__ppDirtyFields = window.__ppDirtyFields || {};
+        window.__ppDirtyFields[_vab.id] = window.__ppDirtyFields[_vab.id] || {};
+        window.__ppDirtyFields[_vab.id].voice = true;
+      } catch(_) {}
       console.log('[voice] mutated brand', _vab.id, '· _vab.voice =', JSON.stringify(_vab.voice));
       try {
         localStorage.setItem('postpost_brands', JSON.stringify(BRANDS));
@@ -1201,6 +1210,12 @@ document.addEventListener('click', (e) => {
     const _aab = BRANDS.find(b => b.id === state.brand);
     if (_aab) {
       _aab.archetype = state.archetype;
+      // Same dirty-field guard as the voice handler — see comment there.
+      try {
+        window.__ppDirtyFields = window.__ppDirtyFields || {};
+        window.__ppDirtyFields[_aab.id] = window.__ppDirtyFields[_aab.id] || {};
+        window.__ppDirtyFields[_aab.id].archetype = true;
+      } catch(_) {}
       console.log('[archetype] mutated brand', _aab.id, '· _aab.archetype =', _aab.archetype);
       try {
         localStorage.setItem('postpost_brands', JSON.stringify(BRANDS));
@@ -4805,13 +4820,23 @@ render();
       var localSnapshot = BRANDS.map(function(b){ return b.id + ':v=' + JSON.stringify(b.voice||[]) + ',a=' + (b.archetype||''); }).join(' | ');
       console.log('[cloud-pull] LOCAL  state voice/archetype snapshot:', localSnapshot);
       // Merge brands by id — preserve local-only brands (cloud may not have them yet)
-      // and keep cloud version when both exist (cloud is the canonical source)
+      // and keep cloud version when both exist (cloud is the canonical source).
+      // EXCEPTION: if the user has already touched a field this session
+      // (window.__ppDirtyFields), preserve the local value for that field
+      // — otherwise a slow cloudPull can revert clicks the user just made.
       if (Array.isArray(s.brands) && s.brands.length) {
         var byId = {};
         BRANDS.forEach(function(b){ byId[b.id] = b; });
+        var dirtyFields = (window.__ppDirtyFields) || {};
         s.brands.forEach(function(b){
           var n = normalizeBrand(b);
-          byId[n.id] = n;                          // cloud overrides local for shared ids
+          var local = byId[n.id];
+          var df = dirtyFields[n.id] || {};
+          if (local) {
+            if (df.voice) n.voice = Array.isArray(local.voice) ? local.voice.slice() : [];
+            if (df.archetype) n.archetype = local.archetype || '';
+          }
+          byId[n.id] = n;
         });
         BRANDS.length = 0;
         Object.values(byId).forEach(function(b){ BRANDS.push(b); });
@@ -4835,6 +4860,33 @@ render();
       // Active brand
       if (s.activeBrandId && BRANDS.some(function(b){ return b.id===s.activeBrandId; })) {
         state.brand = s.activeBrandId;
+      }
+      // ──────────────────────────────────────────────────────────────
+      // CRITICAL: re-derive state.voice / state.archetype / state.brandDesc
+      // from the cloud-merged active brand. Without this, state stays at
+      // the pre-pull boot snapshot (often the defaults) while BRANDS now
+      // has the cloud values. Any later save (saveBrandProfile, voice/
+      // archetype click handler that happens to fire when state is still
+      // stale, etc.) writes state → brand, pushing DEFAULTS to cloud and
+      // wiping the user's real values. Symptom: voice/archetype "doesn't
+      // save" after refresh because each refresh re-corrupts the cloud.
+      // ──────────────────────────────────────────────────────────────
+      var _cpActive = BRANDS.filter(function(b){ return b.id === state.brand; })[0];
+      if (_cpActive) {
+        var _cpDirty = (window.__ppDirtyFields && window.__ppDirtyFields[_cpActive.id]) || {};
+        // Only re-sync fields the user HASN'T touched this session — otherwise
+        // we'd revert their in-progress clicks (same race the merge guard above
+        // protects against, applied here to the state mirror).
+        if (!_cpDirty.voice) {
+          state.voice = Array.isArray(_cpActive.voice) ? _cpActive.voice.slice() : [];
+        }
+        if (!_cpDirty.archetype) {
+          state.archetype = _cpActive.archetype || '';
+        }
+        state.brandDesc = _cpActive.desc || '';
+        console.log('[cloud-pull] state synced from active brand:', state.brand,
+                    '· voice=', JSON.stringify(state.voice), '· archetype=', state.archetype,
+                    '· dirty=', JSON.stringify(_cpDirty));
       }
       // ──────────────────────────────────────────────────────────────
       // Skincare migration — RE-RUN after cloud pull. The boot-time
