@@ -26,6 +26,7 @@ import { state } from './state.js';
 import { sidebarHTML } from './components/sidebar.js';
 import { topbarHTML } from './components/topbar.js';
 import { setupAvatarBgRotation } from './components/avatar-bg.js';
+import { trackPageView } from './track.js';
 
 // PAGES map — page id → renderer function. Mutable by main.js (which
 // fills in every module renderer) + by the inline script (until it's
@@ -68,6 +69,10 @@ export function render() {
       + '<main class="main"><div class="mainInner">' + topbarHTML() + '<div class="page">' + pageFn() + '</div></div></main>';
   }
   window.scrollTo({ top: _keepY, behavior: 'instant' });
+  // Telemetry: only fire on real page changes, not button-click re-renders
+  // of the same page. trackPageView() does its own de-dupe but we gate at
+  // the render boundary too to keep the queue tight.
+  if (!_samePage) trackPageView(state.page);
   _ppLastPage = state.page;
   // Talking Avatar bg rotation — cycle the preview <video src> through
   // avatarBgCandidates every `avatarBgInterval` seconds. Re-wired on
