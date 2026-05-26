@@ -65,7 +65,7 @@ export function pageTopics() {
       </div>
       <div>
         <label class="label">${raw(T('จำนวน', 'How many'))}</label>
-        <input class="input" id="ppTopicCount" value="${state.topicCount || 30}" type="number" min="5" max="60"/>
+        <input class="input" id="ppTopicCount" value="${state.topicCount || 15}" type="number" min="5" max="60"/>
       </div>
     </div>
     <div style="margin-top:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">

@@ -572,9 +572,12 @@ router.post('/topics-brand', async (req, res) => {
   const {
     brandName = '', businessType = '', brandDesc = '',
     voices = [], archetype = '', products = [],
-    theme = '', goals = [], count = 30,
+    theme = '', goals = [], count = 15,
   } = req.body || {};
-  const n = Math.max(1, Math.min(60, parseInt(count, 10) || 30));
+  // Vercel function timeout is 60s — large counts (n≥25) frequently 504 on
+  // Haiku 4.5 with verbose Thai output. Clamp to 25 server-side and require
+  // the UI to ask in smaller batches if more is needed.
+  const n = Math.max(1, Math.min(25, parseInt(count, 10) || 15));
   const prodLines = (Array.isArray(products) ? products : []).slice(0, 15)
     .map(p => `- ${p.name || ''}${p.price ? ' (฿' + p.price + ')' : ''}`).filter(s => s.trim() !== '-').join('\n');
 
@@ -635,12 +638,10 @@ ${prodLines || '(ไม่มีสินค้า — โฟกัสที่�
 [{"kind":"tip","th":"หัวข้อภาษาไทย","en":"English topic","len_th":"80-120 คำ","len_en":"80-120 words","f":"F1"}, ...]`;
 
   try {
-    // Bigger token budget — previous formula (n*130+1200) topped out around
-    // 5,100 tokens for n=30, which cut off the array around index 18 (matches
-    // user report "ขอ 30 ได้ 18"). Bumped multiplier 130→200 + base 1200→2000
-    // so 30-topic asks get ~8,000 tokens of headroom for Claude's verbose
-    // Thai output (Thai chars take 2-3 tokens each vs English's 1).
-    const tokenBudget = Math.max(4000, n * 200 + 2000);
+    // Token budget tuned for n≤25 within the 60s Vercel function ceiling.
+    // For n=15 → ~4250 tokens (well under what Haiku 4.5 can do in ~25-40s).
+    // For n=25 → ~6250 tokens (~40-55s — at the edge but still inside 60s).
+    const tokenBudget = Math.max(3000, n * 150 + 2000);
     const text = await callOpenRouter([{ role: 'user', content: userMsg }], system, { max_tokens: tokenBudget });
     const KINDS = ['knowledge', 'promo', 'review', 'story', 'tip', 'engage',
                    'myth', 'case', 'howto', 'list', 'trend', 'behind', 'compare', 'inspire'];

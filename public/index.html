@@ -1173,10 +1173,14 @@ document.addEventListener('click', (e) => {
         // keyword → ignore the cloud/local cache and start fresh (empty state → user gens new).
         var saved = Array.isArray(nb.topics) ? nb.topics : null;
         if (saved && saved.length && nb.id !== 'happyprice') {
-          var ft = saved[0], sample = (ft && (ft.th || ft.en)) || '';
-          if (/Marine Collagen|สกินแคร์|skincare|ผิวบอบบาง|Sheet Mask|Rose Repair|Bio Astin|Bovine Collagen|คอลลาเจน|เซรั่ม|กุหลาบเขาใหญ่/i.test(sample)) {
+          // Scan ALL topics, not just the first — stale skincare data was
+          // sometimes mixed in (e.g. topics[0] is a brand-appropriate AI
+          // gen but topics[5..] are leftover seeded skincare demos).
+          var SKIN_RE = /Marine Collagen|สกินแคร์|skincare|ผิวบอบบาง|Sheet Mask|Rose Repair|Bio Astin|Bovine Collagen|คอลลาเจน|เซรั่ม|กุหลาบเขาใหญ่|iCON Face|BellaCare|Amado|JOJU|Linhzhimin|Kumiko|Mahad/i;
+          var hasSkin = saved.some(function(t){ return SKIN_RE.test((t && (t.th || t.en)) || ''); });
+          if (hasSkin) {
             console.log('[topics] read-time filter — ignoring stale skincare topics for brand:', nb.id);
-            nb.topics = [];          // also wipe on the brand obj so it doesn't propagate
+            nb.topics = [];
             saved = null;
           }
         }
@@ -1754,10 +1758,12 @@ render();
         // keyword → ignore the cloud/local cache and start fresh (empty state → user gens new).
         var saved = Array.isArray(nb.topics) ? nb.topics : null;
         if (saved && saved.length && nb.id !== 'happyprice') {
-          var ft = saved[0], sample = (ft && (ft.th || ft.en)) || '';
-          if (/Marine Collagen|สกินแคร์|skincare|ผิวบอบบาง|Sheet Mask|Rose Repair|Bio Astin|Bovine Collagen|คอลลาเจน|เซรั่ม|กุหลาบเขาใหญ่/i.test(sample)) {
+          // Scan ALL topics (not just [0]) — stale skincare leaked through.
+          var SKIN_RE2 = /Marine Collagen|สกินแคร์|skincare|ผิวบอบบาง|Sheet Mask|Rose Repair|Bio Astin|Bovine Collagen|คอลลาเจน|เซรั่ม|กุหลาบเขาใหญ่|iCON Face|BellaCare|Amado|JOJU|Linhzhimin|Kumiko|Mahad/i;
+          var hasSkin2 = saved.some(function(t){ return SKIN_RE2.test((t && (t.th || t.en)) || ''); });
+          if (hasSkin2) {
             console.log('[topics] read-time filter — ignoring stale skincare topics for brand:', nb.id);
-            nb.topics = [];          // also wipe on the brand obj so it doesn't propagate
+            nb.topics = [];
             saved = null;
           }
         }
@@ -1797,7 +1803,20 @@ render();
       state.archetype = ab.archetype || '';
       // Boot fallback: use DEMO_TOPICS only for the original HappyPrice seed brand;
       // other brands (e.g. คุรุเทพ) start empty so they don't show skincare topics.
-      if (Array.isArray(ab.topics) && ab.topics.length) TOPICS = ab.topics;
+      // Also scan ALL ab.topics for skincare leftovers before adopting them —
+      // a stale cache can carry Marine Collagen / Rose Repair into a brand
+      // that has nothing to do with skincare.
+      var _bootSkinRe = /Marine Collagen|สกินแคร์|skincare|ผิวบอบบาง|Sheet Mask|Rose Repair|Bio Astin|Bovine Collagen|คอลลาเจน|เซรั่ม|กุหลาบเขาใหญ่|iCON Face|BellaCare|Amado|JOJU|Linhzhimin|Kumiko|Mahad/i;
+      var _bootTopics = Array.isArray(ab.topics) ? ab.topics : null;
+      if (_bootTopics && _bootTopics.length && ab.id !== 'happyprice') {
+        var _bootHasSkin = _bootTopics.some(function(t){ return _bootSkinRe.test((t && (t.th || t.en)) || ''); });
+        if (_bootHasSkin) {
+          console.log('[boot] dropped stale skincare topics for brand:', ab.id);
+          ab.topics = [];
+          _bootTopics = null;
+        }
+      }
+      if (_bootTopics && _bootTopics.length) TOPICS = _bootTopics;
       else if (ab.id !== 'happyprice') TOPICS = [];
     }
     if (ab && Array.isArray(ab.products) && ab.products.length){
@@ -2018,7 +2037,7 @@ render();
     var goalMap = { sales:'เพิ่มยอดขาย', awareness:'สร้าง Awareness', educate:'ให้ความรู้', community:'สร้าง Community', feedback:'รับ Feedback' };
     var goals = (state.topicGoals||['sales','awareness']).map(function(k){ return goalMap[k]||k; });
     var theme = (state.topicTheme||'').trim();
-    var count = parseInt(state.topicCount,10) || 30;
+    var count = parseInt(state.topicCount,10) || 15;
     state.topicGenLoading = true; render();
     toast(state.lang==='th'?'AI กำลังวางแผนหัวข้อจากโปรไฟล์แบรนด์…':'AI is planning topics…');
     try {
@@ -4906,24 +4925,28 @@ render();
       // BRANDS, then push the cleaned version back to cloud so it
       // doesn't haunt future logins.
       // ──────────────────────────────────────────────────────────────
-      var SKIN_KW = /Marine Collagen|สกินแคร์|skincare|ผิวบอบบาง|Sheet Mask|Rose Repair|Bio Astin|Bovine Collagen|Toner Pad|คอลลาเจน|เซรั่ม|Beauty Trio|กุหลาบเขาใหญ่/i;
-      var PROD_KW = /Marine Collagen|iCON|BellaCare|Amado|CmaX|JOJU|Linhzhimin|Kumiko/i;
+      // Scan ALL topics/products (previously only [0]) — stale skincare was
+      // mixing with newer brand-appropriate entries, slipping past the check.
+      var SKIN_KW = /Marine Collagen|สกินแคร์|skincare|ผิวบอบบาง|Sheet Mask|Rose Repair|Bio Astin|Bovine Collagen|Toner Pad|คอลลาเจน|เซรั่ม|Beauty Trio|กุหลาบเขาใหญ่|iCON Face|BellaCare|Amado|JOJU|Linhzhimin|Kumiko|Mahad/i;
+      var PROD_KW = /Marine Collagen|iCON|BellaCare|Amado|CmaX|JOJU|Linhzhimin|Kumiko|Mahad|Sesame|Chatier/i;
       var cleaned = false;
       BRANDS.forEach(function(b){
         if (b.id === 'happyprice') return;
         if (Array.isArray(b.topics) && b.topics.length) {
-          var ft = b.topics[0];
-          var sample = (ft && (ft.th || ft.en)) || '';
-          if (SKIN_KW.test(sample)) {
+          var hasSkin = b.topics.some(function(t){
+            return SKIN_KW.test((t && (t.th || t.en)) || '');
+          });
+          if (hasSkin) {
             console.log('[cloud-sync] post-pull cleanup — wiping skincare topics from:', b.id);
             b.topics = [];
             cleaned = true;
           }
         }
         if (Array.isArray(b.products) && b.products.length) {
-          var fp = b.products[0];
-          var pname = (fp && (fp.name_th || fp.name_en || fp.name)) || '';
-          if (PROD_KW.test(pname)) {
+          var hasProd = b.products.some(function(p){
+            return PROD_KW.test((p && (p.name_th || p.name_en || p.name)) || '');
+          });
+          if (hasProd) {
             console.log('[cloud-sync] post-pull cleanup — wiping skincare products from:', b.id);
             b.products = [];
             cleaned = true;
