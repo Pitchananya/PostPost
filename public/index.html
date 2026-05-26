@@ -2097,6 +2097,13 @@ render();
       state.analyticsDays = parseInt(adEl.dataset.analyticsDays, 10) || 7;
       render();
     }
+    // Automation page — refresh button (drops the in-memory cache so
+    // the next render re-fetches both /summary + /posts).
+    if (e.target.closest('[data-automation-refresh]')) {
+      e.preventDefault();
+      try { delete window.PP._automationCache; } catch(_){}
+      render();
+    }
   });
 
   // Caption page — AI generates hook / caption / hashtags / article for the topic
@@ -5298,7 +5305,7 @@ render();
     + '[data-saveproduct],[data-newimgclear],[data-newimg],[data-proddelete],[data-usetopic],[data-genall],[data-savedraft],[data-savevideodraft],[data-saveavatardraft],[data-editdraft],[data-deletedraft],[data-schedule],[data-avatarscript],[data-veogen],[data-newavatar],[data-rmbgavatar],'
     + '[data-uploadavatar],[data-uploadref],[data-clearref],[data-pickrefproduct],[data-refclose],[data-refpick],[data-genvideoprompt],[data-delavatar],[data-addtoday],[data-pickdraft],[data-pickdraftclose],[data-pickdraftgo],[data-tts],[data-pickfbpage],[data-avatarvideo],[data-pastevideourl],[data-pastelipsyncurl],[data-clearlipsyncurl],[data-hflipsync],[data-locallocaltoggle],[data-bgscene],[data-bgpick],[data-bgsearch],[data-bgsearchclear],[data-bginterval],[data-clipdur],[data-avatarabort],[data-genstoryboard],[data-slottoggle],[data-slotsearch],[data-slotpickurl],[data-mobilemenu],[data-mobilebackdrop],[data-profilemenu],[data-profileview],[data-profileclose],[data-signout],'
     + '[data-previewaspect],[data-previewidx],[data-downloadpng],'
-    + '[data-analytics-days]';
+    + '[data-analytics-days],[data-automation-refresh]';
   document.addEventListener('click', function(e){
     var b = e.target.closest('button, a');
     if (!b) return;
