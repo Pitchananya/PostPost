@@ -47,6 +47,13 @@ router.post('/', async (req, res) => {
 
     const { error } = await supabase.from('events').insert(rows);
     if (error) {
+      // Schema not deployed yet (migration-017-events.sql not run in Supabase).
+      // Don't 500 — that triggers an infinite retry loop on the client. Return
+      // 200 with a warning so the frontend acks the batch + moves on.
+      if (error.code === '42P01' || /relation .* does not exist/i.test(error.message || '')) {
+        console.warn('[events] events table missing — run backend/scripts/migration-017-events.sql in Supabase');
+        return res.json({ ok: true, inserted: 0, warning: 'events_table_missing' });
+      }
       console.error('[events] insert failed:', error.message);
       return res.status(500).json({ error: error.message });
     }
@@ -72,6 +79,16 @@ router.get('/summary', async (req, res) => {
       .limit(5000);
 
     if (error) {
+      // Same graceful fallback as the ingest endpoint — if the table doesn't
+      // exist yet, return an empty summary so the Analytics page shows its
+      // friendly empty state instead of a 500 error banner.
+      if (error.code === '42P01' || /relation .* does not exist/i.test(error.message || '')) {
+        console.warn('[events/summary] events table missing — run backend/scripts/migration-017-events.sql in Supabase');
+        return res.json({
+          days, total: 0, by_name: {}, by_day: {}, by_page: {}, recent: [],
+          warning: 'events_table_missing',
+        });
+      }
       console.error('[events/summary] query failed:', error.message);
       return res.status(500).json({ error: error.message });
     }

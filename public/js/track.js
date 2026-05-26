@@ -28,6 +28,12 @@ const QUEUE = [];
 let FLUSH_TIMER = null;
 let SESSION = null;
 let LAST_TRACKED_PAGE = null;
+// Circuit breaker — after this many consecutive flush failures we assume
+// the backend isn't reachable (server down, /api/events not deployed,
+// migration not run) and stop trying. Re-enabled on next page load.
+let CONSECUTIVE_FAILURES = 0;
+const MAX_FAILURES = 3;
+let DISABLED = false;
 
 function sessionId() {
   if (SESSION) return SESSION;
@@ -49,7 +55,7 @@ function currentPage() {
 }
 
 export function track(name, props) {
-  if (!name) return;
+  if (!name || DISABLED) return;
   QUEUE.push({
     name: String(name).slice(0, 100),
     props: (props && typeof props === 'object') ? props : {},
@@ -68,12 +74,13 @@ export function trackPageView(page) {
 }
 
 function scheduleFlush() {
-  if (FLUSH_TIMER) return;
+  if (FLUSH_TIMER || DISABLED) return;
   FLUSH_TIMER = setTimeout(flush, 4000);
 }
 
 async function flush() {
   FLUSH_TIMER = null;
+  if (DISABLED) { QUEUE.length = 0; return; }
   if (!QUEUE.length) return;
   if (!getTok()) {
     // Not logged in — don't accumulate events forever. Drop and move on.
@@ -83,10 +90,26 @@ async function flush() {
   const batch = QUEUE.splice(0, QUEUE.length);
   try {
     await api('/api/events', { method: 'POST', body: { events: batch } });
+    CONSECUTIVE_FAILURES = 0;          // healthy response — reset breaker
   } catch (e) {
-    // Network/server hiccup — re-enqueue and retry after a longer wait.
+    CONSECUTIVE_FAILURES += 1;
+    if (CONSECUTIVE_FAILURES >= MAX_FAILURES) {
+      // Trip the breaker. Common cause: migration-017-events.sql hasn't
+      // been run in Supabase yet (table missing → backend used to 500;
+      // now it returns 200 with a warning, but for older deploys we still
+      // hit this branch). Drop the queue and stop firing flushes for the
+      // rest of this page load.
+      DISABLED = true;
+      QUEUE.length = 0;
+      console.warn('[track] disabled after', MAX_FAILURES, 'consecutive failures —', e.message);
+      return;
+    }
+    // Transient hiccup — re-enqueue and retry after a longer wait.
+    // Don't schedule via scheduleFlush here (would create chained timers
+    // if scheduleFlush is invoked again by an inbound track() call);
+    // schedule the flush directly to keep at most one pending timer.
     QUEUE.unshift(...batch);
-    setTimeout(scheduleFlush, 10_000);
+    if (!FLUSH_TIMER) FLUSH_TIMER = setTimeout(flush, 10_000);
   }
 }
 
