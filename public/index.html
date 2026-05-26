@@ -1027,7 +1027,7 @@ function setupAvatarBgRotation() {
 // ====================================================================
 // EVENT DELEGATION
 // ====================================================================
-console.log('[boot] PostPost ready · page=' + (state && state.page) + ' · lang=' + (state && state.lang) + ' · build=t2v-i2v-autoswap');
+console.log('[boot] PostPost ready · page=' + (state && state.page) + ' · lang=' + (state && state.lang) + ' · build=voice-debug');
 document.addEventListener('click', (e) => {
   // Diagnostic — log every data-go click so we can verify the navigation
   // chain actually fires. User reported "เข้าสู่ระบบไม่ได้" — if this log
@@ -1130,10 +1130,16 @@ document.addEventListener('click', (e) => {
     const _vab = BRANDS.find(b => b.id === state.brand);
     if (_vab) {
       _vab.voice = state.voice.slice();
-      try { localStorage.setItem('postpost_brands', JSON.stringify(BRANDS)); } catch(saveErr){ console.warn('[voice] localStorage failed:', saveErr.message); }
-      try { (window.PP && window.PP.schedCloudPush || function(){})(); } catch(pushErr){ console.warn('[voice] cloud push failed:', pushErr.message); }
+      console.log('[voice] mutated brand', _vab.id, '· _vab.voice =', JSON.stringify(_vab.voice));
+      try {
+        localStorage.setItem('postpost_brands', JSON.stringify(BRANDS));
+        console.log('[voice] ✓ localStorage saved · brand count =', BRANDS.length);
+      } catch(saveErr){ console.warn('[voice] ✗ localStorage failed:', saveErr.message); }
+      const hasSched = !!(window.PP && window.PP.schedCloudPush);
+      console.log('[voice] window.PP.schedCloudPush available?', hasSched);
+      try { (window.PP && window.PP.schedCloudPush || function(){})(); } catch(pushErr){ console.warn('[voice] ✗ schedCloudPush threw:', pushErr.message); }
     } else {
-      console.warn('[voice] no active brand to save voice into — state.brand =', state.brand);
+      console.warn('[voice] ✗ no active brand to save voice into — state.brand =', state.brand);
     }
     render();
     return;
@@ -1192,17 +1198,19 @@ document.addEventListener('click', (e) => {
     e.preventDefault();
     state.archetype = archeEl.dataset.archetype;
     console.log('[archetype] picked:', state.archetype);
-    // Auto-persist directly — same pattern as the Brand Voice handler above:
-    // localStorage write on inline BRANDS + schedCloudPush (which serializes
-    // inline BRANDS in cloudPushNow). Routing through window.PP.saveBrands
-    // would hit the module copy which diverges from inline after cloudPullOnBoot.
     const _aab = BRANDS.find(b => b.id === state.brand);
     if (_aab) {
       _aab.archetype = state.archetype;
-      try { localStorage.setItem('postpost_brands', JSON.stringify(BRANDS)); } catch(saveErr){ console.warn('[archetype] localStorage failed:', saveErr.message); }
-      try { (window.PP && window.PP.schedCloudPush || function(){})(); } catch(pushErr){ console.warn('[archetype] cloud push failed:', pushErr.message); }
+      console.log('[archetype] mutated brand', _aab.id, '· _aab.archetype =', _aab.archetype);
+      try {
+        localStorage.setItem('postpost_brands', JSON.stringify(BRANDS));
+        console.log('[archetype] ✓ localStorage saved');
+      } catch(saveErr){ console.warn('[archetype] ✗ localStorage failed:', saveErr.message); }
+      const hasSched = !!(window.PP && window.PP.schedCloudPush);
+      console.log('[archetype] window.PP.schedCloudPush available?', hasSched);
+      try { (window.PP && window.PP.schedCloudPush || function(){})(); } catch(pushErr){ console.warn('[archetype] ✗ schedCloudPush threw:', pushErr.message); }
     } else {
-      console.warn('[archetype] no active brand — state.brand =', state.brand);
+      console.warn('[archetype] ✗ no active brand — state.brand =', state.brand);
     }
     render();
     return;
@@ -1269,7 +1277,7 @@ render();
      ES-module graph instead of serving a stale index.html that calls old code.
      Critical for billing-fix rollouts (see commit e043a18) — stale cache here
      means the user keeps clicking "free" while old code keeps calling fal.ai. -->
-<script type="module" src="/js/main.js?v=t2v-i2v-autoswap"></script>
+<script type="module" src="/js/main.js?v=voice-debug"></script>
 
 <!-- ============================================================ -->
 <!-- PostPost backend wiring — API client + real auth             -->
@@ -4692,9 +4700,18 @@ render();
   // so this publish is safe from being clobbered by the module bootstrap.
   try { window.PP = window.PP || {}; window.PP.schedCloudPush = schedCloudPush; } catch(_){}
   async function cloudPushNow(){
-    if (typeof api !== 'function') return;
-    if (!getTok || !getTok()) return;   // not logged in
-    if (_cloudPushInflight) return;     // request already in-flight (re-runs after)
+    if (typeof api !== 'function') {
+      console.warn('[cloud-sync] ✗ api() not available — push SKIPPED');
+      return;
+    }
+    if (!getTok || !getTok()) {
+      console.warn('[cloud-sync] ✗ NOT LOGGED IN — push SKIPPED (localStorage only)');
+      return;
+    }
+    if (_cloudPushInflight) {
+      console.log('[cloud-sync] push already inflight — skipping (will fire again after)');
+      return;
+    }
     var body = {
       brands: BRANDS,
       drafts: state.drafts || [],
@@ -4702,9 +4719,14 @@ render();
       activeBrandId: state.brand,
       updated_at: new Date().toISOString(),
     };
+    // Quick voice/archetype diagnostic on the body about to be pushed
+    var voiceSnapshot = BRANDS.map(function(b){ return b.id + ':v=' + JSON.stringify(b.voice||[]) + ',a=' + (b.archetype||''); }).join(' | ');
+    console.log('[cloud-sync] pushing → voice/archetype snapshot:', voiceSnapshot);
     var serialized = JSON.stringify(body);
-    if (serialized === _cloudPushLastBody) return;    // nothing changed
-    // Skip huge payloads (>5MB) — likely a draft with full base64 image slipped in
+    if (serialized === _cloudPushLastBody) {
+      console.log('[cloud-sync] body unchanged since last push — SKIPPING');
+      return;
+    }
     if (serialized.length > 5 * 1024 * 1024) {
       console.warn('[cloud-sync] payload too big ('+Math.round(serialized.length/1024)+'KB) — skipping');
       setCloudSyncStatus('error', 'ใหญ่เกิน 5MB');
@@ -4713,11 +4735,12 @@ render();
     _cloudPushInflight = true;
     setCloudSyncStatus('saving');
     try {
-      await api('/api/workspace', { method:'PUT', body:{ state: body } });
+      var resp = await api('/api/workspace', { method:'PUT', body:{ state: body } });
       _cloudPushLastBody = serialized;
       setCloudSyncStatus('saved');
+      console.log('[cloud-sync] ✓ pushed OK · API response:', resp);
     } catch (e) {
-      console.warn('[cloud-sync] push failed:', e.message);
+      console.warn('[cloud-sync] ✗ push FAILED:', e.message);
       setCloudSyncStatus('error', e.message);
     } finally {
       _cloudPushInflight = false;
@@ -4766,14 +4789,21 @@ render();
     else attach();
   })();
   async function cloudPullOnBoot(){
-    if (typeof api !== 'function') return;
-    if (!getTok || !getTok()) return;
+    if (typeof api !== 'function') { console.warn('[cloud-pull] ✗ api() not available'); return; }
+    if (!getTok || !getTok()) { console.warn('[cloud-pull] ✗ NOT LOGGED IN — pull skipped'); return; }
     try {
       var r = await api('/api/workspace');
       var ws = r && r.workspace;
-      if (!ws || !ws.state) return;     // no cloud state yet — new user
+      if (!ws || !ws.state) { console.log('[cloud-pull] no cloud state yet (new user)'); return; }
       var s = ws.state;
       var dirty = false;
+      // DIAGNOSTIC: log voice/archetype from CLOUD for each brand
+      if (Array.isArray(s.brands)) {
+        var cloudSnapshot = s.brands.map(function(b){ return b.id + ':v=' + JSON.stringify(b.voice||[]) + ',a=' + (b.archetype||''); }).join(' | ');
+        console.log('[cloud-pull] CLOUD state voice/archetype snapshot:', cloudSnapshot);
+      }
+      var localSnapshot = BRANDS.map(function(b){ return b.id + ':v=' + JSON.stringify(b.voice||[]) + ',a=' + (b.archetype||''); }).join(' | ');
+      console.log('[cloud-pull] LOCAL  state voice/archetype snapshot:', localSnapshot);
       // Merge brands by id — preserve local-only brands (cloud may not have them yet)
       // and keep cloud version when both exist (cloud is the canonical source)
       if (Array.isArray(s.brands) && s.brands.length) {
@@ -4787,6 +4817,8 @@ render();
         Object.values(byId).forEach(function(b){ BRANDS.push(b); });
         try { localStorage.setItem('postpost_brands', JSON.stringify(BRANDS)); } catch(_){}
         dirty = true;
+        var afterSnapshot = BRANDS.map(function(b){ return b.id + ':v=' + JSON.stringify(b.voice||[]) + ',a=' + (b.archetype||''); }).join(' | ');
+        console.log('[cloud-pull] MERGED voice/archetype snapshot:', afterSnapshot);
       }
       // Merge drafts
       if (Array.isArray(s.drafts) && s.drafts.length) {
