@@ -167,6 +167,26 @@ window.PP.setProducts = function(arr) {
 // shim hands off.
 window.render = render;
 
+// ── Global error capture → events table ──
+// Self-hosted Sentry: unhandled JS errors + promise rejections get logged
+// to /api/events so the Analytics page (and SQL Editor) can surface them.
+// Cheaper than Sentry's $26/mo Team plan + uses the existing infra.
+//
+// Lazy-import the tracker so a parse error in track.js itself doesn't
+// crash this whole module before render() runs.
+import('./track.js').then(({ trackError }) => {
+  if (typeof window === 'undefined') return;
+  window.addEventListener('error', (e) => {
+    trackError(e.error || e.message, {
+      type: 'window.error',
+      filename: e.filename, line: e.lineno, col: e.colno,
+    });
+  });
+  window.addEventListener('unhandledrejection', (e) => {
+    trackError(e.reason, { type: 'unhandledrejection' });
+  });
+}).catch(() => { /* tracker unavailable — just give up silently */ });
+
 // ── Step 4: fill the PAGES map with module renderers ──
 PAGES.landing = pageLanding;
 PAGES.login = pageLogin;

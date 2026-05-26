@@ -73,6 +73,37 @@ export function trackPageView(page) {
   track('page_view', { page });
 }
 
+// Lightweight client-side error tracker — self-hosted via the events table
+// (instead of paying for Sentry). Wired into window.onerror +
+// window.onunhandledrejection by main.js so unhandled crashes land here,
+// and exposed manually via window.PP.trackError(err, ctx) for catch blocks
+// that want to attach context.
+//
+// Guard: never re-throw inside this function and never call api() directly
+// — go through track() so the circuit breaker still protects us from a
+// hung backend (the alternative is an error-during-error-flush loop).
+const RECENT_ERRORS = new Set();   // hash → seen-at, to suppress repeat dupes
+export function trackError(err, context) {
+  if (!err || DISABLED) return;
+  const msg = ((err && err.message) || String(err) || 'unknown').slice(0, 500);
+  const stack = ((err && err.stack) || '').slice(0, 2000);
+  // De-dupe — repeating the same error 100 times during one render storm
+  // (e.g. a broken template firing on every state change) shouldn't fill the
+  // events table. Hash by msg+first-stack-frame and remember for 30s.
+  const hash = msg + '|' + stack.split('\n')[0];
+  if (RECENT_ERRORS.has(hash)) return;
+  RECENT_ERRORS.add(hash);
+  setTimeout(() => RECENT_ERRORS.delete(hash), 30_000);
+
+  track('client_error', {
+    message: msg,
+    stack: stack,
+    context: (context && typeof context === 'object') ? context : {},
+    url: (typeof location !== 'undefined' ? location.href : '').slice(0, 200),
+    ua: (typeof navigator !== 'undefined' ? navigator.userAgent : '').slice(0, 200),
+  });
+}
+
 function scheduleFlush() {
   if (FLUSH_TIMER || DISABLED) return;
   FLUSH_TIMER = setTimeout(flush, 4000);
@@ -127,4 +158,5 @@ if (typeof window !== 'undefined') {
   window.PP = window.PP || {};
   window.PP.track = track;
   window.PP.trackPageView = trackPageView;
+  window.PP.trackError = trackError;
 }

@@ -98,6 +98,14 @@ function relativeTime(iso) {
   return Math.floor(s / 86400) + 'd';
 }
 
+// HTML escape for raw error messages/stacks that go into innerHTML —
+// stack traces contain `<` `>` `&` from generic types / file paths and would
+// break layout / open injection holes without escaping.
+function esc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 export function pageAnalytics() {
   const days = state.analyticsDays || 7;
 
@@ -202,6 +210,36 @@ export function pageAnalytics() {
       }).join('')}
     </div>
   </div>
+
+  ${(() => {
+    // Surface client-side errors captured via window.onerror /
+    // unhandledrejection (see public/js/track.js trackError). These are the
+    // user-facing crashes we can't see from the server side — usually a
+    // bug in a render function, a null property access, or a failing fetch.
+    const errors = (recent || []).filter((ev) => ev.name === 'client_error');
+    if (errors.length === 0) return '';
+    return `<div class="card" style="margin-bottom:18px;background:#FEF2F2;border-color:#FCA5A5">
+      <div class="cardHeader">
+        <div>
+          <h3 class="cardTitle" style="color:#991B1B">⚠ ${T('Client errors', 'Client errors')} (${errors.length})</h3>
+          <p class="cardSub" style="color:#7F1D1D">${T('JavaScript crash บนเบราว์เซอร์ — ดึงจาก window.onerror', 'JavaScript crashes — captured from window.onerror')}</p>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;max-height:280px;overflow-y:auto">
+        ${errors.slice(0, 10).map((ev) => {
+          const p = ev.props || {};
+          return `<details style="padding:10px 12px;border-radius:8px;background:#fff;border:1px solid #FCA5A5">
+            <summary style="cursor:pointer;display:flex;align-items:center;gap:8px;list-style:none">
+              <span style="font-size:12.5px;font-weight:700;color:#991B1B;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.message || 'unknown')}</span>
+              <span class="micro" style="color:#7F1D1D;white-space:nowrap">${relativeTime(ev.created_at)}</span>
+            </summary>
+            ${p.stack ? `<pre style="margin-top:8px;padding:8px;background:#FEF2F2;border-radius:6px;font-size:10.5px;color:#7F1D1D;overflow-x:auto;max-height:180px;font-family:var(--mono)">${esc(p.stack)}</pre>` : ''}
+            ${p.url ? `<div class="micro" style="margin-top:4px;color:#7F1D1D">${esc(p.url)}</div>` : ''}
+          </details>`;
+        }).join('')}
+      </div>
+    </div>`;
+  })()}
 
   ${costs ? `
   <!-- AI Cost & Savings -->
