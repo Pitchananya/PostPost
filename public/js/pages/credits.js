@@ -23,19 +23,27 @@ import { head } from '../components/head.js';
 // ──────────────────────────────────────────────────────────────────────────
 const CATALOG = {
   text: {
-    unit_th: 'ต่อ caption + hooks + hashtags 1 ชุด', unit_en: 'per caption + hooks + hashtags batch',
-    note_th: 'Caption gen ฟรี — ขึ้นเครดิตเฉพาะถ้าเลือกโมเดล Premium',
-    note_en: 'Caption gen is FREE — credits charged only when you pick a Premium model',
+    unit_th: 'ต่อ caption + hooks + hashtags 1 ชุด (≈ 1.5K input + 3K output tokens)',
+    unit_en: 'per caption + hooks + hashtags batch (~1.5K input + 3K output tokens)',
+    note_th: 'คิดจากราคา OpenRouter จริง × markup 1.4 (margin ~30-90%) · ยิ่งโมเดลแพง credits ยิ่งสูง',
+    note_en: 'Based on real OpenRouter cost × 1.4 markup (30-90% margin) · pricier models = more credits',
     items: [
-      { id: 'anthropic/claude-haiku-4.5',   label: 'Claude Haiku 4.5',     tier: 'cheap',     cost: 0,  default: true },
-      { id: 'google/gemini-2.5-flash',      label: 'Gemini 2.5 Flash',     tier: 'cheap',     cost: 0 },
-      { id: 'deepseek/deepseek-v3',         label: 'DeepSeek V3',          tier: 'cheap',     cost: 0 },
-      { id: 'openai/gpt-5-mini',            label: 'GPT-5 Mini',           tier: 'cheap',     cost: 0 },
-      { id: 'anthropic/claude-sonnet-4.6',  label: 'Claude Sonnet 4.6',    tier: 'premium',   cost: 3 },
-      { id: 'google/gemini-2.5-pro',        label: 'Gemini 2.5 Pro',       tier: 'premium',   cost: 3 },
-      { id: 'openai/gpt-5',                 label: 'GPT-5',                tier: 'premium',   cost: 5 },
-      { id: 'anthropic/claude-opus-4.7',    label: 'Claude Opus 4.7',      tier: 'premium',   cost: 15 },
-      { id: 'deepseek/deepseek-r1',         label: 'DeepSeek R1',          tier: 'reasoning', cost: 5 },
+      // Cheap tier — sub-cent cost, all round up to 1-2 credits
+      { id: 'deepseek/deepseek-v3',         label: 'DeepSeek V3',          tier: 'cheap',     cost: 1 },
+      { id: 'qwen/qwen-2.5-72b-instruct',   label: 'Qwen 2.5 72B',         tier: 'cheap',     cost: 1 },
+      { id: 'meta-llama/llama-3.3-70b-instruct', label: 'Llama 3.3 70B',   tier: 'cheap',     cost: 1 },
+      { id: 'openai/gpt-5-mini',            label: 'GPT-5 Mini',           tier: 'cheap',     cost: 1 },
+      { id: 'google/gemini-2.5-flash',      label: 'Gemini 2.5 Flash',     tier: 'cheap',     cost: 2 },
+      { id: 'anthropic/claude-haiku-4.5',   label: 'Claude Haiku 4.5',     tier: 'cheap',     cost: 2, default: true },
+      // Balanced — solid quality without breaking the bank
+      { id: 'mistralai/mistral-large-2',    label: 'Mistral Large 2',      tier: 'balanced',  cost: 3 },
+      { id: 'google/gemini-2.5-pro',        label: 'Gemini 2.5 Pro',       tier: 'balanced',  cost: 4 },
+      // Premium — best Thai quality, costly OpenRouter rates
+      { id: 'anthropic/claude-sonnet-4.6',  label: 'Claude Sonnet 4.6',    tier: 'premium',   cost: 7 },
+      { id: 'openai/gpt-5',                 label: 'GPT-5',                tier: 'premium',   cost: 7 },
+      { id: 'anthropic/claude-opus-4.7',    label: 'Claude Opus 4.7',      tier: 'premium',   cost: 32 },
+      // Reasoning — chain-of-thought tokens make output cost ~3× normal
+      { id: 'deepseek/deepseek-r1',         label: 'DeepSeek R1',          tier: 'reasoning', cost: 3 },
     ],
   },
   image: {
@@ -101,21 +109,19 @@ const CATALOG = {
   },
   utility: {
     unit_th: 'ต่อ 1 ครั้ง', unit_en: 'per action',
-    note_th: '',
-    note_en: '',
+    note_th: 'Caption / Topic Bank คิดตามโมเดล Text ที่เลือก (ดูแท็บ Text) · TTS / BG remove / utilities ราคาคงที่',
+    note_en: 'Caption / Topic Bank cost depends on Text model picked (see Text tab) · TTS / BG remove / utilities are flat-priced',
     items: [
-      { id: 'caption-text',         label: 'Caption + Hook + Hashtag gen', tier: 'cheap', cost: 0, default: true },
-      { id: 'topic-bank-gen',       label: 'Topic Bank gen (15 หัวข้อ)',     tier: 'cheap', cost: 0 },
-      { id: 'shopee-scrape',        label: 'Shopee shop scrape',           tier: 'cheap', cost: 0 },
-      { id: 'schedule-publish',     label: 'Schedule + Auto-publish',      tier: 'cheap', cost: 0 },
-      { id: 'pexels-bg-search',     label: 'Pexels background search',     tier: 'cheap', cost: 0 },
-      { id: 'tts-azure-preview',    label: 'TTS preview (Azure ≤10s)',     tier: 'cheap', cost: 0 },
-      { id: 'tts-azure-100char',    label: 'TTS Azure (per 100 chars)',    tier: 'balanced', cost: 2 },
+      { id: 'shopee-scrape',          label: 'Shopee shop scrape',           tier: 'cheap', cost: 0, default: true },
+      { id: 'schedule-publish',       label: 'Schedule + Auto-publish',      tier: 'cheap', cost: 0 },
+      { id: 'pexels-bg-search',       label: 'Pexels background search',     tier: 'cheap', cost: 0 },
+      { id: 'tts-azure-preview',      label: 'TTS preview (Azure ≤10s)',     tier: 'cheap', cost: 0 },
+      { id: 'image-upscale-2x',       label: 'Image upscale (1024 → 2048)',  tier: 'cheap', cost: 1 },
+      { id: 'bg-remove',              label: 'Background remove (avatar photo)', tier: 'cheap', cost: 2 },
+      { id: 'tts-azure-100char',      label: 'TTS Azure (per 100 chars)',    tier: 'balanced', cost: 2 },
+      { id: 'avatar-portrait-gen',    label: 'AI gen avatar portrait',       tier: 'balanced', cost: 10 },
+      { id: 'video-upscale-topaz',    label: 'Video upscale (Topaz)',        tier: 'premium', cost: 15 },
       { id: 'tts-elevenlabs-100char', label: 'TTS ElevenLabs premium (per 100 chars)', tier: 'premium', cost: 30 },
-      { id: 'bg-remove',            label: 'Background remove (avatar photo)', tier: 'cheap', cost: 2 },
-      { id: 'avatar-portrait-gen',  label: 'AI gen avatar portrait',       tier: 'balanced', cost: 10 },
-      { id: 'image-upscale-2x',     label: 'Image upscale (1024 → 2048)',  tier: 'cheap', cost: 1 },
-      { id: 'video-upscale-topaz',  label: 'Video upscale (Topaz)',        tier: 'premium', cost: 15 },
     ],
   },
 };
@@ -247,8 +253,10 @@ export function pageCredits() {
   <div style="margin-top:18px;padding:14px 18px;background:#F0F9FF;border:1px solid #BAE6FD;border-radius:12px;font-size:12px;color:#075985;line-height:1.65">
     <b>${T('วิธีคิดเครดิต:', 'How credits work:')}</b>
     <ul style="margin:6px 0 0 18px;padding:0">
-      <li>${T('สร้างคอนเทนต์ 1 โพสต์ (caption + 4 รูป Gemini) =', 'One post (caption + 4 Gemini images) =')}
-        <b>${T('ประมาณ 20 เครดิต', 'about 20 credits')}</b></li>
+      <li>${T('สร้าง 1 โพสต์ (caption Haiku 2 cr + 4 รูป Gemini 20 cr) =', 'One post (caption Haiku 2 cr + 4 Gemini images 20 cr) =')}
+        <b>${T('22 เครดิต', '22 credits')}</b></li>
+      <li>${T('สร้างด้วย Opus 4.7 + รูป GPT Image 1 (HD) =', 'With Opus 4.7 + GPT Image 1 HD =')}
+        <b>${T('32 + 4×10 = 72 เครดิต', '32 + 4×10 = 72 credits')}</b></li>
       <li>${T('Avatar OmniHuman v1.5 = 1.3 cr/วินาที · คลิป 30 วิ ≈', 'Avatar OmniHuman v1.5 = 1.3 cr/sec · 30-sec clip ≈')}
         <b>${T('40 เครดิต', '40 credits')}</b></li>
       <li>${T('Avatar Infinitalk = 0.6 cr/วินาที · คลิป 30 วิ ≈', 'Avatar Infinitalk = 0.6 cr/sec · 30-sec clip ≈')}
@@ -257,8 +265,8 @@ export function pageCredits() {
         <b>${T('40 เครดิต', '40 credits')}</b></li>
       <li>${T('Veo 3 Fast = 25 cr/วินาที · คลิป 8 วิ =', 'Veo 3 Fast = 25 cr/sec · 8-sec clip =')}
         <b>${T('200 เครดิต', '200 credits')}</b></li>
-      <li>${T('Caption + Topic Bank gen — ฟรีไม่จำกัด (เริ่มคิดเมื่อใช้โมเดล Premium)',
-              'Caption + Topic Bank gen — unlimited free (charged only on Premium models)')}</li>
+      <li>${T('Caption + Topic Bank gen — คิดตามโมเดล Text ที่เลือก (Haiku 2 cr · Sonnet 7 cr · Opus 32 cr)',
+              'Caption + Topic Bank gen — depends on Text model picked (Haiku 2 cr · Sonnet 7 cr · Opus 32 cr)')}</li>
       <li>${T('เครดิตจาก Top-up pack ไม่หมดอายุ — เครดิตจากแพ็คเกจ reset ทุก 30 วัน',
               'Top-up pack credits never expire · plan credits reset every 30 days')}</li>
     </ul>
