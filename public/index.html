@@ -41,7 +41,7 @@ window.PP.state = window.PP.state || {
   avatarMode: 'free',      // ⚠️ DEFAULT SAFE — 'free' (no fal.ai charge). User must explicitly click "Real lip-sync" to opt-in.
   avatarLipsyncModel: 'fal-ai/bytedance/omnihuman/v1.5',  // default: OmniHuman v1.5 (face + body gestures, $0.50) — Infinitalk = face only
   textModel: 'anthropic/claude-haiku-4.5',                // default text model for caption/topic gen — see TEXT_MODEL_METADATA in backend
-  imageModel: 'openai/gpt-5.4-image-2',                   // default image model — one of two REAL OpenRouter image-output ids (other is google/gemini-3.1-flash-image-preview). Stale ids (gpt-image-1, dall-e-3, flux-*, imagen-*, seedream-*, grok-2-image) rewritten in creative.js + genImagesForSlides.
+  imageModel: 'google/gemini-3.1-flash-image-preview',    // default image model — Nano Banana 2. Fast (~3-5s), cheap, reliable. GPT-5.4 is higher quality but needs reasoning.effort='minimal' to dodge Vercel's 60s ceiling — pick it from the dropdown when you want better Thai text rendering.
   ttvStyle: 0,                                          // index into the styles[] array on the Text-to-Video page (0 = Creator/UGC)
   ttvModel: 'fal-ai/wan/v2.2-a14b/text-to-video',       // default to Wan 2.2 — cheapest reliable ($0.30/clip, no quota gamble)
   ttvDuration: '8s',
@@ -2414,12 +2414,15 @@ render();
     }
   }
   // ── Image-gen client dispatch ────────────────────────────────────────
-  // OpenRouter's live /api/v1/models catalog lists exactly two image-output
-  // models right now: openai/gpt-5.4-image-2 and
-  // google/gemini-3.1-flash-image-preview. Everything else previously
-  // offered (gpt-image-1, dall-e-3, flux-*, imagen-*, seedream-*, grok-2-
-  // image) returned "not a valid model ID" because they're not on
-  // OpenRouter as image-output models — rewrite stale saved selections.
+  // OpenRouter currently lists 12 image-output models (see backend/routes/
+  // image-models/index.js for the full registry). Each one has its own
+  // dedicated backend route at /api/ai/gen-image/<slug> with model-
+  // specific request shape — pick the right slug here based on the
+  // model id the user selected.
+  //
+  // Stale state pointing at retired ids (gpt-image-1, dall-e-3, flux-
+  // schnell, imagen-4, etc.) gets rewritten to the closest current
+  // model so existing sessions never get stuck on a non-existent id.
   function resolveImageModel(rawModel) {
     var IMG_LEGACY = {
       gemini: 'google/gemini-3.1-flash-image-preview',
@@ -2427,26 +2430,34 @@ render();
       'openai/gpt-image-1': 'openai/gpt-5.4-image-2',
       'openai/gpt-image-2': 'openai/gpt-5.4-image-2',
       'openai/dall-e-3': 'openai/gpt-5.4-image-2',
-      'google/gemini-2.5-flash-image': 'google/gemini-3.1-flash-image-preview',
-      'google/imagen-4': 'google/gemini-3.1-flash-image-preview',
-      'bytedance/seedream-4': 'openai/gpt-5.4-image-2',
-      'black-forest-labs/flux-schnell': 'openai/gpt-5.4-image-2',
-      'black-forest-labs/flux-1.1-pro': 'openai/gpt-5.4-image-2',
-      'black-forest-labs/flux-kontext-pro': 'openai/gpt-5.4-image-2',
-      'xai/grok-2-image': 'openai/gpt-5.4-image-2',
+      'google/imagen-4': 'google/gemini-3-pro-image-preview',
+      'bytedance/seedream-4': 'bytedance-seed/seedream-4.5',
+      'black-forest-labs/flux-schnell': 'black-forest-labs/flux.2-klein-4b',
+      'black-forest-labs/flux-1.1-pro': 'black-forest-labs/flux.2-pro',
+      'black-forest-labs/flux-kontext-pro': 'black-forest-labs/flux.2-flex',
+      'xai/grok-2-image': 'x-ai/grok-imagine-image-quality',
     };
-    return IMG_LEGACY[rawModel] || rawModel || 'openai/gpt-5.4-image-2';
+    return IMG_LEGACY[rawModel] || rawModel || 'google/gemini-3.1-flash-image-preview';
   }
-  // Pick the per-MODEL backend endpoint. OpenRouter only serves two
-  // image-output models right now, and each has its own dedicated route
-  // with model-specific request body (different max_tokens, different
-  // timeout, different prompt-shaping) — zero shared branching inside.
+  // Full model-id → backend-slug map. The slug matches the filename
+  // under backend/routes/image-models/ (one file per model).
+  var IMG_SLUG_BY_MODEL = {
+    'google/gemini-2.5-flash-image':         'gemini-2.5',
+    'google/gemini-3.1-flash-image-preview': 'nano-banana',
+    'google/gemini-3-pro-image-preview':     'gemini-3-pro',
+    'openai/gpt-5-image':                    'gpt-5',
+    'openai/gpt-5-image-mini':               'gpt-5-mini',
+    'openai/gpt-5.4-image-2':                'gpt-5.4',
+    'black-forest-labs/flux.2-pro':          'flux-2-pro',
+    'black-forest-labs/flux.2-max':          'flux-2-max',
+    'black-forest-labs/flux.2-flex':         'flux-2-flex',
+    'black-forest-labs/flux.2-klein-4b':     'flux-2-klein',
+    'bytedance-seed/seedream-4.5':           'seedream-4.5',
+    'x-ai/grok-imagine-image-quality':       'grok-imagine',
+  };
   function pickGenImageEndpoint(model) {
-    if (model === 'google/gemini-3.1-flash-image-preview') return '/api/ai/gen-image/nano-banana';
-    // Default to GPT-5.4 — covers the canonical id + any legacy
-    // gpt-image-1 / dall-e / openai-* selection that resolveImageModel()
-    // already rewrote to gpt-5.4-image-2.
-    return '/api/ai/gen-image/gpt-5.4';
+    var slug = IMG_SLUG_BY_MODEL[model] || 'nano-banana';  // safe default
+    return '/api/ai/gen-image/' + slug;
   }
 
   // Sequential image generation — one call per slide prompt, routed to the

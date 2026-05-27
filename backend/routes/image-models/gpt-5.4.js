@@ -75,7 +75,11 @@ export async function handler(req, res) {
           // Disable the heavy reasoning pass — image-gen calls don't
           // need chain-of-thought; skipping it is the main fix that
           // unblocks this model from hitting Vercel's 60s ceiling.
-          reasoning: { effort: 'minimal' },
+          // Belt + braces: 'effort: minimal' on the reasoning config
+          // AND 'include_reasoning: false' so the response stream
+          // doesn't carry any reasoning tokens back either.
+          reasoning: { effort: 'minimal', exclude: true },
+          include_reasoning: false,
         }),
       });
     } finally {

@@ -65,34 +65,47 @@ export function pageCreative() {
         <div style="display:flex;align-items:center;gap:8px;margin-top:12px;padding-top:12px;border-top:1px dashed var(--line);flex-wrap:wrap">
           <span class="micro" style="font-weight:700">${raw(T('โมเดล AI สร้างรูป:', 'Image AI model:'))}</span>
           ${raw((() => {
-            // Only the two models OpenRouter actually serves with
-            // output_modalities: ["image"] as of the live /api/v1/models
-            // catalog. All the previously-listed Flux / Seedream / Imagen /
-            // Grok / DALL-E / gpt-image-1 / gemini-2.5-flash-image entries
-            // returned "not a valid model ID" because they don't exist on
-            // OpenRouter as image-output models (some are FAL-only, some
-            // are text-only, some were never released).
+            // All 12 OpenRouter image-output models as of May 2026 —
+            // source: openrouter.ai/collections/image-models. Each model
+            // has its own backend route under /api/ai/gen-image/<slug>
+            // (file-per-model in backend/routes/image-models/).
+            //
+            // Stale state pointing at retired ids gets rewritten so an
+            // existing session never gets stuck on a non-existent model.
             const LEGACY = {
               gemini: 'google/gemini-3.1-flash-image-preview',
               gpt: 'openai/gpt-5.4-image-2',
-              // Old picks that are no longer offered → rewrite to the
-              // closest real OpenRouter model so existing state still works.
               'openai/gpt-image-1': 'openai/gpt-5.4-image-2',
               'openai/gpt-image-2': 'openai/gpt-5.4-image-2',
               'openai/dall-e-3': 'openai/gpt-5.4-image-2',
-              'google/gemini-2.5-flash-image': 'google/gemini-3.1-flash-image-preview',
-              'google/imagen-4': 'google/gemini-3.1-flash-image-preview',
-              'bytedance/seedream-4': 'openai/gpt-5.4-image-2',
-              'black-forest-labs/flux-schnell': 'openai/gpt-5.4-image-2',
-              'black-forest-labs/flux-1.1-pro': 'openai/gpt-5.4-image-2',
-              'black-forest-labs/flux-kontext-pro': 'openai/gpt-5.4-image-2',
-              'xai/grok-2-image': 'openai/gpt-5.4-image-2',
+              'google/imagen-4': 'google/gemini-3-pro-image-preview',
+              'bytedance/seedream-4': 'bytedance-seed/seedream-4.5',
+              'black-forest-labs/flux-schnell': 'black-forest-labs/flux.2-klein-4b',
+              'black-forest-labs/flux-1.1-pro': 'black-forest-labs/flux.2-pro',
+              'black-forest-labs/flux-kontext-pro': 'black-forest-labs/flux.2-flex',
+              'xai/grok-2-image': 'x-ai/grok-imagine-image-quality',
             };
-            const cur = LEGACY[state.imageModel] || state.imageModel || 'openai/gpt-5.4-image-2';
+            const cur = LEGACY[state.imageModel] || state.imageModel || 'google/gemini-3.1-flash-image-preview';
             const opts = [
-              { group: T('โมเดลที่ใช้งานได้', 'Available models'), items: [
-                ['openai/gpt-5.4-image-2',                'GPT-5.4 Image 2 (OpenAI) 🏆'],
-                ['google/gemini-3.1-flash-image-preview', 'Nano Banana 2 (Gemini 3.1 Flash) ⭐'],
+              { group: T('🟦 Google (Nano Banana)', '🟦 Google (Nano Banana)'), items: [
+                ['google/gemini-2.5-flash-image',         'Nano Banana — Gemini 2.5 Flash (GA, ถูกสุด)'],
+                ['google/gemini-3.1-flash-image-preview', 'Nano Banana 2 — Gemini 3.1 Flash ⭐'],
+                ['google/gemini-3-pro-image-preview',     'Nano Banana Pro — Gemini 3 Pro (2K/4K) 🏆'],
+              ]},
+              { group: T('🟩 OpenAI (GPT)', '🟩 OpenAI (GPT)'), items: [
+                ['openai/gpt-5-image-mini',               'GPT-5 Image Mini (เบา/ถูก)'],
+                ['openai/gpt-5-image',                    'GPT-5 Image'],
+                ['openai/gpt-5.4-image-2',                'GPT-5.4 Image 2 (Thai text ดี)'],
+              ]},
+              { group: T('🟥 Black Forest Labs (FLUX.2)', '🟥 Black Forest Labs (FLUX.2)'), items: [
+                ['black-forest-labs/flux.2-klein-4b',     'FLUX.2 Klein 4B (เร็วสุด)'],
+                ['black-forest-labs/flux.2-flex',         'FLUX.2 Flex (typography)'],
+                ['black-forest-labs/flux.2-pro',          'FLUX.2 Pro (photoreal)'],
+                ['black-forest-labs/flux.2-max',          'FLUX.2 Max (top-tier)'],
+              ]},
+              { group: T('🟨 ByteDance / xAI', '🟨 ByteDance / xAI'), items: [
+                ['bytedance-seed/seedream-4.5',           'Seedream 4.5 (portrait/text $0.04)'],
+                ['x-ai/grok-imagine-image-quality',       'Grok Imagine (editorial)'],
               ]},
             ];
             return '<select class="select" id="ppImageModel" style="height:32px;width:auto;padding:0 28px 0 10px;font-size:12px">'

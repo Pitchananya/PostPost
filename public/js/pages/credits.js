@@ -51,13 +51,25 @@ const CATALOG = {
     note_th: 'รูปคุณภาพสูง (HD) คิดเครดิตมากกว่าเพราะต้นทุน provider แพงกว่า',
     note_en: 'HD images cost more credits because provider rates are higher',
     items: [
-      // Only the two REAL OpenRouter image-output models (verified against
-      // the live /api/v1/models catalog). Every other entry previously
-      // listed here (gpt-image-1, dall-e-3, gemini-2.5-flash-image, flux-*,
-      // seedream-4, imagen-4, grok-2-image) is not served by OpenRouter as
-      // image-output and would 400 with "not a valid model ID".
-      { id: 'openai/gpt-5.4-image-2',                label: 'GPT-5.4 Image 2 (OpenAI)',         tier: 'premium', cost: 15, default: true },
-      { id: 'google/gemini-3.1-flash-image-preview', label: 'Nano Banana 2 (Gemini 3.1 Flash)', tier: 'cheap',   cost: 5 },
+      // All 12 OpenRouter image-output models as of May 2026.
+      // Source: openrouter.ai/collections/image-models. Costs are
+      // rough USD-credit equivalents (1 credit = $0.01).
+      // ── Google (Nano Banana family) ──
+      { id: 'google/gemini-2.5-flash-image',         label: 'Nano Banana (Gemini 2.5 Flash)',   tier: 'cheap',    cost: 3 },
+      { id: 'google/gemini-3.1-flash-image-preview', label: 'Nano Banana 2 (Gemini 3.1 Flash)', tier: 'cheap',    cost: 5, default: true },
+      { id: 'google/gemini-3-pro-image-preview',     label: 'Nano Banana Pro (Gemini 3 Pro)',   tier: 'premium',  cost: 12 },
+      // ── OpenAI (GPT) ──
+      { id: 'openai/gpt-5-image-mini',               label: 'GPT-5 Image Mini',                 tier: 'cheap',    cost: 6 },
+      { id: 'openai/gpt-5-image',                    label: 'GPT-5 Image',                      tier: 'balanced', cost: 12 },
+      { id: 'openai/gpt-5.4-image-2',                label: 'GPT-5.4 Image 2',                  tier: 'premium',  cost: 15 },
+      // ── Black Forest Labs (FLUX.2) ──
+      { id: 'black-forest-labs/flux.2-klein-4b',     label: 'FLUX.2 Klein 4B',                  tier: 'cheap',    cost: 2 },
+      { id: 'black-forest-labs/flux.2-flex',         label: 'FLUX.2 Flex (typography)',         tier: 'balanced', cost: 6 },
+      { id: 'black-forest-labs/flux.2-pro',          label: 'FLUX.2 Pro (photoreal)',           tier: 'balanced', cost: 8 },
+      { id: 'black-forest-labs/flux.2-max',          label: 'FLUX.2 Max (top-tier)',            tier: 'premium',  cost: 18 },
+      // ── ByteDance / xAI ──
+      { id: 'bytedance-seed/seedream-4.5',           label: 'Seedream 4.5 (portrait)',          tier: 'balanced', cost: 4 },
+      { id: 'x-ai/grok-imagine-image-quality',       label: 'Grok Imagine',                     tier: 'balanced', cost: 7 },
     ],
   },
   video: {
