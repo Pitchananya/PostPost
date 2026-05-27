@@ -64,10 +64,36 @@ export function pageCreative() {
         </div>
         <div style="display:flex;align-items:center;gap:8px;margin-top:12px;padding-top:12px;border-top:1px dashed var(--line);flex-wrap:wrap">
           <span class="micro" style="font-weight:700">${raw(T('โมเดล AI สร้างรูป:', 'Image AI model:'))}</span>
-          <select class="select" id="ppImageModel" style="height:32px;width:auto;padding:0 28px 0 10px;font-size:12px">
-            <option value="gemini" ${(state.imageModel || 'gemini') === 'gemini' ? 'selected' : ''}>${T('Gemini · เร็ว', 'Gemini · fast')}</option>
-            <option value="gpt" ${state.imageModel === 'gpt' ? 'selected' : ''}>${T('GPT · gpt-5.4 (ช้า/คมชัด)', 'GPT · gpt-5.4 (slow/sharp)')}</option>
-          </select>
+          ${raw((() => {
+            // Map legacy provider keys → full ids so old saved state still picks the right option.
+            const LEGACY = { gemini: 'google/gemini-2.5-flash-image', gpt: 'openai/gpt-5.4-image-2' };
+            const cur = LEGACY[state.imageModel] || state.imageModel || 'google/gemini-2.5-flash-image';
+            const opts = [
+              { group: T('⚡ ถูก/เร็ว', '⚡ Cheap/Fast'), items: [
+                ['google/gemini-2.5-flash-image',     'Gemini Nano Banana ⭐'],
+                ['google/gemini-3.1-flash-image-preview', 'Gemini 3.1 Flash'],
+                ['bytedance/seedream-4',              'Seedream 4.0 (ถูกสุด)'],
+                ['black-forest-labs/flux-schnell',    'Flux Schnell (เร็วสุด)'],
+              ]},
+              { group: T('🎨 Balanced', '🎨 Balanced'), items: [
+                ['google/imagen-4',                       'Imagen 4 (Google photo)'],
+                ['black-forest-labs/flux-1.1-pro',        'Flux 1.1 Pro (product)'],
+                ['black-forest-labs/flux-kontext-pro',    'Flux Kontext (แก้รูป)'],
+                ['xai/grok-2-image',                      'Grok 2 Image'],
+              ]},
+              { group: T('💎 พรีเมียม', '💎 Premium'), items: [
+                ['openai/gpt-image-1',     'GPT Image 1 / DALL-E HD 🏆'],
+                ['openai/gpt-image-2',     'GPT Image 2 Medium'],
+                ['openai/gpt-5.4-image-2', 'GPT-5.4 Image 2 (top)'],
+                ['openai/dall-e-3',        'DALL-E 3'],
+              ]},
+            ];
+            return '<select class="select" id="ppImageModel" style="height:32px;width:auto;padding:0 28px 0 10px;font-size:12px">'
+              + opts.map(g => '<optgroup label="' + g.group + '">'
+                + g.items.map(([id, label]) => '<option value="' + id + '"' + (cur === id ? ' selected' : '') + '>' + label + '</option>').join('')
+                + '</optgroup>').join('')
+              + '</select>';
+          })())}
           <span class="micro" style="font-weight:700;margin-left:6px">${raw(T('จำนวนรูป:', 'Images:'))}</span>
           <select class="select" id="ppImageCount" style="height:32px;width:auto;padding:0 28px 0 10px;font-size:12px">
             ${raw([1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => `<option value="${n}" ${(state.imageCount || 4) === n ? 'selected' : ''}>${n} ${T('รูป', 'imgs')}</option>`).join(''))}

@@ -40,6 +40,8 @@ window.PP.state = window.PP.state || {
   avatar: 'mintra',
   avatarMode: 'free',      // ⚠️ DEFAULT SAFE — 'free' (no fal.ai charge). User must explicitly click "Real lip-sync" to opt-in.
   avatarLipsyncModel: 'fal-ai/bytedance/omnihuman/v1.5',  // default: OmniHuman v1.5 (face + body gestures, $0.50) — Infinitalk = face only
+  textModel: 'anthropic/claude-haiku-4.5',                // default text model for caption/topic gen — see TEXT_MODEL_METADATA in backend
+  imageModel: 'google/gemini-2.5-flash-image',            // default image model — full OpenRouter id (legacy 'gemini'/'gpt' mapped server-side)
   ttvStyle: 0,                                          // index into the styles[] array on the Text-to-Video page (0 = Creator/UGC)
   ttvModel: 'fal-ai/wan/v2.2-a14b/text-to-video',       // default to Wan 2.2 — cheapest reliable ($0.30/clip, no quota gamble)
   ttvDuration: '8s',
@@ -718,6 +720,24 @@ function generateInputHTML() {
           <option value="short" ${state.genLength==='short'?'selected':''}>${T('สั้น (~80 คำ)','Short (~80)')}</option>
           <option value="medium" ${(state.genLength||'medium')==='medium'?'selected':''}>${T('ปานกลาง (~150 คำ)','Medium (~150)')}</option>
           <option value="long" ${state.genLength==='long'?'selected':''}>${T('ยาว (~250 คำ)','Long (~250)')}</option>
+        </select></div>
+      <div style="display:flex;align-items:center;gap:6px"><span class="micro" style="font-weight:700">${T('โมเดล AI:','AI Model:')}</span>
+        <select class="select" id="ppGenTextModel" style="height:34px;width:auto;padding:0 30px 0 10px;font-size:12px">
+          <optgroup label="${T('⚡ ถูก/เร็ว','⚡ Cheap/Fast')}">
+            <option value="anthropic/claude-haiku-4.5" ${(state.textModel||'anthropic/claude-haiku-4.5')==='anthropic/claude-haiku-4.5'?'selected':''}>Claude Haiku 4.5 ⭐</option>
+            <option value="google/gemini-2.5-flash" ${state.textModel==='google/gemini-2.5-flash'?'selected':''}>Gemini 2.5 Flash</option>
+            <option value="deepseek/deepseek-v3" ${state.textModel==='deepseek/deepseek-v3'?'selected':''}>DeepSeek V3 (ถูกสุด)</option>
+            <option value="openai/gpt-5-mini" ${state.textModel==='openai/gpt-5-mini'?'selected':''}>GPT-5 Mini</option>
+          </optgroup>
+          <optgroup label="${T('💎 พรีเมียม','💎 Premium')}">
+            <option value="anthropic/claude-sonnet-4.6" ${state.textModel==='anthropic/claude-sonnet-4.6'?'selected':''}>Claude Sonnet 4.6</option>
+            <option value="google/gemini-2.5-pro" ${state.textModel==='google/gemini-2.5-pro'?'selected':''}>Gemini 2.5 Pro</option>
+            <option value="openai/gpt-5" ${state.textModel==='openai/gpt-5'?'selected':''}>GPT-5</option>
+            <option value="anthropic/claude-opus-4.7" ${state.textModel==='anthropic/claude-opus-4.7'?'selected':''}>Claude Opus 4.7 🏆</option>
+          </optgroup>
+          <optgroup label="${T('🧠 Reasoning','🧠 Reasoning')}">
+            <option value="deepseek/deepseek-r1" ${state.textModel==='deepseek/deepseek-r1'?'selected':''}>DeepSeek R1</option>
+          </optgroup>
         </select></div>
       <div style="margin-left:auto;display:flex;gap:8px">
         <button class="btn outline">${I('upload',15)} ${T('อัปโหลดรูป','Upload')}</button>
@@ -1744,7 +1764,16 @@ render();
     if (t && t.id==='ppGenTone') { state.genTone = t.value; return; }
     if (t && t.id==='ppGenLang') { state.genLang = t.value; return; }
     if (t && t.id==='ppGenLength') { state.genLength = t.value; return; }
-    if (t && t.id==='ppImageModel') { state.imageModel = t.value; return; }
+    if (t && t.id==='ppGenTextModel') {
+      state.textModel = t.value;
+      try { window.PP && window.PP.track && window.PP.track('text_model_changed', { model: t.value }); } catch(_){}
+      return;
+    }
+    if (t && t.id==='ppImageModel') {
+      state.imageModel = t.value;
+      try { window.PP && window.PP.track && window.PP.track('image_model_changed', { model: t.value }); } catch(_){}
+      return;
+    }
     if (t && t.id==='ppImageCount') { state.imageCount = parseInt(t.value,10)||4; return; }
     if (t && t.id==='ppAvatarVoice') { state.avatarVoice = t.value; return; }
     if (t && t.id==='ppTopicBrand') {
@@ -2106,6 +2135,7 @@ render();
         voices: voiceLabels, archetype: archLabel, products: prods,
         theme: theme, goals: goals, count: count,
         exclude: existing,
+        textModel: state.textModel || '',
       }});
       if (j && j.topics && j.topics.length) {
         TOPICS = j.topics;
@@ -2191,7 +2221,8 @@ render();
         brandName: ab.name, businessType: ab.bizType||'', brandDesc: ab.desc||state.brandDesc||'',
         voices: voiceLabels, archetype: arch?(state.lang==='th'?arch.th:arch.en):'',
         products: prods, topic: topic, tone: toneLabel, length: lenLabel, lang: state.genLang||'th',
-        imageCount: state.imageCount || 4
+        imageCount: state.imageCount || 4,
+        textModel: state.textModel || '',
       }});
       if (j && (j.hooks || j.caption)) {
         state.genHooks = j.hooks || [];
@@ -2223,13 +2254,15 @@ render();
   async function genImagesForSlides(){
     var prompts = state.genImagePrompts || [];
     var count = Math.min(state.imageCount || 4, prompts.length);
-    var provider = state.imageModel || 'gemini';
+    // Legacy provider keys map to full model ids for backward compatibility
+    var IMG_LEGACY = { gemini: 'google/gemini-2.5-flash-image', gpt: 'openai/gpt-5.4-image-2' };
+    var imgModel = IMG_LEGACY[state.imageModel] || state.imageModel || 'google/gemini-2.5-flash-image';
     state.genImages = [];
     state.previewIndex = 0;
     for (var i = 0; i < count; i++) {
       toast(state.lang==='th' ? ('กำลังสร้างรูป '+(i+1)+'/'+count+'…') : ('Generating image '+(i+1)+'/'+count+'…'));
       try {
-        var r = await api('/api/ai/gen-image', { method:'POST', body:{ prompt: prompts[i], provider: provider } });
+        var r = await api('/api/ai/gen-image', { method:'POST', body:{ prompt: prompts[i], model: imgModel } });
         if (r && r.image_base64) state.genImages.push('data:image/png;base64,' + r.image_base64);
         else if (r && r.image_url) state.genImages.push(r.image_url);
         else state.genImages.push(null);
