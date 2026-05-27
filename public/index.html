@@ -664,14 +664,36 @@ const DEMO_TOPICS = TOPICS.slice();
 // SHARED: Product picker + Generate input + Publish card
 // ====================================================================
 function productPickerHTML() {
-  const selectedCount = 5;
+  // Always read from the ACTIVE brand's products — never the legacy module-level
+  // PRODUCTS array, which on boot still holds the seeded happyprice skincare
+  // demos and only gets reassigned on brand-switch. For a non-happyprice brand
+  // with no synced products yet, that meant skincare items showed up as fake
+  // "products available to post" on the Caption/Creative pages.
+  var _ab = BRANDS.filter(function(b){ return b.id === state.brand; })[0];
+  var list = (_ab && Array.isArray(_ab.products)) ? _ab.products : [];
+  var selectedCount = (state.selectedProducts || []).filter(function(id){
+    return list.some(function(p){ return p.id === id; });
+  }).length;
+  // Subtitle reflects the brand's actual Shopee URL handle, not the hardcoded
+  // happyprice.sh placeholder. Falls back to "ยังไม่ได้เชื่อมร้าน" when empty.
+  var shopUrl = (_ab && _ab.shopUrl) || '';
+  var handle = '';
+  if (shopUrl) {
+    var m = shopUrl.match(/shopee\.[^/]+\/([^/#?]+)/);
+    handle = m ? m[1] : shopUrl.replace(/^https?:\/\//, '').slice(0, 40);
+  }
+  var sub = handle
+    ? T('ดึงจาก Shopee · '+handle+' · <b style="color:var(--purple)">'+list.length+'</b> สินค้าพร้อมใช้',
+        'From Shopee · '+handle+' · <b style="color:var(--purple)">'+list.length+'</b> products ready')
+    : T('ยังไม่ได้เชื่อมร้าน — ไปที่ Profile เพื่อวาง URL ร้านของคุณ',
+        'No shop connected — set your shop URL on Profile');
   return `<div class="card" style="margin-bottom:16px">
     <div class="split" style="margin-bottom:12px">
       <div style="display:flex;align-items:center;gap:10px">
         <div style="width:34px;height:34px;border-radius:9px;background:var(--orange-soft);display:grid;place-items:center;color:var(--orange)">${I('package',16)}</div>
         <div>
           <h3 class="cardTitle">${T('เลือกสินค้าที่จะโพสต์','Pick a product to post')}</h3>
-          <p class="cardSub">${T('ดึงจาก Shopee · happyprice.sh · <b style="color:var(--purple)">'+selectedCount+'</b> สินค้าพร้อมใช้','From Shopee · happyprice.sh · <b style="color:var(--purple)">'+selectedCount+'</b> products ready')}</p>
+          <p class="cardSub">${sub}</p>
         </div>
       </div>
       <div style="display:flex;gap:8px;align-items:center">
@@ -680,12 +702,16 @@ function productPickerHTML() {
       </div>
     </div>
     <div style="display:flex;gap:10px;overflow-x:auto;padding-bottom:6px">
-      ${PRODUCTS.map(p => `<button class="productCard ${(state.selectedProducts||[]).indexOf(p.id)>=0?'active':''}" data-product="${p.id}" style="width:130px;flex-shrink:0">
+      ${list.length === 0 ? `<div style="flex:1;padding:24px;text-align:center;color:var(--muted);font-size:12.5px;border:1px dashed var(--line3);border-radius:12px;background:var(--cream2)">
+        ${I('package',22,'#9CA3AF')}
+        <div style="margin-top:8px;font-weight:700;color:var(--ink2)">${T('ยังไม่มีสินค้าสำหรับแบรนด์นี้','No products for this brand yet')}</div>
+        <div style="margin-top:4px;font-size:11.5px">${T('ไปที่ Profile → "สินค้าจากร้านของคุณ" เพื่อเชื่อม Shopee หรือเพิ่มเอง','Go to Profile → "Products from your store" to connect Shopee or add manually')}</div>
+      </div>` : list.map(p => `<button class="productCard ${(state.selectedProducts||[]).indexOf(p.id)>=0?'active':''}" data-product="${p.id}" style="width:130px;flex-shrink:0">
         <span class="checkBadge">✓</span>
         ${productImgHTML(p, {badge:true})}
-        <div class="pName" style="font-size:11px;height:28px">${p.short}</div>
-        <div class="split"><span class="pPrice">฿${p.price}</span><span style="font-size:9.5px;color:var(--muted)">★ ${p.rating}</span></div>
-        <div style="font-size:9px;color:var(--muted)">${T('ขายแล้ว','Sold')} ${p.sales}</div>
+        <div class="pName" style="font-size:11px;height:28px">${p.short || p.name_th || p.name_en || ''}</div>
+        <div class="split"><span class="pPrice">฿${p.price}</span><span style="font-size:9.5px;color:var(--muted)">★ ${p.rating||'—'}</span></div>
+        <div style="font-size:9px;color:var(--muted)">${T('ขายแล้ว','Sold')} ${p.sales||0}</div>
       </button>`).join('')}
       <button class="productCard" style="width:130px;flex-shrink:0;border:1px dashed var(--line3);background:var(--cream2);align-items:center;justify-content:center;gap:6px">
         ${I('plus',20,'#6B6473')}
@@ -1910,7 +1936,19 @@ render();
       state.selectedProducts = PRODUCTS.map(function(p){ return p.id; });
       state.shopStats = ab.shopStats || null;
       if (ab.shopUrl) state.shopUrl = ab.shopUrl;
+    } else if (ab && ab.id !== 'happyprice') {
+      // No saved products + not the seed happyprice brand → wipe the global
+      // PRODUCTS (initialized with skincare demos at line 600) so they don't
+      // bleed into the Caption/Creative product picker on a fresh brand.
+      PRODUCTS = [];
+      state.selectedProducts = [];
+      state.shopStats = null;
+      state.shopUrl = '';
     }
+    // Mirror PRODUCTS into the module's array so importers (profile.js,
+    // topics.js consumers) read the same brand-scoped list — without this,
+    // the module copy keeps the seed skincare demos.
+    try { window.PP && window.PP.setProducts && window.PP.setProducts(PRODUCTS); } catch(_){}
   })();
 
   // Per-brand channel connection — Facebook / Instagram / TikTok
