@@ -51,6 +51,7 @@ import { pageTopics } from './pages/topics.js';
 import { pageLibrary } from './pages/library.js';
 import { pageCaption } from './pages/caption.js';
 import { pageCreative } from './pages/creative.js';
+import { pageCredits } from './pages/credits.js';
 import { pageProfile } from './pages/profile.js';
 import { pageTextVideo } from './pages/textvideo.js';
 import { pageAvatar } from './pages/avatar.js';
@@ -204,5 +205,7 @@ PAGES.profile = pageProfile;
 PAGES.textvideo = pageTextVideo;
 // Phase 3d — Talking Avatar (biggest page).
 PAGES.avatar = pageAvatar;
+// AI pricing / credits reference page (Hedra-style table)
+PAGES.credits = pageCredits;
 // First paint — now that PAGES is filled in, render the canonical page.
 render();

@@ -22,5 +22,6 @@ export const NAV = {
     { id: 'analytics',  icon: 'trending',    label: { th: 'Analytics', en: 'Analytics' } },
     { id: 'calendar',   icon: 'calendar',    label: { th: 'ปฏิทิน', en: 'Calendar' }, badge: 12 },
     { id: 'library',    icon: 'library',     label: { th: 'คลังคอนเทนต์', en: 'Library' } },
+    { id: 'credits',    icon: 'sparkles',    label: { th: 'ราคา AI / Credits', en: 'AI Pricing / Credits' }, tag: 'NEW' },
   ],
 };
