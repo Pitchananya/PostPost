@@ -82,6 +82,14 @@ window.PP.state = window.PP.state || {
   previewIndex: 0,         // current slide in carousel
   sidebarOpen: false,      // mobile drawer state (≤768px) — toggled by the hamburger button
   profileMenuOpen: false,  // topbar profile dropdown — opened by clicking the .profilePill
+  // Per-card edit toggles on the Caption page — when true, the read-only
+  // display swaps for a textarea so the user can hand-edit AI output.
+  editingCaption: false,
+  editingArticle: false,
+  editingHashtags: false,
+  // Index of the image slot currently being regenerated on the Creative
+  // page (set by regenImageSlot, cleared in `finally`). -1 = none.
+  genImageRegenIdx: -1,
 };
 const state = window.PP.state;
 
@@ -2378,27 +2386,43 @@ render();
       state.genLoading = false; render();
     }
   }
-  // Sequential image generation — one /gen-image call per slide prompt
-  async function genImagesForSlides(){
-    var prompts = state.genImagePrompts || [];
-    var count = Math.min(state.imageCount || 4, prompts.length);
-    // Legacy provider keys map to full model ids for backward compatibility
-    // Legacy provider keys + retired/fake model ids → real ids. gpt-image-2 /
-    // gpt-5.4-image-2 never existed on OpenRouter — rewrite to gpt-image-1 so
-    // stale saved selections don't keep producing 400 "not a valid model ID".
+  // ── Image-gen client dispatch ────────────────────────────────────────
+  // Pick the per-provider backend endpoint that matches the chosen model.
+  // openai/gpt-image-* + dall-e   → /api/ai/gen-image/openai
+  // google/(gemini.*image|imagen) → /api/ai/gen-image/google
+  // everything else (flux/seedream/grok/...) → /api/ai/gen-image/openrouter
+  // Each backend route is a single dedicated code path with no branching,
+  // so a failure points cleanly at one provider's API.
+  function resolveImageModel(rawModel) {
+    // gpt-image-2 / gpt-5.4-image-2 never existed on OpenRouter — rewrite
+    // stale saved selections to gpt-image-1 before dispatching.
     var IMG_LEGACY = {
       gemini: 'google/gemini-2.5-flash-image',
       gpt: 'openai/gpt-image-1',
       'openai/gpt-image-2': 'openai/gpt-image-1',
       'openai/gpt-5.4-image-2': 'openai/gpt-image-1',
     };
-    var imgModel = IMG_LEGACY[state.imageModel] || state.imageModel || 'openai/gpt-image-1';
+    return IMG_LEGACY[rawModel] || rawModel || 'openai/gpt-image-1';
+  }
+  function pickGenImageEndpoint(model) {
+    if (/^openai\/(gpt-image|dall-e)/i.test(model)) return '/api/ai/gen-image/openai';
+    if (/^google\/(gemini.*image|imagen)/i.test(model)) return '/api/ai/gen-image/google';
+    return '/api/ai/gen-image/openrouter';
+  }
+
+  // Sequential image generation — one call per slide prompt, routed to the
+  // dedicated per-provider backend endpoint based on the picked model.
+  async function genImagesForSlides(){
+    var prompts = state.genImagePrompts || [];
+    var count = Math.min(state.imageCount || 4, prompts.length);
+    var imgModel = resolveImageModel(state.imageModel);
+    var endpoint = pickGenImageEndpoint(imgModel);
     state.genImages = [];
     state.previewIndex = 0;
     for (var i = 0; i < count; i++) {
       toast(state.lang==='th' ? ('กำลังสร้างรูป '+(i+1)+'/'+count+'…') : ('Generating image '+(i+1)+'/'+count+'…'));
       try {
-        var r = await api('/api/ai/gen-image', { method:'POST', body:{ prompt: prompts[i], model: imgModel } });
+        var r = await api(endpoint, { method:'POST', body:{ prompt: prompts[i], model: imgModel } });
         if (r && r.image_base64) state.genImages.push('data:image/png;base64,' + r.image_base64);
         else if (r && r.image_url) state.genImages.push(r.image_url);
         else state.genImages.push(null);
@@ -2411,7 +2435,126 @@ render();
   }
   document.addEventListener('click', function(e){
     if (e.target.closest('[data-genall]')) { e.preventDefault(); genAll(); }
+    // ── Caption / Article / Hashtags inline edit toggles ─────────────────
+    // Each card on the Caption page swaps between read-only display and a
+    // textarea (or chip→textarea for hashtags). Pencil toggles the flag,
+    // render() switches the markup. When LEAVING edit mode for hashtags,
+    // re-parse the textarea into the chip array (split on whitespace,
+    // auto-prepend # for tokens that don't have one).
+    if (e.target.closest('[data-editcap]')) {
+      e.preventDefault();
+      // If leaving edit mode, capture the textarea value (in case the
+      // input handler missed the last keystroke) before re-rendering.
+      if (state.editingCaption) {
+        var capEl = document.getElementById('ppGenCaption');
+        if (capEl) state.genCaption = capEl.value;
+      }
+      state.editingCaption = !state.editingCaption;
+      render();
+      if (state.editingCaption) {
+        setTimeout(function(){ var el = document.getElementById('ppGenCaption'); if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); } }, 30);
+      }
+      return;
+    }
+    if (e.target.closest('[data-editarticle]')) {
+      e.preventDefault();
+      if (state.editingArticle) {
+        var artEl = document.getElementById('ppGenArticle');
+        if (artEl) state.genArticle = artEl.value;
+      }
+      state.editingArticle = !state.editingArticle;
+      render();
+      if (state.editingArticle) {
+        setTimeout(function(){ var el = document.getElementById('ppGenArticle'); if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); } }, 30);
+      }
+      return;
+    }
+    if (e.target.closest('[data-edithashtags]')) {
+      e.preventDefault();
+      if (state.editingHashtags) {
+        var hEl = document.getElementById('ppGenHashtagsEdit');
+        if (hEl) {
+          state.genHashtags = (hEl.value || '').split(/\s+/)
+            .map(function(s){ return s.trim(); })
+            .filter(Boolean)
+            .map(function(s){ return s[0] === '#' ? s : '#' + s.replace(/^#+/, ''); });
+        }
+      }
+      state.editingHashtags = !state.editingHashtags;
+      render();
+      if (state.editingHashtags) {
+        setTimeout(function(){ var el = document.getElementById('ppGenHashtagsEdit'); if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); } }, 30);
+      }
+      return;
+    }
+    if (e.target.closest('[data-copycap]')) {
+      e.preventDefault();
+      var src = (state.editingCaption && document.getElementById('ppGenCaption')) ? document.getElementById('ppGenCaption').value : (state.genCaption || '');
+      if (src) { try { navigator.clipboard.writeText(src); toast(state.lang==='th'?'คัดลอกแคปชั่นแล้ว':'Caption copied','success'); } catch(_){ } }
+      return;
+    }
+    if (e.target.closest('[data-copyarticle]')) {
+      e.preventDefault();
+      var src2 = (state.editingArticle && document.getElementById('ppGenArticle')) ? document.getElementById('ppGenArticle').value : (state.genArticle || '');
+      if (src2) { try { navigator.clipboard.writeText(src2); toast(state.lang==='th'?'คัดลอกบทความแล้ว':'Article copied','success'); } catch(_){ } }
+      return;
+    }
+    // ── Per-image regenerate (Creative page) ─────────────────────────────
+    // The bulk genAll path produces N images in one shot. When one fails
+    // (or the user wants a different variation), they can click the slot's
+    // refresh button to re-roll JUST that image — uses the same prompt
+    // that the slot was generated with so the others aren't affected.
+    var regenEl = e.target.closest('[data-regenimg]');
+    if (regenEl) {
+      e.preventDefault();
+      var idx = parseInt(regenEl.getAttribute('data-regenimg'), 10);
+      if (!isNaN(idx) && typeof regenImageSlot === 'function') regenImageSlot(idx);
+      return;
+    }
   });
+
+  // Sync the textarea values back to state as the user types — no render()
+  // here on purpose; render would replace the DOM and lose focus/selection.
+  document.addEventListener('input', function(e){
+    var t = e.target; if (!t || !t.id) return;
+    if (t.id === 'ppGenCaption') { state.genCaption = t.value; return; }
+    if (t.id === 'ppGenArticle') { state.genArticle = t.value; return; }
+    // Hashtags textarea is only parsed back into the array on edit-mode
+    // exit (above) — typing should stay free-form so " #foo " mid-edit
+    // doesn't get re-tokenized after every keystroke.
+  });
+
+  // Per-image regenerate — re-runs gen-image for a single slot using the
+  // prompt that produced it. Index is into state.genImagePrompts /
+  // state.genImages parallel arrays. Caller already validated `idx`.
+  // Uses the same per-provider dispatch as the bulk gen so one slot's
+  // retry hits the same backend route the rest of the batch used.
+  async function regenImageSlot(idx){
+    var prompts = state.genImagePrompts || [];
+    if (idx < 0 || idx >= prompts.length) return;
+    var imgModel = resolveImageModel(state.imageModel);
+    var endpoint = pickGenImageEndpoint(imgModel);
+    // Mark slot as "regenerating" with a null placeholder so the UI can
+    // show a spinner immediately while the request is in flight.
+    if (!Array.isArray(state.genImages)) state.genImages = [];
+    while (state.genImages.length <= idx) state.genImages.push(null);
+    state.genImageRegenIdx = idx;
+    render();
+    toast(state.lang==='th' ? ('กำลังสร้างรูป '+(idx+1)+' ใหม่…') : ('Regenerating image '+(idx+1)+'…'));
+    try {
+      var r = await api(endpoint, { method:'POST', body:{ prompt: prompts[idx], model: imgModel } });
+      var url = r.image_url || (r.image_base64 ? ('data:image/png;base64,' + r.image_base64) : null);
+      if (!url) throw new Error(r.error || 'no image returned');
+      state.genImages[idx] = url;
+      toast(state.lang==='th' ? ('สร้างรูป '+(idx+1)+' สำเร็จ ✓') : ('Image '+(idx+1)+' ready ✓'),'success');
+    } catch(e){
+      state.genImages[idx] = null;
+      toast((state.lang==='th'?'รูปที่ '+(idx+1)+' ไม่สำเร็จ: ':'Image '+(idx+1)+' failed: ')+(e.message||''),'error');
+    } finally {
+      state.genImageRegenIdx = -1;
+      render();
+    }
+  }
 
   // Talking Avatar — AI script generator (Phase 1: script only, no TTS/lipsync yet)
   async function genAvatarScript(){
@@ -5564,6 +5707,7 @@ render();
     + '[data-saveproduct],[data-newimgclear],[data-newimg],[data-proddelete],[data-usetopic],[data-genall],[data-savedraft],[data-savevideodraft],[data-saveavatardraft],[data-editdraft],[data-deletedraft],[data-schedule],[data-avatarscript],[data-veogen],[data-newavatar],[data-rmbgavatar],'
     + '[data-uploadavatar],[data-uploadref],[data-clearref],[data-pickrefproduct],[data-refclose],[data-refpick],[data-genvideoprompt],[data-delavatar],[data-addtoday],[data-pickdraft],[data-pickdraftclose],[data-pickdraftgo],[data-tts],[data-pickfbpage],[data-avatarvideo],[data-pastevideourl],[data-pastelipsyncurl],[data-clearlipsyncurl],[data-hflipsync],[data-locallocaltoggle],[data-bgscene],[data-bgpick],[data-bgsearch],[data-bgsearchclear],[data-bginterval],[data-clipdur],[data-avatarabort],[data-genstoryboard],[data-slottoggle],[data-slotsearch],[data-slotpickurl],[data-mobilemenu],[data-mobilebackdrop],[data-profilemenu],[data-profileview],[data-profileclose],[data-signout],'
     + '[data-previewaspect],[data-previewidx],[data-downloadpng],'
+    + '[data-editcap],[data-editarticle],[data-edithashtags],[data-copycap],[data-copyarticle],[data-regenimg],'
     + '[data-analytics-days],[data-automation-refresh]';
   document.addEventListener('click', function(e){
     var b = e.target.closest('button, a');

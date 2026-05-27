@@ -117,15 +117,21 @@ export function pageCreative() {
         </div>
         ${genImages.length
           ? raw(`<div class="grid g2" style="gap:14px">
-            ${genImages.map((img, i) => `<div class="productCard" style="padding:12px">
+            ${genImages.map((img, i) => {
+              const isRegen = state.genImageRegenIdx === i;
+              return `<div class="productCard" style="padding:12px;position:relative">
               <div style="position:absolute;top:8px;left:8px;z-index:2;background:var(--purple);color:#fff;width:24px;height:24px;border-radius:7px;display:grid;place-items:center;font-weight:800;font-size:12px">${i + 1}</div>
+              <button class="btn ${img ? 'ghost' : 'primary'} sm iconOnly" data-regenimg="${i}" title="${T('สร้างใหม่', 'Regenerate')}" ${isRegen ? 'disabled' : ''} style="position:absolute;top:8px;right:8px;z-index:2;background:${img ? 'rgba(255,255,255,.92)' : 'var(--orange)'};color:${img ? 'var(--ink)' : '#fff'};box-shadow:0 2px 6px rgba(0,0,0,.12);width:28px;height:28px">${I(isRegen ? 'clock' : 'refresh', 13)}</button>
               <div class="productImg" style="aspect-ratio:1;background:#f3f0ea;overflow:hidden">
                 ${img
-                  ? `<img src="${img}" alt="" style="width:100%;height:100%;object-fit:cover"/>`
-                  : `<div style="display:grid;place-items:center;height:100%;color:var(--muted);font-size:11px;text-align:center;padding:8px">${T('สร้างรูปไม่สำเร็จ', 'Image failed')}</div>`}
+                  ? `<img src="${img}" alt="" style="width:100%;height:100%;object-fit:cover${isRegen ? ';opacity:.55' : ''}"/>`
+                  : (isRegen
+                    ? `<div style="display:grid;place-items:center;height:100%;color:var(--orange);font-size:11px;text-align:center;padding:8px;gap:6px"><div style="font-size:22px">⏳</div>${T('กำลังสร้างใหม่…', 'Regenerating…')}</div>`
+                    : `<div style="display:grid;place-items:center;height:100%;color:var(--muted);font-size:11px;text-align:center;padding:8px;gap:6px"><div style="font-size:20px;color:#DC2626">⚠</div>${T('สร้างรูปไม่สำเร็จ — กด ↻ ลองใหม่', 'Image failed — tap ↻ to retry')}</div>`)}
               </div>
               <div style="font-size:11px;color:var(--muted);margin-top:6px;line-height:1.45;max-height:50px;overflow:hidden">${escText((state.genImagePrompts || [])[i] || '')}</div>
-            </div>`).join('')}
+            </div>`;
+            }).join('')}
           </div>`)
           : raw(`<div style="padding:32px 20px;text-align:center;color:var(--muted)">
             <div style="font-size:28px;margin-bottom:8px">🖼️</div>

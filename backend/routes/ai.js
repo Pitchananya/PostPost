@@ -1476,56 +1476,138 @@ router.post('/image', async (req, res) => {
   }
 });
 
-// 🖼️ POST /ai/gen-image — sync image generation via OpenRouter (OPENROUTER_API_KEY).
-// GPT and Gemini are different models — provider picks which one.
-// body: { prompt, provider: 'gpt' | 'gemini' } → { ok, provider, model, image_base64 }
+// 🖼️ Image generation — fully split per provider so each one's
+// API quirks (request body shape, response parsing, auth, error handling,
+// rate-limit codes) stay isolated. The frontend dispatches to the right
+// URL based on the model prefix:
+//
+//   openai/gpt-image-* | openai/dall-e-*  → /ai/gen-image/openai
+//   google/gemini-*-image | google/imagen → /ai/gen-image/google
+//   everything else (flux, seedream, grok) → /ai/gen-image/openrouter
+//
+// The legacy /ai/gen-image is kept as a thin dispatcher for older clients
+// (frontends pinned to a previous deploy still call it). Per-provider
+// endpoints are the canonical surface from now on.
+
+// ── Fake/retired model ids the older clients may still send. OpenRouter
+//    rejects these with 400 "not a valid model ID", so we rewrite to a
+//    real one before dispatching. Kept module-level so all three routes
+//    share the same allow-list.
+const FAKE_OPENAI_IMAGE_IDS = new Set(['openai/gpt-image-2', 'openai/gpt-5.4-image-2']);
+function normalizeOpenAIImageModel(modelBody) {
+  if (FAKE_OPENAI_IMAGE_IDS.has(modelBody)) return 'openai/gpt-image-1';
+  return modelBody || (process.env.GPT_IMAGE_MODEL || 'openai/gpt-image-1');
+}
+
+// 🎨 POST /ai/gen-image/openai — OpenAI's /v1/images/generations API.
+// Request body: { model, prompt, size, n, quality }
+// Response: { data: [{ b64_json | url }] }
+// Auth: OPENAI_API_KEY (NOT OpenRouter). Models: openai/gpt-image-1, openai/dall-e-3.
+router.post('/gen-image/openai', async (req, res) => {
+  const { prompt, model: modelBody } = req.body || {};
+  if (!prompt || !String(prompt).trim()) return res.status(400).json({ error: 'prompt required' });
+  if (!process.env.OPENAI_API_KEY) return res.status(500).json({ error: 'OPENAI_API_KEY not set — required for /gen-image/openai' });
+  const model = normalizeOpenAIImageModel(modelBody);
+  if (!/^openai\/(gpt-image|dall-e)/i.test(model)) {
+    return res.status(400).json({ error: `model ${model} not supported by /gen-image/openai — use /gen-image/google or /gen-image/openrouter` });
+  }
+  const t0 = Date.now();
+  try {
+    const r = await generateImageOpenAIDirect(String(prompt), model);
+    if (r.error) throw new Error(r.error);
+    console.log(`[ai/gen-image/openai] ✓ ${model} took=${Date.now()-t0}ms`);
+    res.json({ ok: true, provider: 'openai', model, image_base64: r.image_base64 || null, image_url: r.image_url || null });
+  } catch (e) {
+    console.error(`[ai/gen-image/openai] ✗ ${model} after ${Date.now()-t0}ms: ${e.message}`);
+    res.status(500).json({ error: e.message, model, provider: 'openai' });
+  }
+});
+
+// 🟦 POST /ai/gen-image/google — Google AI Studio's generateContent with
+// responseModalities: ['IMAGE','TEXT']. Returns inlineData base64.
+// Auth: GOOGLE_AI_API_KEY. Models: google/gemini-*-image, google/imagen-*.
+router.post('/gen-image/google', async (req, res) => {
+  const { prompt, model: modelBody } = req.body || {};
+  if (!prompt || !String(prompt).trim()) return res.status(400).json({ error: 'prompt required' });
+  if (!process.env.GOOGLE_AI_API_KEY) return res.status(500).json({ error: 'GOOGLE_AI_API_KEY not set — required for /gen-image/google' });
+  const model = modelBody || (process.env.GEMINI_IMAGE_MODEL || 'google/gemini-3.1-flash-image-preview');
+  if (!/^google\/(gemini.*image|imagen)/i.test(model)) {
+    return res.status(400).json({ error: `model ${model} not supported by /gen-image/google — use /gen-image/openai or /gen-image/openrouter` });
+  }
+  const t0 = Date.now();
+  try {
+    const r = await generateImageGoogleDirect(String(prompt), model);
+    if (r.error) throw new Error(r.error);
+    console.log(`[ai/gen-image/google] ✓ ${model} took=${Date.now()-t0}ms`);
+    res.json({ ok: true, provider: 'google', model, image_base64: r.image_base64 || null, image_url: r.image_url || null });
+  } catch (e) {
+    console.error(`[ai/gen-image/google] ✗ ${model} after ${Date.now()-t0}ms: ${e.message}`);
+    res.status(500).json({ error: e.message, model, provider: 'google' });
+  }
+});
+
+// 🌐 POST /ai/gen-image/openrouter — OpenRouter chat-completions with
+// modalities: ['image','text']. Covers everything that isn't OpenAI or
+// Google direct: Flux, Seedream, Grok, etc. Also a fallback path for
+// OpenAI/Google when the dedicated key isn't configured.
+// Auth: OPENROUTER_API_KEY.
+router.post('/gen-image/openrouter', async (req, res) => {
+  const { prompt, model: modelBody } = req.body || {};
+  if (!prompt || !String(prompt).trim()) return res.status(400).json({ error: 'prompt required' });
+  if (!process.env.OPENROUTER_API_KEY) return res.status(500).json({ error: 'OPENROUTER_API_KEY not set — required for /gen-image/openrouter' });
+  // Rewrite the fake openai/gpt-image-2 ids here too, in case a client
+  // hits this endpoint directly with a stale value.
+  const model = FAKE_OPENAI_IMAGE_IDS.has(modelBody) ? 'openai/gpt-image-1' : (modelBody || 'black-forest-labs/flux-1.1-pro');
+  const t0 = Date.now();
+  try {
+    const result = await tryOpenRouterImageGen(String(prompt), model, 'standard');
+    if (!result.ok || !result.url) throw new Error(result.error || 'no image returned');
+    const out = parseImageUrlToReturn(result.url, model);
+    console.log(`[ai/gen-image/openrouter] ✓ ${model} took=${Date.now()-t0}ms`);
+    res.json({ ok: true, provider: 'openrouter', model, image_base64: out.image_base64 || null, image_url: out.image_url || null });
+  } catch (e) {
+    console.error(`[ai/gen-image/openrouter] ✗ ${model} after ${Date.now()-t0}ms: ${e.message}`);
+    res.status(500).json({ error: e.message, model, provider: 'openrouter' });
+  }
+});
+
+// 🔀 POST /ai/gen-image — legacy dispatcher. Kept for backward compat with
+// older clients that haven't migrated to the per-provider endpoints. New
+// callers should pick /openai, /google, or /openrouter directly so the
+// code path is explicit at the call site.
 router.post('/gen-image', async (req, res) => {
   const { prompt, provider: providerBody = 'gemini', model: modelBody } = req.body || {};
   if (!prompt || !String(prompt).trim()) return res.status(400).json({ error: 'prompt required' });
-  // Rewrite fake / retired model ids the frontend may still send.
-  // gpt-image-2 / gpt-5.4-image-2 don't exist on OpenRouter — rewrite to gpt-image-1.
-  const FAKE = new Set(['openai/gpt-image-2', 'openai/gpt-5.4-image-2']);
-  const requested = FAKE.has(modelBody) ? 'openai/gpt-image-1' : modelBody;
+  const requested = FAKE_OPENAI_IMAGE_IDS.has(modelBody) ? 'openai/gpt-image-1' : modelBody;
   const model = requested
     || (providerBody === 'gpt'
       ? (process.env.GPT_IMAGE_MODEL || 'openai/gpt-image-1')
       : (process.env.GEMINI_IMAGE_MODEL || 'google/gemini-3.1-flash-image-preview'));
-  // Per-provider routing — OpenAI and Google use different request/response
-  // shapes (OpenAI = POST /v1/images/generations with b64_json; Google =
-  // generateContent with inlineData; everything else = OpenRouter chat
-  // completions with modalities: ['image','text']). The generic OpenRouter
-  // route worked for some models but failed silently/strangely for the
-  // dedicated image-only endpoints. Each provider gets its own code path.
   const isOpenAIImage = /^openai\/(gpt-image|dall-e)/i.test(model);
   const isGoogleImage = /^google\/(gemini.*image|imagen)/i.test(model);
   const t0 = Date.now();
   try {
-    let out;
-    let provider;
+    let out, provider;
     if (isOpenAIImage && process.env.OPENAI_API_KEY) {
-      // OpenAI direct — /v1/images/generations
       provider = 'openai';
       const r = await generateImageOpenAIDirect(String(prompt), model);
       if (r.error) throw new Error(r.error);
       out = { image_base64: r.image_base64 || null, image_url: r.image_url || null };
     } else if (isGoogleImage && process.env.GOOGLE_AI_API_KEY) {
-      // Google direct — generateContent w/ responseModalities IMAGE
       provider = 'google';
       const r = await generateImageGoogleDirect(String(prompt), model);
       if (r.error) throw new Error(r.error);
       out = { image_base64: r.image_base64 || null, image_url: r.image_url || null };
     } else {
-      // Fallback: OpenRouter chat-completions (Flux, Seedream, Grok, etc.).
-      // Also handles openai/* and google/* when the dedicated key is missing.
       provider = 'openrouter';
       const result = await tryOpenRouterImageGen(String(prompt), model, 'standard');
       if (!result.ok || !result.url) throw new Error(result.error || 'no image returned');
       out = parseImageUrlToReturn(result.url, model);
     }
-    console.log(`[ai/gen-image] ✓ ${provider} ${model} took=${Date.now()-t0}ms`);
+    console.log(`[ai/gen-image] (legacy dispatch → ${provider}) ✓ ${model} took=${Date.now()-t0}ms`);
     res.json({ ok: true, provider, model, image_base64: out.image_base64 || null, image_url: out.image_url || null });
   } catch (e) {
-    console.error(`[ai/gen-image] ✗ ${model} after ${Date.now()-t0}ms: ${e.message}`);
+    console.error(`[ai/gen-image] (legacy dispatch) ✗ ${model} after ${Date.now()-t0}ms: ${e.message}`);
     res.status(500).json({ error: e.message, model });
   }
 });

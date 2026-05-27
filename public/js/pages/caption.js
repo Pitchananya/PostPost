@@ -87,27 +87,35 @@ export function pageCaption() {
             <p class="cardSub">${state.genCaption ? (state.genCaption.length + T(' ตัวอักษร · พร้อมโพสต์', ' chars · ready to post')) : T('เหมาะกับ Facebook & Instagram Post', 'For Facebook & Instagram Post')}</p>
           </div>
           <div style="display:flex;gap:4px">
-            <button class="btn ghost sm iconOnly">${raw(I('edit', 13))}</button>
-            <button class="btn ghost sm iconOnly">${raw(I('copy', 13))}</button>
-            <button class="btn ghost sm iconOnly">${raw(I('refresh', 13))}</button>
+            <button class="btn ${state.editingCaption ? 'primary' : 'ghost'} sm iconOnly" data-editcap="1" title="${T(state.editingCaption ? 'เสร็จ' : 'แก้ไข', state.editingCaption ? 'Done' : 'Edit')}">${raw(I(state.editingCaption ? 'check' : 'edit', 13))}</button>
+            <button class="btn ghost sm iconOnly" data-copycap="1" title="${T('คัดลอก', 'Copy')}">${raw(I('copy', 13))}</button>
+            <button class="btn ghost sm iconOnly" data-genall="1" title="${T('สร้างใหม่', 'Regenerate')}">${raw(I('refresh', 13))}</button>
           </div>
         </div>
-        <div style="background:var(--cream2);border-radius:12px;padding:16px;font-size:14px;line-height:1.65;color:var(--ink);border:1px solid var(--line)${state.genCaption ? ';white-space:pre-wrap' : ''}">
-          ${state.genCaption ? state.genCaption : raw(genEmpty(T('ยังไม่มีแคปชั่น — กด "สร้างทั้งหมด" เพื่อให้ AI เขียนให้', 'No caption yet — hit "Generate All"')))}
-        </div>
+        ${state.editingCaption
+          ? `<textarea id="ppGenCaption" class="textarea" rows="6" style="background:var(--cream2);border:1.5px solid var(--orange);border-radius:12px;padding:16px;font-size:14px;line-height:1.65;color:var(--ink);width:100%;resize:vertical;white-space:pre-wrap;font-family:inherit" placeholder="${T('พิมพ์แคปชั่นที่นี่…', 'Type caption here…')}">${escText(state.genCaption || '')}</textarea>`
+          : `<div style="background:var(--cream2);border-radius:12px;padding:16px;font-size:14px;line-height:1.65;color:var(--ink);border:1px solid var(--line)${state.genCaption ? ';white-space:pre-wrap' : ''}">
+          ${state.genCaption ? escText(state.genCaption) : raw(genEmpty(T('ยังไม่มีแคปชั่น — กด "สร้างทั้งหมด" เพื่อให้ AI เขียนให้', 'No caption yet — hit "Generate All"')))}
+        </div>`}
       </div>
 
       <!-- Hashtags -->
       <div class="card">
         <div class="cardHeader">
           <h3 class="cardTitle">${raw(T('แฮชแท็ก', 'Hashtags'))}</h3>
-          <button class="btn ghost sm" data-genall="1">${raw(I('refresh', 13))} ${raw(T('สร้างใหม่', 'New set'))}</button>
+          <div style="display:flex;gap:4px">
+            <button class="btn ${state.editingHashtags ? 'primary' : 'ghost'} sm iconOnly" data-edithashtags="1" title="${T(state.editingHashtags ? 'เสร็จ' : 'แก้ไข', state.editingHashtags ? 'Done' : 'Edit')}">${raw(I(state.editingHashtags ? 'check' : 'edit', 13))}</button>
+            <button class="btn ghost sm" data-genall="1">${raw(I('refresh', 13))} ${raw(T('สร้างใหม่', 'New set'))}</button>
+          </div>
         </div>
-        <div style="display:flex;flex-wrap:wrap;gap:6px">
+        ${state.editingHashtags
+          ? `<textarea id="ppGenHashtagsEdit" class="textarea" rows="3" style="border:1.5px solid var(--orange);border-radius:12px;padding:12px;font-size:13px;line-height:1.6;width:100%;resize:vertical;font-family:inherit" placeholder="${T('คั่นด้วยช่องว่าง — เช่น #ผิวสวย #สกินแคร์', 'Separate with spaces — e.g. #beauty #skincare')}">${escText((state.genHashtags || []).join(' '))}</textarea>
+            <div class="micro" style="margin-top:6px;color:var(--muted)">${raw(T('คั่นด้วยช่องว่าง · #จะถูกเติมให้อัตโนมัติถ้าไม่ใส่', 'Space-separated · # is auto-prepended'))}</div>`
+          : `<div style="display:flex;flex-wrap:wrap;gap:6px">
           ${(state.genHashtags && state.genHashtags.length)
             ? raw(state.genHashtags.map((tag) => `<span style="padding:5px 10px;border-radius:99px;background:var(--blue-soft);color:#1D4ED8;font-size:12px;font-weight:600;cursor:pointer">${escText(tag)}</span>`).join(''))
             : raw(genEmpty(T('ยังไม่มีแฮชแท็ก — กด "สร้างทั้งหมด"', 'No hashtags yet — hit "Generate All"')))}
-        </div>
+        </div>`}
       </div>
 
       <!-- Article (long form) -->
@@ -117,16 +125,18 @@ export function pageCaption() {
             <h3 class="cardTitle">${raw(T('บทความ (Long-form)', 'Article (Long-form)'))}</h3>
             <p class="cardSub">${raw(T('บทความยาว AI เขียนตาม Brand Voice', 'Long-form article in your Brand Voice'))}</p>
           </div>
-          <div style="display:flex;gap:4px">
+          <div style="display:flex;gap:4px;align-items:center">
             <span class="pill blue">${raw(T('สำหรับ Facebook Note / Blog', 'For Facebook Note / Blog'))}</span>
-            <button class="btn ghost sm iconOnly">${raw(I('edit', 13))}</button>
-            <button class="btn ghost sm iconOnly">${raw(I('copy', 13))}</button>
-            <button class="btn ghost sm iconOnly">${raw(I('refresh', 13))}</button>
+            <button class="btn ${state.editingArticle ? 'primary' : 'ghost'} sm iconOnly" data-editarticle="1" title="${T(state.editingArticle ? 'เสร็จ' : 'แก้ไข', state.editingArticle ? 'Done' : 'Edit')}">${raw(I(state.editingArticle ? 'check' : 'edit', 13))}</button>
+            <button class="btn ghost sm iconOnly" data-copyarticle="1" title="${T('คัดลอก', 'Copy')}">${raw(I('copy', 13))}</button>
+            <button class="btn ghost sm iconOnly" data-genall="1" title="${T('สร้างใหม่', 'Regenerate')}">${raw(I('refresh', 13))}</button>
           </div>
         </div>
-        <div style="background:#fff;border:1px solid var(--line);border-radius:12px;padding:18px;max-height:280px;overflow-y:auto;font-size:13.5px;line-height:1.7${state.genArticle ? ';white-space:pre-wrap' : ''}">
-          ${state.genArticle ? state.genArticle : raw(genEmpty(T('ยังไม่มีบทความ — กด "สร้างทั้งหมด" เพื่อให้ AI เขียนบทความยาว', 'No article yet — hit "Generate All"')))}
-        </div>
+        ${state.editingArticle
+          ? `<textarea id="ppGenArticle" class="textarea" rows="14" style="background:#fff;border:1.5px solid var(--orange);border-radius:12px;padding:18px;font-size:13.5px;line-height:1.7;width:100%;min-height:280px;resize:vertical;white-space:pre-wrap;font-family:inherit" placeholder="${T('พิมพ์บทความที่นี่…', 'Type article here…')}">${escText(state.genArticle || '')}</textarea>`
+          : `<div style="background:#fff;border:1px solid var(--line);border-radius:12px;padding:18px;max-height:280px;overflow-y:auto;font-size:13.5px;line-height:1.7${state.genArticle ? ';white-space:pre-wrap' : ''}">
+          ${state.genArticle ? escText(state.genArticle) : raw(genEmpty(T('ยังไม่มีบทความ — กด "สร้างทั้งหมด" เพื่อให้ AI เขียนบทความยาว', 'No article yet — hit "Generate All"')))}
+        </div>`}
       </div>
     </div>
 
