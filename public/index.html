@@ -2474,50 +2474,94 @@ render();
 
   // Poll /image-status until the job is done or failed, with a long
   // overall budget (5 min — Render free tier handles GPT-5.4 in 90-150s).
-  // Returns { image_url, image_base64 } or throws.
+  // Returns { image_url, image_base64 } or throws. Logs every status
+  // change to console so the user can diagnose stuck/failed jobs from
+  // DevTools without reading server logs.
   async function pollImageJob(jobId, opts) {
     var maxMs = (opts && opts.maxMs) || 5 * 60_000;
     var intervalMs = (opts && opts.intervalMs) || 3000;
     var t0 = Date.now();
+    var attempts = 0;
+    var lastStatus = '';
+    console.log('[image-async] 🔄 polling job', jobId, '(every', intervalMs+'ms, max', maxMs+'ms)');
     while (Date.now() - t0 < maxMs) {
       await new Promise(function(r){ setTimeout(r, intervalMs); });
+      attempts++;
       var s;
       try {
         s = await api('/api/ai/image-status?id=' + encodeURIComponent(jobId));
       } catch (e) {
         // transient network error — keep polling rather than abort
-        console.warn('[image-async] poll error (will retry):', e.message);
+        console.warn('[image-async] poll #' + attempts + ' network error (will retry):', e.message);
         continue;
       }
+      // Log status changes (not every identical poll)
+      if (s.status !== lastStatus) {
+        var elapsedSec = Math.round((Date.now() - t0) / 1000);
+        console.log('[image-async] job', jobId, '→', s.status,
+          '· elapsed', elapsedSec+'s',
+          '· provider:', s.provider || '(none)',
+          '· model:', s.model || '(none)');
+        lastStatus = s.status;
+      }
       if (s.status === 'done') {
+        console.log('[image-async] ✅ job', jobId, 'done · has_base64:', !!s.image_base64, '· has_url:', !!s.image_url);
         return { image_url: s.image_url || null, image_base64: s.image_base64 || null };
       }
       if (s.status === 'failed') {
-        throw new Error(s.error || 'image-job failed');
+        console.error('[image-async] ❌ job', jobId, 'failed:', s.error);
+        throw new Error('job ' + jobId + ' failed: ' + (s.error || '(no error message from worker)'));
       }
       // 'pending' or 'processing' → loop
     }
-    throw new Error('image-job poll timeout (5 min)');
+    console.error('[image-async] ⏱️ job', jobId, 'poll timeout after 5min — last status:', lastStatus);
+    throw new Error('job ' + jobId + ' timeout after 5min (last status: ' + lastStatus + ')');
   }
 
   // Single-image generation that picks sync vs async based on model.
   // Returns the URL string (data:image/png;base64,... or http(s)://...)
-  // or null if no image came back.
+  // or null if no image came back. Every step logs to console so the
+  // user can trace what's happening end-to-end in DevTools.
   async function generateOneImage(prompt, model) {
+    var t0 = Date.now();
+    var promptPreview = String(prompt || '').slice(0, 60).replace(/\s+/g, ' ');
     if (isSlowImageModel(model)) {
+      console.log('[image-gen] 🐢 slow model →', model, '· async path · prompt:', promptPreview+'…');
       // Async path — submit job, poll until done. The /image-async
       // endpoint queues into Supabase image_jobs and triggers the
       // Render worker (RENDER_WORKER_URL on the backend env).
-      var sub = await api('/api/ai/image-async', { method:'POST', body:{ prompt: prompt, model: model } });
-      if (!sub || !sub.job_id) throw new Error('no job_id returned');
+      var sub;
+      try {
+        sub = await api('/api/ai/image-async', { method:'POST', body:{ prompt: prompt, model: model } });
+      } catch (e) {
+        console.error('[image-gen] ❌ /image-async submit failed:', e.message);
+        throw new Error('submit failed: ' + e.message);
+      }
+      if (!sub || !sub.job_id) {
+        console.error('[image-gen] ❌ /image-async returned no job_id:', sub);
+        throw new Error('no job_id returned (response: ' + JSON.stringify(sub).slice(0, 200) + ')');
+      }
+      console.log('[image-gen] ✓ /image-async submit ok · job_id:', sub.job_id, '· status:', sub.status);
       var done = await pollImageJob(sub.job_id);
+      var totalSec = Math.round((Date.now() - t0) / 1000);
+      console.log('[image-gen] ✅ async path done in', totalSec+'s for', model);
       if (done.image_base64) return 'data:image/png;base64,' + done.image_base64;
       if (done.image_url) return done.image_url;
+      console.error('[image-gen] ❌ job done but no image_base64 / image_url in response');
       return null;
     }
     // Sync path — direct call to the per-model handler.
     var endpoint = pickGenImageEndpoint(model);
-    var r = await api(endpoint, { method:'POST', body:{ prompt: prompt, model: model } });
+    console.log('[image-gen] ⚡ fast model →', model, '· sync path:', endpoint, '· prompt:', promptPreview+'…');
+    var r;
+    try {
+      r = await api(endpoint, { method:'POST', body:{ prompt: prompt, model: model } });
+    } catch (e) {
+      console.error('[image-gen] ❌ sync call to', endpoint, 'failed:', e.message);
+      throw e;
+    }
+    var totalSec = Math.round((Date.now() - t0) / 1000);
+    console.log('[image-gen] ✅ sync path done in', totalSec+'s · has_base64:', !!(r && r.image_base64), '· has_url:', !!(r && r.image_url));
     if (r && r.image_base64) return 'data:image/png;base64,' + r.image_base64;
     if (r && r.image_url) return r.image_url;
     return null;

@@ -1209,7 +1209,14 @@ ${isGuru ? guruImageRules : (course === 'PFB' ? pfbImageRules : (course === 'PHE
 router.post('/image-async', async (req, res) => {
   const { prompt, model } = req.body || {};
   if (!prompt) return res.status(400).json({ error: 'prompt required' });
-  if (!supabase) return res.status(400).json({ error: 'Supabase required for async mode' });
+  if (!supabase) {
+    console.error('[image-async] ❌ Supabase client not configured — set SUPABASE_URL + SUPABASE_SERVICE_KEY on Vercel env');
+    return res.status(400).json({ error: 'Supabase not configured on backend — async mode unavailable' });
+  }
+
+  const promptPreview = String(prompt).slice(0, 60).replace(/\s+/g, ' ');
+  const useModel = model || OPENROUTER_IMAGE_MODEL;
+  console.log(`[image-async] 📥 received: model=${useModel} · prompt="${promptPreview}…" · tenant=${currentTenantId()}`);
 
   try {
     // 1. สร้าง job row
@@ -1217,13 +1224,17 @@ router.post('/image-async', async (req, res) => {
       .from('image_jobs')
       .insert({
         prompt: String(prompt).slice(0, 8000),
-        model: model || OPENROUTER_IMAGE_MODEL,
+        model: useModel,
         status: 'pending',
         tenant_id: currentTenantId(),
       })
       .select('id,prompt,model,status,created_at')
       .single();
-    if (error) throw new Error(error.message);
+    if (error) {
+      console.error(`[image-async] ❌ Supabase insert failed: ${error.message} (code=${error.code})`);
+      throw new Error(`Supabase insert: ${error.message}`);
+    }
+    console.log(`[image-async] ✓ job ${job.id} created in DB (status=pending)`);
 
     // 2. Fire-and-forget trigger worker (ไม่ await — กลับมาตอบ user ทันที)
     // Prefer Render worker (no wall-clock limit, handles GPT-5.4 > 150s) over
@@ -1235,20 +1246,32 @@ router.post('/image-async', async (req, res) => {
     const workerName = renderUrl ? 'render' : 'supabase-edge';
 
     if (workerUrl && workerSecret) {
+      console.log(`[image-async] 🚀 triggering ${workerName} at ${workerUrl.split('/').slice(0, 3).join('/')} for job ${job.id}`);
       fetch(workerUrl, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${workerSecret}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ job_id: job.id }),
       })
-        .then(() => console.log(`[image-async] triggered ${workerName} for job ${job.id}`))
-        .catch(e => console.warn(`[image-async] trigger ${workerName} failed:`, e.message));
+        .then(async (r) => {
+          if (r.ok) {
+            console.log(`[image-async] ✓ ${workerName} accepted job ${job.id} (status=${r.status})`);
+          } else {
+            const errText = await r.text().catch(() => '(no body)');
+            console.error(`[image-async] ❌ ${workerName} rejected job ${job.id}: ${r.status} ${errText.slice(0, 200)}`);
+          }
+        })
+        .catch(e => console.error(`[image-async] ❌ trigger ${workerName} fetch failed for job ${job.id}: ${e.message}`));
     } else {
-      console.warn('[image-async] no worker URL set (RENDER_WORKER_URL or SUPABASE_EDGE_URL) — job will stay pending');
+      // Be loud about WHICH env var is missing so the user knows exactly what to set on Vercel.
+      const missing = [];
+      if (!renderUrl && !edgeUrl) missing.push('RENDER_WORKER_URL (or SUPABASE_EDGE_URL)');
+      if (!workerSecret) missing.push('WORKER_SECRET');
+      console.error(`[image-async] ⚠️ no worker configured — job ${job.id} will sit in 'pending' until 6min watchdog · missing env: ${missing.join(', ')}`);
     }
 
     res.json({ ok: true, job_id: job.id, status: 'pending', poll_url: `/api/ai/image-status?id=${job.id}` });
   } catch (e) {
-    console.error('[image-async]', e.message);
+    console.error(`[image-async] ❌ unhandled error: ${e.message}`);
     res.status(500).json({ error: e.message });
   }
 });
