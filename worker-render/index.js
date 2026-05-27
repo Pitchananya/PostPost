@@ -165,24 +165,46 @@ async function processLipsyncJob(jobId) {
 }
 
 // Main worker endpoint — Vercel calls this with job_id
+// 🖼️ Image generation endpoint
+//
+// Used to be fire-and-forget: respond 200 → run processJob in background.
+// Problem: on Render free tier the Node process was being suspended /
+// recycled between the response and the background work finishing,
+// leaving the Supabase image_jobs row stuck at 'pending' until the
+// Vercel-side watchdog marked it failed.
+//
+// Fix: process INLINE. Vercel already calls this endpoint fire-and-
+// forget (it doesn't await the response, just kicks the fetch and
+// returns to the client with the job_id), so Render can take as long
+// as the job needs without affecting client latency. Render also has
+// no wall-clock per-request limit on web services, so a 90-150s
+// inline call is fine.
 app.post('/process-image-job', async (req, res) => {
   const auth = req.headers.authorization || '';
   const expected = process.env.WORKER_SECRET;
   if (expected && auth !== `Bearer ${expected}`) {
+    console.warn(`[worker] ❌ unauthorized request to /process-image-job`);
     return res.status(401).json({ error: 'unauthorized' });
   }
 
   const jobId = Number(req.body?.job_id);
   if (!jobId) return res.status(400).json({ error: 'job_id required' });
 
-  // Acknowledge fast (Vercel can hang up — we'll do the long work in background)
-  res.json({ ok: true, job_id: jobId, status: 'accepted', worker: 'render' });
-
-  // Fire-and-forget — Node keeps the process alive until this resolves
-  processJob(jobId).catch((e) => console.error(`[worker] job ${jobId} crashed:`, e));
+  console.log(`[worker] 📥 received job ${jobId}`);
+  try {
+    await processJob(jobId);
+    res.json({ ok: true, job_id: jobId, status: 'completed', worker: 'render' });
+  } catch (e) {
+    console.error(`[worker] 💥 job ${jobId} crashed in handler:`, e?.message, e?.stack);
+    // processJob already writes status=failed to Supabase before re-throwing
+    // (see catch block below), so this response is for diagnostics only.
+    res.status(500).json({ error: e?.message || 'worker crashed', job_id: jobId });
+  }
 });
 
 async function processJob(jobId) {
+  const stepStart = Date.now();
+  console.log(`[worker] [job ${jobId}] step 1/5 — fetching row from Supabase`);
   const { data: job, error: fetchErr } = await supabase
     .from('image_jobs')
     .select('id, prompt, model, status')
@@ -190,30 +212,57 @@ async function processJob(jobId) {
     .maybeSingle();
 
   if (fetchErr || !job) {
-    console.error(`[worker] job ${jobId} not found:`, fetchErr?.message);
+    console.error(`[worker] [job ${jobId}] ❌ not found in image_jobs:`, fetchErr?.message || '(no row)');
     return;
   }
 
   if (job.status === 'done' || job.status === 'processing') {
-    console.log(`[worker] job ${jobId} already ${job.status} — skipping`);
+    console.log(`[worker] [job ${jobId}] already ${job.status} — skipping (duplicate trigger?)`);
     return;
   }
 
-  await supabase
+  console.log(`[worker] [job ${jobId}] step 2/5 — marking processing (model=${job.model}, prompt len=${(job.prompt || '').length})`);
+  const { error: upErr } = await supabase
     .from('image_jobs')
     .update({ status: 'processing', updated_at: new Date().toISOString() })
     .eq('id', jobId);
+  if (upErr) {
+    // Supabase update failed — keep going, the OpenRouter call will likely
+    // also fail to write back, but try anyway to surface the real error.
+    console.warn(`[worker] [job ${jobId}] ⚠️ failed to set status=processing: ${upErr.message}`);
+  }
 
   try {
     const apiKey = process.env.OPENROUTER_API_KEY;
-    if (!apiKey) throw new Error('OPENROUTER_API_KEY not set');
+    if (!apiKey) throw new Error('OPENROUTER_API_KEY not set on Render env');
 
     const model = job.model || 'openai/gpt-5.4-image-2';
     const fullPrompt = `Create a high-quality image: ${job.prompt}.
 
 Style: warm, professional. Aspect: vertical 4:5. Maximum quality, photorealistic detail.`;
 
-    console.log(`[worker] job ${jobId} → ${model} (prompt ${job.prompt.slice(0, 60)}...)`);
+    // Per-family request body tuning. The OpenAI image models all run a
+    // hidden reasoning pass that EATS wall time — set reasoning effort
+    // to 'minimal' so they go straight to image gen. Non-GPT models
+    // ignore the field.
+    const isGptFamily = /^openai\/gpt-5/i.test(model);
+    const requestBody = {
+      model,
+      messages: [{ role: 'user', content: fullPrompt }],
+      modalities: ['image', 'text'],
+      max_tokens: isGptFamily ? 2048 : 8192,
+    };
+    if (isGptFamily) {
+      // Send the reasoning skip in BOTH conventions (OpenAI flat /
+      // OpenRouter nested) — whichever the upstream provider honors wins.
+      requestBody.reasoning_effort = 'minimal';
+      requestBody.reasoning = { effort: 'minimal' };
+      // Route to fastest provider — image gen for GPT-5 family otherwise
+      // picks a cheap-but-slow upstream which compounds the latency.
+      requestBody.provider = { sort: 'throughput', allow_fallbacks: true };
+    }
+
+    console.log(`[worker] [job ${jobId}] step 3/5 — calling OpenRouter model=${model} family=${isGptFamily ? 'gpt' : 'other'}`);
     const t0 = Date.now();
 
     // ⏱️ Timeout 5 นาที — กัน OpenRouter ค้างไม่จบ (ไม่มี wall-clock kill ของ Render)
@@ -231,19 +280,14 @@ Style: warm, professional. Aspect: vertical 4:5. Maximum quality, photorealistic
           'HTTP-Referer': process.env.PUBLIC_URL || 'https://postpost.adsventure.ltd',
           'X-Title': 'PostPost',
         },
-        body: JSON.stringify({
-          model,
-          messages: [{ role: 'user', content: fullPrompt }],
-          modalities: ['image', 'text'],
-          max_tokens: 16384,
-        }),
+        body: JSON.stringify(requestBody),
       });
     } finally {
       clearTimeout(timeout);
     }
 
     const took = Date.now() - t0;
-    console.log(`[worker] job ${jobId} ${model} took=${took}ms status=${r.status}`);
+    console.log(`[worker] [job ${jobId}] step 4/5 — OpenRouter responded status=${r.status} took=${took}ms`);
 
     // อ่าน response เป็น text ก่อน — กัน "Unexpected end of JSON input" ตอน body ว่าง/HTML/truncated
     const responseText = await r.text();
@@ -269,7 +313,8 @@ Style: warm, professional. Aspect: vertical 4:5. Maximum quality, photorealistic
       throw new Error(`No image in response — keys: ${Object.keys(data).join(',')}, content preview: ${JSON.stringify(data).slice(0, 200)}`);
     }
 
-    await supabase
+    console.log(`[worker] [job ${jobId}] step 5/5 — writing result to Supabase (has_base64=${!!image_base64}, has_url=${!!image_url})`);
+    const { error: doneErr } = await supabase
       .from('image_jobs')
       .update({
         status: 'done',
@@ -280,18 +325,33 @@ Style: warm, professional. Aspect: vertical 4:5. Maximum quality, photorealistic
         updated_at: new Date().toISOString(),
       })
       .eq('id', jobId);
+    if (doneErr) {
+      // We have an image but couldn't persist it. Log loudly — the
+      // frontend poll will time out, but the image was generated; this
+      // points at a Supabase auth / RLS issue rather than the model.
+      console.error(`[worker] [job ${jobId}] ⚠️ image generated but Supabase update failed: ${doneErr.message}`);
+      throw new Error(`Supabase done-update failed: ${doneErr.message}`);
+    }
 
-    console.log(`[worker] ✅ job ${jobId} done in ${took}ms`);
+    const totalSec = Math.round((Date.now() - stepStart) / 1000);
+    console.log(`[worker] [job ${jobId}] ✅ done in ${totalSec}s total (${took}ms OpenRouter)`);
   } catch (e) {
-    console.error(`[worker] job ${jobId} failed:`, e.message);
+    console.error(`[worker] [job ${jobId}] ❌ failed:`, e?.message);
     await supabase
       .from('image_jobs')
       .update({
         status: 'failed',
-        error: String(e.message).slice(0, 500),
+        error: String(e?.message || 'unknown error').slice(0, 500),
         updated_at: new Date().toISOString(),
       })
-      .eq('id', jobId);
+      .eq('id', jobId)
+      .then(({ error }) => {
+        if (error) console.error(`[worker] [job ${jobId}] ⚠️ failed to write failed-status: ${error.message}`);
+      });
+    // Re-throw so the handler returns 500 to Vercel — useful in Vercel's
+    // logs but doesn't affect the Vercel client (it already responded
+    // to the user with job_id and is polling Supabase).
+    throw e;
   }
 }
 
