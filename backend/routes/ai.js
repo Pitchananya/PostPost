@@ -3,6 +3,7 @@ import { requireAuth } from './auth.js';
 import { db, supabase, currentTenantId } from '../db.js';
 import { composeImage, fetchImageBuffer } from '../services/composer.js';
 import { TEMPLATE_LIST } from '../services/templates.js';
+import { mount as mountImageModels, slugForModel as imageModelSlug } from './image-models/index.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -1476,139 +1477,24 @@ router.post('/image', async (req, res) => {
   }
 });
 
-// 🖼️ Image generation — ONE dedicated route per model. OpenRouter only
-// serves two image-output models right now (verified against the live
-// /api/v1/models catalog), and each one has its own quirks (pre-charged
-// token budget, supported request format, response shape, prompt
-// preferences). Splitting per-model keeps each code path isolated so a
-// fix or tweak for one model never accidentally touches the other.
+// 🖼️ Image generation — one file per model under ./image-models/. Each
+// file is a self-contained handler with its own model id, max_tokens,
+// timeout, and prompt shaping. To add a new OpenRouter image model:
 //
-//   openai/gpt-5.4-image-2                 → /ai/gen-image/gpt-5.4
-//   google/gemini-3.1-flash-image-preview  → /ai/gen-image/nano-banana
+//   1. Create ./image-models/<slug>.js exporting { MODEL, handler }
+//   2. Register it in ./image-models/index.js
+//   3. Add the dropdown option in public/js/pages/creative.js
+//   4. Add a dispatch arm in pickGenImageEndpoint() in public/index.html
 //
-// Both routes go through OpenRouter's chat-completions endpoint, but each
-// has its own request builder (cheaper max_tokens for nano-banana since
-// Google doesn't pre-charge; full 16k budget for GPT-5.4 since OpenAI
-// pre-charges based on tokens) and its own response parser.
+// The registry mounts each handler at POST /ai/gen-image/<slug>. Below
+// are alias / legacy dispatchers that redirect older URLs to the right
+// per-model route so clients pinned to a previous deploy still work.
 
-const OPENROUTER_CHAT_URL = 'https://openrouter.ai/api/v1/chat/completions';
-
-// 🎨 POST /ai/gen-image/gpt-5.4 — OpenAI GPT-5.4 Image 2.
-// Quirks:
-// - OpenRouter PRE-CHARGES tokens (up to 65k by default → ~$1.30 reserved
-//   per call). We cap max_tokens at 16384 to keep the pre-charge sane
-//   (~$0.25 reserved, actual cost ~$0.04-0.08).
-// - Best Thai text rendering of the two; preferred for posts that need
-//   readable Thai copy baked into the image.
-// - Uses 'standard' request format (messages + modalities).
-router.post('/gen-image/gpt-5.4', async (req, res) => {
-  const { prompt } = req.body || {};
-  if (!prompt || !String(prompt).trim()) return res.status(400).json({ error: 'prompt required' });
-  if (!process.env.OPENROUTER_API_KEY) return res.status(500).json({ error: 'OPENROUTER_API_KEY not set' });
-  const MODEL = 'openai/gpt-5.4-image-2';
-  const MAX_TOKENS = 16384;  // cap the pre-charge — GPT-5.4 reserves the full budget upfront
-  const t0 = Date.now();
-  try {
-    const aspect = OPENROUTER_IMAGE_SIZE === '1024x1536' ? 'portrait 2:3'
-                 : OPENROUTER_IMAGE_SIZE === '1536x1024' ? 'landscape 3:2'
-                 : 'square 1:1';
-    const fullPrompt = `Create a high-quality image: ${String(prompt)}.\n\nStyle: warm, professional. Aspect: ${aspect}.`;
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort('timeout 45s'), 45_000);
-    let r;
-    try {
-      r = await fetch(OPENROUTER_CHAT_URL, {
-        method: 'POST',
-        signal: ctrl.signal,
-        headers: {
-          'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-          'Content-Type': 'application/json',
-          'HTTP-Referer': process.env.PUBLIC_URL || 'https://post-post-seven.vercel.app',
-          'X-Title': 'PostPost',
-        },
-        body: JSON.stringify({
-          model: MODEL,
-          messages: [{ role: 'user', content: fullPrompt }],
-          modalities: ['image', 'text'],
-          max_tokens: MAX_TOKENS,
-        }),
-      });
-    } finally { clearTimeout(timer); }
-    if (!r.ok) {
-      const err = await r.text();
-      throw new Error(`${r.status}: ${err.slice(0, 240)}`);
-    }
-    const data = await r.json();
-    const found = extractImageFromOpenRouterResponse(data);
-    if (!found?.url) throw new Error(found?.error === 'model_refused' ? `refused: ${found.refusal}` : 'no image in response');
-    const out = parseImageUrlToReturn(found.url, MODEL);
-    console.log(`[ai/gen-image/gpt-5.4] ✓ took=${Date.now()-t0}ms src=${found.source}`);
-    res.json({ ok: true, provider: 'openrouter', model: MODEL, image_base64: out.image_base64 || null, image_url: out.image_url || null });
-  } catch (e) {
-    console.error(`[ai/gen-image/gpt-5.4] ✗ after ${Date.now()-t0}ms: ${e.message}`);
-    res.status(500).json({ error: e.message, model: MODEL });
-  }
-});
-
-// 🟦 POST /ai/gen-image/nano-banana — Google Gemini 3.1 Flash Image Preview.
-// Quirks:
-// - No upfront token pre-charge — Google bills actual usage (cheap, ~$0.01
-//   per image). We can use a smaller max_tokens budget without reserving.
-// - Lower-latency than GPT-5.4 (~3-5s vs 8-15s).
-// - Slightly weaker at Thai text-on-image but better at photographic scenes.
-// - Uses 'standard' request format (messages + modalities).
-router.post('/gen-image/nano-banana', async (req, res) => {
-  const { prompt } = req.body || {};
-  if (!prompt || !String(prompt).trim()) return res.status(400).json({ error: 'prompt required' });
-  if (!process.env.OPENROUTER_API_KEY) return res.status(500).json({ error: 'OPENROUTER_API_KEY not set' });
-  const MODEL = 'google/gemini-3.1-flash-image-preview';
-  const MAX_TOKENS = 8192;  // Google doesn't pre-charge → smaller budget is fine
-  const t0 = Date.now();
-  try {
-    const aspect = OPENROUTER_IMAGE_SIZE === '1024x1536' ? 'portrait 2:3'
-                 : OPENROUTER_IMAGE_SIZE === '1536x1024' ? 'landscape 3:2'
-                 : 'square 1:1';
-    const fullPrompt = `Create a high-quality image: ${String(prompt)}.\n\nStyle: warm, professional. Aspect: ${aspect}.`;
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort('timeout 30s'), 30_000);  // shorter — nano-banana is faster
-    let r;
-    try {
-      r = await fetch(OPENROUTER_CHAT_URL, {
-        method: 'POST',
-        signal: ctrl.signal,
-        headers: {
-          'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-          'Content-Type': 'application/json',
-          'HTTP-Referer': process.env.PUBLIC_URL || 'https://post-post-seven.vercel.app',
-          'X-Title': 'PostPost',
-        },
-        body: JSON.stringify({
-          model: MODEL,
-          messages: [{ role: 'user', content: fullPrompt }],
-          modalities: ['image', 'text'],
-          max_tokens: MAX_TOKENS,
-        }),
-      });
-    } finally { clearTimeout(timer); }
-    if (!r.ok) {
-      const err = await r.text();
-      throw new Error(`${r.status}: ${err.slice(0, 240)}`);
-    }
-    const data = await r.json();
-    const found = extractImageFromOpenRouterResponse(data);
-    if (!found?.url) throw new Error(found?.error === 'model_refused' ? `refused: ${found.refusal}` : 'no image in response');
-    const out = parseImageUrlToReturn(found.url, MODEL);
-    console.log(`[ai/gen-image/nano-banana] ✓ took=${Date.now()-t0}ms src=${found.source}`);
-    res.json({ ok: true, provider: 'openrouter', model: MODEL, image_base64: out.image_base64 || null, image_url: out.image_url || null });
-  } catch (e) {
-    console.error(`[ai/gen-image/nano-banana] ✗ after ${Date.now()-t0}ms: ${e.message}`);
-    res.status(500).json({ error: e.message, model: MODEL });
-  }
-});
+mountImageModels(router);
 
 // 🔁 Provider aliases — accept any OpenAI-style or Google-style model id
-// and redirect to the dedicated model route. Kept so older clients pinned
-// to /gen-image/openai or /gen-image/google still work after deploy.
+// and redirect to the dedicated model route. Older clients pinned to
+// /gen-image/openai or /gen-image/google still work after deploy.
 router.post('/gen-image/openai', (req, res, next) => {
   req.url = '/gen-image/gpt-5.4';
   next('route');
@@ -1621,24 +1507,21 @@ router.post('/gen-image/openrouter', (req, res, next) => {
   // Dispatch based on the model the client sent. Default to GPT-5.4 since
   // it's the higher-quality of the two.
   const m = req.body && req.body.model;
-  req.url = /^google\//i.test(m) ? '/gen-image/nano-banana' : '/gen-image/gpt-5.4';
+  const slug = imageModelSlug(m) || (/^google\//i.test(m) ? 'nano-banana' : 'gpt-5.4');
+  req.url = '/gen-image/' + slug;
   next('route');
 });
 
 // 🔀 POST /ai/gen-image — legacy dispatcher. Kept for backward compat with
-// older clients pinned to this URL. Picks the dedicated per-model route
-// based on the client's `model` (or `provider`) field; if the client sent
-// a now-removed id (gpt-image-1, dall-e-3, flux-*, imagen-*, etc.), it
-// routes to the GPT-5.4 default since that's the highest-quality model
-// OpenRouter actually serves.
+// older clients pinned to this URL. If the client sent a now-removed id
+// (gpt-image-1, dall-e-3, flux-*, imagen-*, etc.), routes to the GPT-5.4
+// default since that's the highest-quality model OpenRouter actually serves.
 router.post('/gen-image', (req, res, next) => {
   const m = (req.body && req.body.model) || '';
   const p = (req.body && req.body.provider) || '';
-  if (m === 'google/gemini-3.1-flash-image-preview' || /^google\//i.test(m) || p === 'gemini') {
-    req.url = '/gen-image/nano-banana';
-  } else {
-    req.url = '/gen-image/gpt-5.4';
-  }
+  let slug = imageModelSlug(m);
+  if (!slug) slug = (/^google\//i.test(m) || p === 'gemini') ? 'nano-banana' : 'gpt-5.4';
+  req.url = '/gen-image/' + slug;
   next('route');
 });
 
