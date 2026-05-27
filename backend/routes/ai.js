@@ -316,7 +316,7 @@ ${getFooter(course)}
 ⚠️ Footer ห้ามเปลี่ยน — copy ทั้งบล็อกเหมือนตัวอย่าง (เบอร์, FB Page name, Line ID เป๊ะ)`;
 }
 
-async function callOpenRouter(messages, system, { model = OPENROUTER_TEXT_MODEL, max_tokens = 2500, json = false } = {}) {
+async function callOpenRouter(messages, system, { model = OPENROUTER_TEXT_MODEL_RUNTIME, max_tokens = 2500, json = false } = {}) {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) throw new Error('OPENROUTER_API_KEY not set');
 
@@ -1614,45 +1614,187 @@ async function generateImageOpenAIDirect(prompt, modelOverride) {
 
 // ===== MODEL METADATA — รู้ล่วงหน้าว่า model ไหนรองรับอะไร, ราคา, format ที่ work =====
 const MODEL_METADATA = {
+  // Premium / High quality
   'openai/gpt-5.4-image-2': {
     label: 'GPT-5.4 Image 2',
-    via: 'openrouter',
-    cost_per_image_usd: 0.98,           // OpenRouter pre-charges 65,536 tokens × $0.000015
+    tier: 'premium', via: 'openrouter',
+    cost_per_image_usd: 0.98,
     pre_charge_tokens: 65536,
-    supported_formats: ['standard'],     // tested: response_format=402, tools=404
+    supported_formats: ['standard'],
     quality_thai_text: 90,
     notes: 'OpenRouter pre-charges full token budget; ต้อง credit ≥ $1',
   },
+  'openai/gpt-image-1': {
+    label: 'GPT Image 1 (DALL-E HD)',
+    tier: 'premium', via: 'openai_direct',
+    cost_per_image_usd: 0.04,
+    quality_thai_text: 95,
+    notes: 'Best Thai text rendering · ต้องตั้ง OPENAI_API_KEY',
+  },
+  'openai/gpt-image-2': {
+    label: 'GPT Image 2 (Medium)',
+    tier: 'premium', via: 'openrouter',
+    cost_per_image_usd: 0.08,
+    pre_charge_tokens: 8192,
+    supported_formats: ['standard'],
+    quality_thai_text: 92,
+    notes: 'ราคากลาง คุณภาพสูง · Thai text ดีมาก',
+  },
+  'openai/dall-e-3': {
+    label: 'DALL-E 3',
+    tier: 'premium', via: 'openai_direct',
+    cost_per_image_usd: 0.04,
+    quality_thai_text: 60,
+  },
+
+  // Balanced — sweet spot price/quality
+  'google/imagen-4': {
+    label: 'Imagen 4',
+    tier: 'balanced', via: 'openrouter',
+    cost_per_image_usd: 0.05,
+    supported_formats: ['standard'],
+    quality_thai_text: 75,
+    notes: 'Google premium · realistic photos',
+  },
+  'black-forest-labs/flux-1.1-pro': {
+    label: 'Flux 1.1 Pro',
+    tier: 'balanced', via: 'openrouter',
+    cost_per_image_usd: 0.04,
+    supported_formats: ['standard'],
+    quality_thai_text: 55,
+    notes: 'Best for product photography · Thai text เพี้ยน',
+  },
+  'black-forest-labs/flux-kontext-pro': {
+    label: 'Flux Kontext Pro',
+    tier: 'balanced', via: 'openrouter',
+    cost_per_image_usd: 0.04,
+    quality_thai_text: 50,
+    notes: 'แก้รูปเดิม + เพิ่ม element ได้',
+  },
+  'xai/grok-2-image': {
+    label: 'Grok 2 Image',
+    tier: 'balanced', via: 'openrouter',
+    cost_per_image_usd: 0.04,
+    quality_thai_text: 65,
+    notes: 'xAI · realistic + meme-friendly',
+  },
+
+  // Cheap / Fast — high volume use
+  'google/gemini-2.5-flash-image': {
+    label: 'Gemini 2.5 Flash (Nano Banana)',
+    tier: 'cheap', via: 'google_direct',
+    cost_per_image_usd: 0.039,
+    quality_thai_text: 70,
+    notes: 'DEFAULT · ราคาถูก คุณภาพดี Thai-friendly',
+  },
   'google/gemini-3.1-flash-image-preview': {
     label: 'Gemini 3.1 Flash Image',
-    via: 'openrouter',
+    tier: 'cheap', via: 'openrouter',
     cost_per_image_usd: 0.04,
     pre_charge_tokens: 4096,
     supported_formats: ['standard'],
     quality_thai_text: 50,
     notes: 'ราคาถูก เร็ว — Thai text เพี้ยน',
   },
-  'google/gemini-2.5-flash-image': {
-    label: 'Gemini 2.5 Flash Image',
-    via: 'google_direct',
-    cost_per_image_usd: 0.039,
-    quality_thai_text: 70,
+  'bytedance/seedream-4': {
+    label: 'Seedream 4.0',
+    tier: 'cheap', via: 'openrouter',
+    cost_per_image_usd: 0.03,
+    quality_thai_text: 45,
+    notes: 'ByteDance · ถูกสุด · CN-leaning style',
   },
-  'openai/gpt-image-1': {
-    label: 'GPT Image 1',
-    via: 'openai_direct',
-    cost_per_image_usd: 0.04,
-    quality_thai_text: 95,
-  },
-  'openai/dall-e-3': {
-    label: 'DALL-E 3',
-    via: 'openai_direct',
-    cost_per_image_usd: 0.04,
-    quality_thai_text: 60,
+  'black-forest-labs/flux-schnell': {
+    label: 'Flux Schnell',
+    tier: 'cheap', via: 'openrouter',
+    cost_per_image_usd: 0.003,
+    quality_thai_text: 40,
+    notes: 'ถูกที่สุด · เร็วมาก · คุณภาพต่ำกว่า Pro',
   },
 };
 
 const FALLBACK_MODEL = 'google/gemini-3.1-flash-image-preview';
+
+// ===== TEXT MODEL METADATA — for caption/topic/hook gen via OpenRouter =====
+const TEXT_MODEL_METADATA = {
+  // Premium
+  'anthropic/claude-opus-4.7': {
+    label: 'Claude Opus 4.7', tier: 'premium',
+    cost_per_1m_input_usd: 15.00, cost_per_1m_output_usd: 75.00,
+    quality_thai: 98, notes: 'Best Thai content quality - most expensive',
+  },
+  'anthropic/claude-sonnet-4.6': {
+    label: 'Claude Sonnet 4.6', tier: 'premium',
+    cost_per_1m_input_usd: 3.00, cost_per_1m_output_usd: 15.00,
+    quality_thai: 95, notes: 'Premium sweet spot · ใช้สำหรับ Caption ยาว',
+  },
+  'openai/gpt-5': {
+    label: 'GPT-5', tier: 'premium',
+    cost_per_1m_input_usd: 5.00, cost_per_1m_output_usd: 15.00,
+    quality_thai: 93, notes: 'OpenAI flagship · Thai ดี',
+  },
+
+  // Balanced - default production tier
+  'anthropic/claude-haiku-4.5': {
+    label: 'Claude Haiku 4.5', tier: 'balanced',
+    cost_per_1m_input_usd: 0.80, cost_per_1m_output_usd: 4.00,
+    quality_thai: 88, notes: 'DEFAULT · เร็ว · Thai ดี · ราคาถูก',
+  },
+  'openai/gpt-5-mini': {
+    label: 'GPT-5 Mini', tier: 'balanced',
+    cost_per_1m_input_usd: 0.40, cost_per_1m_output_usd: 1.60,
+    quality_thai: 82, notes: 'OpenAI mini · ถูกกว่า GPT-5 10x',
+  },
+  'google/gemini-2.5-pro': {
+    label: 'Gemini 2.5 Pro', tier: 'balanced',
+    cost_per_1m_input_usd: 1.25, cost_per_1m_output_usd: 10.00,
+    quality_thai: 90, notes: 'Google premium · ดี Thai',
+  },
+  'mistralai/mistral-large-2': {
+    label: 'Mistral Large 2', tier: 'balanced',
+    cost_per_1m_input_usd: 2.00, cost_per_1m_output_usd: 6.00,
+    quality_thai: 75, notes: 'European · Thai พอใช้',
+  },
+
+  // Cheap - high-volume
+  'google/gemini-2.5-flash': {
+    label: 'Gemini 2.5 Flash', tier: 'cheap',
+    cost_per_1m_input_usd: 0.30, cost_per_1m_output_usd: 2.50,
+    quality_thai: 85, notes: 'ถูก เร็ว Thai ดี · ใช้สำหรับ topic gen ปริมาณมาก',
+  },
+  'deepseek/deepseek-v3': {
+    label: 'DeepSeek V3', tier: 'cheap',
+    cost_per_1m_input_usd: 0.14, cost_per_1m_output_usd: 0.28,
+    quality_thai: 80, notes: 'ถูกที่สุด · Chinese-trained · Thai สำเร็จดีกว่าที่คิด',
+  },
+  'qwen/qwen-2.5-72b-instruct': {
+    label: 'Qwen 2.5 72B', tier: 'cheap',
+    cost_per_1m_input_usd: 0.35, cost_per_1m_output_usd: 0.40,
+    quality_thai: 78, notes: 'Alibaba · เก่ง Asian languages',
+  },
+  'meta-llama/llama-3.3-70b-instruct': {
+    label: 'Llama 3.3 70B', tier: 'cheap',
+    cost_per_1m_input_usd: 0.59, cost_per_1m_output_usd: 0.79,
+    quality_thai: 72, notes: 'Meta open source · Thai ปานกลาง',
+  },
+
+  // Reasoning - for strategy / market analysis
+  'deepseek/deepseek-r1': {
+    label: 'DeepSeek R1 (Reasoning)', tier: 'reasoning',
+    cost_per_1m_input_usd: 0.55, cost_per_1m_output_usd: 2.19,
+    quality_thai: 85, notes: 'มี chain-of-thought · ใช้สำหรับ strategy / planning',
+  },
+};
+
+let OPENROUTER_TEXT_MODEL_RUNTIME = OPENROUTER_TEXT_MODEL;
+
+function getTextModelMeta(model) {
+  return TEXT_MODEL_METADATA[model] || {
+    label: model, tier: 'unknown',
+    cost_per_1m_input_usd: null, cost_per_1m_output_usd: null,
+    quality_thai: null,
+  };
+}
+
 
 function getModelMeta(model) {
   return MODEL_METADATA[model] || {
@@ -3760,5 +3902,37 @@ function stubTopics(course, count) {
   const pool = course === 'GURU' ? guru : course === 'PHE' ? phe : pfb;
   return Array.from({ length: count }, (_, i) => pool[i % pool.length]);
 }
+
+
+
+// 📋 Text models metadata — for frontend picker
+router.get('/text-models', (req, res) => {
+  const models = Object.entries(TEXT_MODEL_METADATA).map(([id, meta]) => ({
+    id, label: meta.label, tier: meta.tier,
+    cost_per_1m_input_usd: meta.cost_per_1m_input_usd,
+    cost_per_1m_output_usd: meta.cost_per_1m_output_usd,
+    cost_per_1m_input_thb: meta.cost_per_1m_input_usd ? Math.round(meta.cost_per_1m_input_usd * 36 * 100) / 100 : null,
+    cost_per_1m_output_thb: meta.cost_per_1m_output_usd ? Math.round(meta.cost_per_1m_output_usd * 36 * 100) / 100 : null,
+    quality_thai: meta.quality_thai,
+    notes: meta.notes,
+    est_cost_per_action_usd: meta.cost_per_1m_output_usd
+      ? Math.round((meta.cost_per_1m_input_usd * 0.0005 + meta.cost_per_1m_output_usd * 0.0015) * 10000) / 10000
+      : null,
+  }));
+  res.json({ current: OPENROUTER_TEXT_MODEL_RUNTIME, models });
+});
+
+// 🔄 Runtime switch — change active text model (until server restart)
+router.post('/set-text-model', (req, res) => {
+  const { model } = req.body || {};
+  if (!model) return res.status(400).json({ error: 'model required' });
+  if (!TEXT_MODEL_METADATA[model] && !/^(anthropic|openai|google|meta-llama|mistralai|deepseek|qwen|xai)\//.test(model)) {
+    return res.status(400).json({ error: 'invalid model — must be in catalog or known provider prefix' });
+  }
+  OPENROUTER_TEXT_MODEL_RUNTIME = model;
+  process.env.OPENROUTER_TEXT_MODEL = model;
+  console.log(`[ai/text] text model switched to: ${model}`);
+  res.json({ ok: true, model });
+});
 
 export default router;
