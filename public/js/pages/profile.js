@@ -234,6 +234,48 @@ export function pageProfile() {
     </div>
   </div>
 
+  <!-- === AI Instruction (Advanced) === -->
+  <div class="card" style="margin-top:18px">
+    <details ${activeBrand.aiInstruction ? 'open' : ''}>
+      <summary style="cursor:pointer;list-style:none;display:flex;align-items:center;gap:12px;padding:4px 0">
+        <div style="flex:1">
+          <div style="display:flex;align-items:center;gap:10px">
+            <h3 class="cardTitle">${raw(T('AI Instruction (Advanced)', 'AI Instruction (Advanced)'))}</h3>
+            <span class="pill purple">${raw(T('Power user', 'Power user'))}</span>
+            ${activeBrand.aiInstruction ? `<span class="pill green" style="font-size:10px">${T('ตั้งแล้ว', 'Set')} · ${activeBrand.aiInstruction.length} ${T('ตัวอักษร', 'chars')}</span>` : ''}
+          </div>
+          <p class="cardSub">${raw(T(
+            'system prompt แบบยาวให้ AI — paste IDENTITY / WORKFLOW / FRAMEWORKS / RULES ของคุณ · ใช้เมื่อต้องการควบคุม AI ลึกกว่า Brand Voice + Archetype',
+            'Long-form AI system prompt — paste your IDENTITY / WORKFLOW / FRAMEWORKS / RULES · use when you need finer control than Voice + Archetype'
+          ))}</p>
+        </div>
+        <span class="micro" style="color:var(--muted)">▼</span>
+      </summary>
+
+      <div style="margin-top:14px">
+        <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+          <button class="btn ghost sm" data-aiins-template="content-creative">${raw(I('sparkles', 12))} ${T('Template: Content Creative', 'Template: Content Creative')}</button>
+          <button class="btn ghost sm" data-aiins-template="sales-focused">${raw(I('sparkles', 12))} ${T('Template: Sales-Focused', 'Template: Sales-Focused')}</button>
+          <button class="btn ghost sm" style="color:var(--red)" data-aiins-clear="1">${raw(I('x', 12, '#DC2626'))} ${T('ล้าง', 'Clear')}</button>
+        </div>
+        <textarea
+          class="textarea" id="ppBrandAiInstruction" rows="14"
+          placeholder="${T(
+            'เช่น: [INSTRUCTION: AI ผู้เชี่ยวชาญด้าน Content Creative] · 1. IDENTITY — คุณคือ ฟาติน ผู้ช่วยส่วนตัว · 2. PERSONA & TONE — สื่อสารอย่างเพื่อนที่ปรึกษา · 3. GOALS — สร้าง 30 หัวข้อ/เดือน · 4. WORKFLOW — ถามธีม/audience/แพลตฟอร์ม · 5. RULES — ห้ามคำเสี่ยง ห้ามซ้ำ · 6. HOOK FRAMEWORKS · ... · 10. ข้อมูลธุรกิจ (PFB)',
+            'e.g.: [INSTRUCTION: AI Content Creative Specialist] · 1. IDENTITY — you are Fatin, personal assistant · 2. PERSONA & TONE · 3. GOALS — 30 topics/month · 4. WORKFLOW · 5. RULES · 6. HOOK FRAMEWORKS · ... · 10. Business data (PFB)'
+          )}"
+          style="font-family:var(--mono);font-size:12px;line-height:1.7;resize:vertical;min-height:280px"
+        >${escText(activeBrand.aiInstruction || '')}</textarea>
+        <div class="micro" style="margin-top:6px;color:var(--muted);line-height:1.55">
+          💡 ${raw(T(
+            'AI จะใช้ instruction นี้นำหน้า prompt มาตรฐาน (brand profile + voice + archetype ยังถูกส่งให้ AI ด้วย) · บันทึกอัตโนมัติ 2 วินาทีหลังหยุดพิมพ์ · max 8,000 ตัวอักษร',
+            'AI prepends this before the standard prompt (brand profile + voice + archetype still get sent too) · auto-saves 2s after you stop typing · max 8,000 chars'
+          ))}
+        </div>
+      </div>
+    </details>
+  </div>
+
   <!-- === Posting channels (per brand) === -->
   <div class="card" style="margin-top:18px">
     <div class="cardHeader">

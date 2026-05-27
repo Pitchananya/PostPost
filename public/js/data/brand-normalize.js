@@ -7,7 +7,8 @@
 //
 // Canonical shape:
 //   { id, name, mark, color, sub_th, sub_en, ch, logo, bizType, desc,
-//     voice, products, shopStats, shopUrl, channelInfo, archetype, topics }
+//     voice, products, shopStats, shopUrl, channelInfo, archetype, topics,
+//     aiInstruction }
 
 export function normalizeBrand(b) {
   return {
@@ -28,5 +29,10 @@ export function normalizeBrand(b) {
     channelInfo: (b.channelInfo && typeof b.channelInfo === 'object') ? b.channelInfo : {},
     archetype: b.archetype || '',
     topics: Array.isArray(b.topics) ? b.topics : null,
+    // Free-form "system prompt" — pasted by power users for custom AI behavior.
+    // Backend (/content-brand, /topics-brand) prepends this to the system prompt
+    // BEFORE the standard brand profile block, so it overrides default tone but
+    // still gets the structured brand data (voice/archetype/products) appended.
+    aiInstruction: typeof b.aiInstruction === 'string' ? b.aiInstruction : '',
   };
 }
