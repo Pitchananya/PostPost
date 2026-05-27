@@ -41,7 +41,7 @@ window.PP.state = window.PP.state || {
   avatarMode: 'free',      // ⚠️ DEFAULT SAFE — 'free' (no fal.ai charge). User must explicitly click "Real lip-sync" to opt-in.
   avatarLipsyncModel: 'fal-ai/bytedance/omnihuman/v1.5',  // default: OmniHuman v1.5 (face + body gestures, $0.50) — Infinitalk = face only
   textModel: 'anthropic/claude-haiku-4.5',                // default text model for caption/topic gen — see TEXT_MODEL_METADATA in backend
-  imageModel: 'google/gemini-2.5-flash-image',            // default image model — full OpenRouter id (legacy 'gemini'/'gpt' mapped server-side)
+  imageModel: 'openai/gpt-5.4-image-2',                   // default image model — full OpenRouter id (legacy 'gemini'/'gpt' mapped server-side)
   ttvStyle: 0,                                          // index into the styles[] array on the Text-to-Video page (0 = Creator/UGC)
   ttvModel: 'fal-ai/wan/v2.2-a14b/text-to-video',       // default to Wan 2.2 — cheapest reliable ($0.30/clip, no quota gamble)
   ttvDuration: '8s',
@@ -2384,7 +2384,7 @@ render();
     var count = Math.min(state.imageCount || 4, prompts.length);
     // Legacy provider keys map to full model ids for backward compatibility
     var IMG_LEGACY = { gemini: 'google/gemini-2.5-flash-image', gpt: 'openai/gpt-5.4-image-2' };
-    var imgModel = IMG_LEGACY[state.imageModel] || state.imageModel || 'google/gemini-2.5-flash-image';
+    var imgModel = IMG_LEGACY[state.imageModel] || state.imageModel || 'openai/gpt-5.4-image-2';
     state.genImages = [];
     state.previewIndex = 0;
     for (var i = 0; i < count; i++) {

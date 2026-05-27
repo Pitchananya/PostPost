@@ -67,7 +67,7 @@ export function pageCreative() {
           ${raw((() => {
             // Map legacy provider keys → full ids so old saved state still picks the right option.
             const LEGACY = { gemini: 'google/gemini-2.5-flash-image', gpt: 'openai/gpt-5.4-image-2' };
-            const cur = LEGACY[state.imageModel] || state.imageModel || 'google/gemini-2.5-flash-image';
+            const cur = LEGACY[state.imageModel] || state.imageModel || 'openai/gpt-5.4-image-2';
             const opts = [
               { group: T('⚡ ถูก/เร็ว', '⚡ Cheap/Fast'), items: [
                 ['google/gemini-2.5-flash-image',     'Gemini Nano Banana ⭐'],
