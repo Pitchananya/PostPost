@@ -82,20 +82,21 @@ const CATALOG = {
     ],
   },
   avatar: {
-    unit_th: 'ต่อคลิป Avatar 30 วินาที (รวม TTS + lipsync + compositing)',
-    unit_en: 'per 30-sec avatar clip (TTS + lipsync + compositing included)',
-    note_th: 'โหมด "ทันใจ ฟรี" + "ฟรี + ปากขยับ" (HF Spaces) ไม่คิดเครดิตเพราะ render ฝั่ง client',
-    note_en: '"Instant" and "Free real" (HF Spaces) modes are 0 credits — rendered client-side or via free HF',
+    unit_th: 'ต่อ 1 วินาที (รวม TTS + lipsync + compositing)',
+    unit_en: 'per second (TTS + lipsync + compositing included)',
+    cost_suffix_th: ' / วินาที', cost_suffix_en: ' / sec',
+    note_th: 'คูณตามจำนวนวินาทีจริง — เช่น OmniHuman v1.5 30 วิ = 1.3 × 30 ≈ 40 เครดิต · โหมด "ทันใจ ฟรี" (browser) = ฟรี ไม่จำกัด',
+    note_en: 'Multiply by clip length — e.g. OmniHuman v1.5 30s = 1.3 × 30 ≈ 40 credits · "Instant" (browser) mode = unlimited free',
     items: [
-      { id: 'free-audio-reactive',                  label: 'Audio-reactive (browser)',  tier: 'cheap',    cost: 0, default: true },
-      { id: 'hf-joyhallo',                           label: 'HF Spaces — JoyHallo (Thai)', tier: 'cheap', cost: 5 },
-      { id: 'hf-musetalk',                           label: 'HF Spaces — MuseTalk',       tier: 'cheap',  cost: 5 },
-      { id: 'hf-latentsync',                         label: 'HF Spaces — LatentSync 1.5', tier: 'cheap',  cost: 5 },
-      { id: 'fal-ai/sadtalker',                      label: 'fal.ai SadTalker',           tier: 'balanced', cost: 8 },
-      { id: 'fal-ai/infinitalk',                     label: 'fal.ai Infinitalk',          tier: 'balanced', cost: 18 },
-      { id: 'veed/fabric-1.0',                       label: 'VEED Fabric 1.0',            tier: 'balanced', cost: 25 },
-      { id: 'fal-ai/bytedance/omnihuman',            label: 'fal.ai OmniHuman',           tier: 'premium', cost: 40 },
-      { id: 'fal-ai/bytedance/omnihuman/v1.5',       label: 'fal.ai OmniHuman v1.5',      tier: 'premium', cost: 40 },
+      { id: 'free-audio-reactive',              label: 'Audio-reactive (browser)',   tier: 'cheap',    cost: 0,   default: true },
+      { id: 'hf-joyhallo',                       label: 'HF Spaces — JoyHallo (Thai)', tier: 'cheap',   cost: 0.2 },
+      { id: 'hf-musetalk',                       label: 'HF Spaces — MuseTalk',        tier: 'cheap',   cost: 0.2 },
+      { id: 'hf-latentsync',                     label: 'HF Spaces — LatentSync 1.5',  tier: 'cheap',   cost: 0.2 },
+      { id: 'fal-ai/sadtalker',                  label: 'fal.ai SadTalker',            tier: 'balanced', cost: 0.3 },
+      { id: 'fal-ai/infinitalk',                 label: 'fal.ai Infinitalk',           tier: 'balanced', cost: 0.6 },
+      { id: 'veed/fabric-1.0',                   label: 'VEED Fabric 1.0',             tier: 'balanced', cost: 0.8 },
+      { id: 'fal-ai/bytedance/omnihuman',        label: 'fal.ai OmniHuman',            tier: 'premium',  cost: 1.3 },
+      { id: 'fal-ai/bytedance/omnihuman/v1.5',   label: 'fal.ai OmniHuman v1.5',       tier: 'premium',  cost: 1.3 },
     ],
   },
   utility: {
@@ -248,8 +249,10 @@ export function pageCredits() {
     <ul style="margin:6px 0 0 18px;padding:0">
       <li>${T('สร้างคอนเทนต์ 1 โพสต์ (caption + 4 รูป Gemini) =', 'One post (caption + 4 Gemini images) =')}
         <b>${T('ประมาณ 20 เครดิต', 'about 20 credits')}</b></li>
-      <li>${T('Avatar 30 วินาที (OmniHuman v1.5) = ', 'Avatar 30s (OmniHuman v1.5) =')}
+      <li>${T('Avatar OmniHuman v1.5 = 1.3 cr/วินาที · คลิป 30 วิ ≈', 'Avatar OmniHuman v1.5 = 1.3 cr/sec · 30-sec clip ≈')}
         <b>${T('40 เครดิต', '40 credits')}</b></li>
+      <li>${T('Avatar Infinitalk = 0.6 cr/วินาที · คลิป 30 วิ ≈', 'Avatar Infinitalk = 0.6 cr/sec · 30-sec clip ≈')}
+        <b>${T('18 เครดิต', '18 credits')}</b></li>
       <li>${T('Text-to-Video Wan 2.2 = 5 cr/วินาที · คลิป 8 วิ =', 'Text-to-Video Wan 2.2 = 5 cr/sec · 8-sec clip =')}
         <b>${T('40 เครดิต', '40 credits')}</b></li>
       <li>${T('Veo 3 Fast = 25 cr/วินาที · คลิป 8 วิ =', 'Veo 3 Fast = 25 cr/sec · 8-sec clip =')}
