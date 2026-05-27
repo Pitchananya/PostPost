@@ -61,11 +61,10 @@ const CATALOG = {
       { id: 'black-forest-labs/flux-1.1-pro',        label: 'Flux 1.1 Pro',           tier: 'balanced', cost: 5 },
       { id: 'black-forest-labs/flux-kontext-pro',    label: 'Flux Kontext Pro',       tier: 'balanced', cost: 5 },
       { id: 'xai/grok-2-image',                      label: 'Grok 2 Image',           tier: 'balanced', cost: 5 },
-      // Premium
+      // Premium — only real OpenRouter ids (gpt-image-2 / gpt-5.4-image-2
+      // were never valid and produced "not a valid model ID" 400s).
       { id: 'openai/gpt-image-1',                    label: 'GPT Image 1 / DALL-E HD', tier: 'premium', cost: 10 },
-      { id: 'openai/gpt-image-2',                    label: 'GPT Image 2 Medium',     tier: 'premium', cost: 15 },
       { id: 'openai/dall-e-3',                       label: 'DALL-E 3',               tier: 'premium', cost: 10 },
-      { id: 'openai/gpt-5.4-image-2',                label: 'GPT-5.4 Image 2',        tier: 'premium', cost: 30 },
     ],
   },
   video: {

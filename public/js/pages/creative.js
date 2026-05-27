@@ -65,9 +65,17 @@ export function pageCreative() {
         <div style="display:flex;align-items:center;gap:8px;margin-top:12px;padding-top:12px;border-top:1px dashed var(--line);flex-wrap:wrap">
           <span class="micro" style="font-weight:700">${raw(T('โมเดล AI สร้างรูป:', 'Image AI model:'))}</span>
           ${raw((() => {
-            // Map legacy provider keys → full ids so old saved state still picks the right option.
-            const LEGACY = { gemini: 'google/gemini-2.5-flash-image', gpt: 'openai/gpt-5.4-image-2' };
-            const cur = LEGACY[state.imageModel] || state.imageModel || 'openai/gpt-5.4-image-2';
+            // Map legacy provider keys + retired/fake model ids → real ids so old saved
+            // state picks something that actually exists. gpt-image-2 / gpt-5.4-image-2
+            // were never valid OpenRouter ids (the API returns "not a valid model ID"),
+            // so anything saved with those values is rewritten to gpt-image-1.
+            const LEGACY = {
+              gemini: 'google/gemini-2.5-flash-image',
+              gpt: 'openai/gpt-image-1',
+              'openai/gpt-image-2': 'openai/gpt-image-1',
+              'openai/gpt-5.4-image-2': 'openai/gpt-image-1',
+            };
+            const cur = LEGACY[state.imageModel] || state.imageModel || 'openai/gpt-image-1';
             const opts = [
               { group: T('⚡ ถูก/เร็ว', '⚡ Cheap/Fast'), items: [
                 ['google/gemini-2.5-flash-image',     'Gemini Nano Banana ⭐'],
@@ -83,8 +91,6 @@ export function pageCreative() {
               ]},
               { group: T('💎 พรีเมียม', '💎 Premium'), items: [
                 ['openai/gpt-image-1',     'GPT Image 1 / DALL-E HD 🏆'],
-                ['openai/gpt-image-2',     'GPT Image 2 Medium'],
-                ['openai/gpt-5.4-image-2', 'GPT-5.4 Image 2 (top)'],
                 ['openai/dall-e-3',        'DALL-E 3'],
               ]},
             ];

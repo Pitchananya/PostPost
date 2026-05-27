@@ -42,7 +42,7 @@ const DEFAULTS = {
   selectedHook: 1,
   avatar: 'mintra',
   textModel: 'anthropic/claude-haiku-4.5',                // default text model for caption/topic gen — full OpenRouter id (see TEXT_MODEL_METADATA in backend/routes/ai.js)
-  imageModel: 'openai/gpt-5.4-image-2',                   // default image model — full id (legacy 'gemini'/'gpt' still mapped server-side for backward compat)
+  imageModel: 'openai/gpt-image-1',                       // default image model — real OpenRouter id (legacy 'gemini'/'gpt' still mapped server-side for backward compat; old fake ids gpt-image-2/gpt-5.4-image-2 rewritten in creative.js)
   avatarMode: 'free',      // ⚠️ DEFAULT SAFE — 'free' (no fal.ai charge). User explicitly opts-in to 'real' to enable lipsync.
   avatarLipsyncModel: 'fal-ai/bytedance/omnihuman/v1.5',  // default: OmniHuman v1.5 (face + body gestures, $0.50) — Infinitalk = face only
   ttvStyle: 0,                                          // index into the styles[] array on the Text-to-Video page (0 = Creator/UGC)
