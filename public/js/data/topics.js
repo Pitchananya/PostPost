@@ -16,16 +16,12 @@
 // pointing at the same array. Reassigning the export binding (`TOPICS =
 // newArray`) would silently desync every other importer.
 
-const SEED_PRODUCTS = [
-  { id: 'p1', name_th: 'Marine Collagen from New Zealand 100g — ออร์แกนิคแท้', name_en: 'Marine Collagen NZ 100g', short: 'Marine Collagen NZ', price: 550, sales: '1.4k', rating: 4.9, badge: 'ขายดี', hue: ['#FFE4E6', '#FECACA'], label: 'COLLAGEN' },
-  { id: 'p2', name_th: 'iCON FACE iSERUM เซรั่มผิวกระจก สยบริ้วรอย 30ml', name_en: 'iCON Face iSerum 30ml', short: 'iCON Face iSerum', price: 690, sales: '2.1k', rating: 4.8, badge: 'แนะนำ', hue: ['#FFEDD5', '#FECDD3'], label: 'SERUM' },
-  { id: 'p3', name_th: 'BellaCare Collagen Tripeptide Super Premium', name_en: 'BellaCare Collagen Tripeptide', short: 'BellaCare', price: 599, sales: '980', rating: 4.7, hue: ['#FFE4E6', '#FED7AA'], label: 'BELLA' },
-  { id: 'p4', name_th: 'Amado Face Night Sleeping Mask 100g', name_en: 'Amado Sleeping Mask 100g', short: 'Amado Mask', price: 300, sales: '640', rating: 4.6, hue: ['#E0E7FF', '#FECDD3'], label: 'MASK' },
-  { id: 'p5', name_th: 'CmaX Cordyceps Coffee กาแฟซีแม็คซ์ ถั่งเช่า', name_en: 'CmaX Cordyceps Coffee', short: 'CmaX Coffee', price: 235, sales: '320', rating: 4.5, hue: ['#FEF3C7', '#FED7AA'], label: 'COFFEE' },
-  { id: 'p6', name_th: 'JOJU COLLAGEN ปรับผิว เจจูคอลลาเจน', name_en: 'Joju Collagen', short: 'Joju Collagen', price: 490, sales: '1.1k', rating: 4.8, hue: ['#FED7AA', '#FECACA'], label: 'JOJU' },
-  { id: 'p7', name_th: 'Linhzhimin หลินจือมิน 60 เม็ด', name_en: 'Linhzhimin · 60 caps', short: 'Linhzhimin', price: 1120, sales: '420', rating: 4.9, badge: 'พรีเมียม', hue: ['#FEF3C7', '#FCD9A8'], label: 'LINH' },
-  { id: 'p8', name_th: 'Kumiko Collagen สเต็มเซลล์รกปลาแซลม่อน 15ซอง', name_en: 'Kumiko Collagen · 15 sachets', short: 'Kumiko', price: 250, sales: '880', rating: 4.6, hue: ['#FFE4E6', '#E0E7FF'], label: 'KUMI' },
-];
+// Seed products — intentionally empty. The previous skincare mock data
+// (Marine Collagen, iCON Face iSerum, etc.) leaked into every brand's
+// product picker as fake "available products" until the brand had its
+// own Shopee sync. New brands now start with no products and the user
+// pulls real ones via Profile → Shopee scraper.
+const SEED_PRODUCTS = [];
 
 // Live arrays — what pages read from. Snapshot copies in DEMO_* below.
 export const PRODUCTS = SEED_PRODUCTS.slice();
