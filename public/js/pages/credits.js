@@ -61,23 +61,24 @@ const CATALOG = {
     ],
   },
   video: {
-    unit_th: 'ต่อคลิป 8 วินาที', unit_en: 'per 8-sec clip',
-    note_th: 'ราคาคำนวณจาก 8 วินาที — คลิปยาวกว่าคูณเพิ่มตามสัดส่วน',
-    note_en: 'Based on 8-sec clips — longer clips scale linearly',
+    unit_th: 'ต่อ 1 วินาที',  unit_en: 'per second',
+    cost_suffix_th: ' / วินาที', cost_suffix_en: ' / sec',
+    note_th: 'คูณตามจำนวนวินาทีจริง — เช่น Veo 3 Fast 8 วิ = 25 × 8 = 200 เครดิต',
+    note_en: 'Multiply by clip length — e.g. Veo 3 Fast 8s = 25 × 8 = 200 credits',
     items: [
-      // Cheap (Replicate)
-      { id: 'fal-ai/wan/v2.2-a14b/text-to-video',    label: 'Wan 2.2 t2v',       tier: 'cheap',    cost: 40, default: true },
-      { id: 'replicate/seedance-lite',               label: 'Seedance Lite',     tier: 'cheap',    cost: 40 },
-      { id: 'replicate/seedance-1-5-pro',            label: 'Seedance 1.5 Pro',  tier: 'cheap',    cost: 50 },
-      { id: 'replicate/hunyuan-video',               label: 'Hunyuan Video',     tier: 'cheap',    cost: 70 },
+      // Cheap
+      { id: 'fal-ai/wan/v2.2-a14b/text-to-video',    label: 'Wan 2.2 t2v',       tier: 'cheap',    cost: 5,  default: true },
+      { id: 'replicate/seedance-lite',               label: 'Seedance Lite',     tier: 'cheap',    cost: 5 },
+      { id: 'replicate/seedance-1-5-pro',            label: 'Seedance 1.5 Pro',  tier: 'cheap',    cost: 6 },
+      { id: 'replicate/hunyuan-video',               label: 'Hunyuan Video',     tier: 'cheap',    cost: 9 },
       // Balanced
-      { id: 'fal-ai/kling-video/v2.5-turbo',         label: 'Kling 2.5 Turbo',   tier: 'balanced', cost: 100 },
-      { id: 'fal-ai/kling-video/v2.6-pro',           label: 'Kling 2.6 Pro',     tier: 'balanced', cost: 200 },
-      { id: 'replicate/seedance-2-0',                label: 'Seedance 2.0',      tier: 'balanced', cost: 50 },
+      { id: 'fal-ai/kling-video/v2.5-turbo',         label: 'Kling 2.5 Turbo',   tier: 'balanced', cost: 13 },
+      { id: 'fal-ai/kling-video/v2.6-pro',           label: 'Kling 2.6 Pro',     tier: 'balanced', cost: 25 },
+      { id: 'replicate/seedance-2-0',                label: 'Seedance 2.0',      tier: 'balanced', cost: 6 },
       // Premium
-      { id: 'fal-ai/veo3-fast',                      label: 'Veo 3.1 Fast',      tier: 'premium',  cost: 200 },
-      { id: 'fal-ai/veo3',                           label: 'Veo 3 (full)',      tier: 'premium',  cost: 500 },
-      { id: 'fal-ai/kling-video/v2.6-master',        label: 'Kling 2.6 Master',  tier: 'premium',  cost: 400 },
+      { id: 'fal-ai/veo3-fast',                      label: 'Veo 3.1 Fast',      tier: 'premium',  cost: 25 },
+      { id: 'fal-ai/veo3',                           label: 'Veo 3 (full)',      tier: 'premium',  cost: 63 },
+      { id: 'fal-ai/kling-video/v2.6-master',        label: 'Kling 2.6 Master',  tier: 'premium',  cost: 50 },
     ],
   },
   avatar: {
@@ -199,7 +200,7 @@ export function pageCredits() {
   <!-- Tab description -->
   <div style="margin-bottom:14px;font-size:12.5px;color:var(--muted);line-height:1.55">
     <b style="color:var(--purple)">${T('คิดราคา:', 'Pricing unit:')}</b> ${t({ th: cat.unit_th, en: cat.unit_en })}
-    ${cat.note_th ? `<br><span style="color:var(--orange)">💡 ${t({ th: cat.note_th, en: cat.note_en })}</span>` : ''}
+    ${raw(cat.note_th ? `<br><span style="color:var(--orange)">💡 ${escHtml(t({ th: cat.note_th, en: cat.note_en }))}</span>` : '')}
   </div>
 
   <!-- Models table (Hedra-style) -->
@@ -232,7 +233,7 @@ export function pageCredits() {
               <td style="text-align:right;padding-right:24px;font-weight:800;color:${item.cost === 0 ? 'var(--green)' : 'var(--purple)'};font-size:14px;white-space:nowrap">
                 ${item.cost === 0
                   ? T('ฟรี', 'FREE')
-                  : `<b>${item.cost}</b> <span style="font-size:11px;font-weight:600;color:var(--muted)">${T('เครดิต', 'credits')}</span>`}
+                  : `<b>${item.cost}</b> <span style="font-size:11px;font-weight:600;color:var(--muted)">${T('เครดิต', 'credits')}${cat.cost_suffix_th ? t({ th: cat.cost_suffix_th, en: cat.cost_suffix_en }) : ''}</span>`}
               </td>
             </tr>`;
           }).join('');
@@ -249,8 +250,10 @@ export function pageCredits() {
         <b>${T('ประมาณ 20 เครดิต', 'about 20 credits')}</b></li>
       <li>${T('Avatar 30 วินาที (OmniHuman v1.5) = ', 'Avatar 30s (OmniHuman v1.5) =')}
         <b>${T('40 เครดิต', '40 credits')}</b></li>
-      <li>${T('Text-to-Video 8 วินาที (Wan 2.2) =', 'Text-to-Video 8s (Wan 2.2) =')}
+      <li>${T('Text-to-Video Wan 2.2 = 5 cr/วินาที · คลิป 8 วิ =', 'Text-to-Video Wan 2.2 = 5 cr/sec · 8-sec clip =')}
         <b>${T('40 เครดิต', '40 credits')}</b></li>
+      <li>${T('Veo 3 Fast = 25 cr/วินาที · คลิป 8 วิ =', 'Veo 3 Fast = 25 cr/sec · 8-sec clip =')}
+        <b>${T('200 เครดิต', '200 credits')}</b></li>
       <li>${T('Caption + Topic Bank gen — ฟรีไม่จำกัด (เริ่มคิดเมื่อใช้โมเดล Premium)',
               'Caption + Topic Bank gen — unlimited free (charged only on Premium models)')}</li>
       <li>${T('เครดิตจาก Top-up pack ไม่หมดอายุ — เครดิตจากแพ็คเกจ reset ทุก 30 วัน',
