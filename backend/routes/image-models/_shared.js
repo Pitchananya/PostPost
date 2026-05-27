@@ -107,7 +107,7 @@ export function openRouterHeaders() {
   return {
     'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
     'Content-Type': 'application/json',
-    'HTTP-Referer': process.env.PUBLIC_URL || 'https://post-post-seven.vercel.app',
+    'HTTP-Referer': process.env.PUBLIC_URL || 'https://postpost.adsventure.ltd',
     'X-Title': 'PostPost',
   };
 }

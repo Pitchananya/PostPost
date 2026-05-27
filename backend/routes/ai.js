@@ -331,7 +331,7 @@ async function callOpenRouter(messages, system, { model = OPENROUTER_TEXT_MODEL_
     headers: {
       'Authorization': `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
-      'HTTP-Referer': process.env.PUBLIC_URL || 'https://oem-content-factory.vercel.app',
+      'HTTP-Referer': process.env.PUBLIC_URL || 'https://postpost.adsventure.ltd',
       'X-Title': 'OEM Content Factory',
     },
     body: JSON.stringify(body)
@@ -1940,7 +1940,7 @@ async function tryOpenRouterImageGen(prompt, model, requestFormat = 'standard') 
   const headers = {
     'Authorization': `Bearer ${apiKey}`,
     'Content-Type': 'application/json',
-    'HTTP-Referer': process.env.PUBLIC_URL || 'https://oem-content-factory.vercel.app',
+    'HTTP-Referer': process.env.PUBLIC_URL || 'https://postpost.adsventure.ltd',
     'X-Title': 'OEM Content Factory',
   };
 

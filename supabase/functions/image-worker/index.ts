@@ -157,8 +157,8 @@ Style: warm, professional. Aspect: vertical 4:5. Maximum quality, photorealistic
         headers: {
           'Authorization': `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
-          'HTTP-Referer': 'https://oem-content-factory.vercel.app',
-          'X-Title': 'OEM Content Factory',
+          'HTTP-Referer': Deno.env.get('PUBLIC_URL') || 'https://postpost.adsventure.ltd',
+          'X-Title': 'PostPost',
         },
         body: JSON.stringify({
           model,
