@@ -253,13 +253,16 @@ Style: warm, professional. Aspect: vertical 4:5. Maximum quality, photorealistic
       max_tokens: isGptFamily ? 2048 : 8192,
     };
     if (isGptFamily) {
-      // Send the reasoning skip in BOTH conventions (OpenAI flat /
-      // OpenRouter nested) — whichever the upstream provider honors wins.
-      requestBody.reasoning_effort = 'minimal';
+      // ⚠️ Keep the GPT-family request body MINIMAL — the previous version
+      // sent `reasoning_effort` (OpenAI flat), `reasoning.effort` (OpenRouter
+      // nested), AND `provider: { sort: 'throughput' }`. Combined, OpenRouter
+      // returned a fast 400 "Provider returned error" because at least one
+      // of those fields isn't honored on the openai/gpt-5-image* route.
+      //
+      // The single documented + working field is the nested
+      // `reasoning: { effort: 'minimal' }` (matches OpenRouter's reasoning
+      // tokens docs for OpenAI models). Drop the others.
       requestBody.reasoning = { effort: 'minimal' };
-      // Route to fastest provider — image gen for GPT-5 family otherwise
-      // picks a cheap-but-slow upstream which compounds the latency.
-      requestBody.provider = { sort: 'throughput', allow_fallbacks: true };
     }
 
     console.log(`[worker] [job ${jobId}] step 3/5 — calling OpenRouter model=${model} family=${isGptFamily ? 'gpt' : 'other'}`);
@@ -304,8 +307,20 @@ Style: warm, professional. Aspect: vertical 4:5. Maximum quality, photorealistic
     }
 
     if (!r.ok) {
-      const errMsg = data?.error?.message || JSON.stringify(data).slice(0, 300);
-      throw new Error(`OpenRouter ${r.status}: ${errMsg}`);
+      // OpenRouter's `error.message` is often vague ("Provider returned error")
+      // while the real detail lives in `error.metadata` or `error.code`. Log
+      // the FULL error object so we can diagnose without guessing — and
+      // include the provider name + code in the thrown error message so
+      // the frontend's failed-status toast surfaces it too.
+      const errObj = data?.error || {};
+      const errMsg = errObj.message || 'unknown error';
+      const errCode = errObj.code || '';
+      const errMeta = errObj.metadata ? JSON.stringify(errObj.metadata).slice(0, 400) : '';
+      const providerName = errObj.metadata?.provider_name || '';
+      console.error(`[worker] [job ${jobId}] ❌ OpenRouter ${r.status} full error:`, JSON.stringify(data, null, 2).slice(0, 1200));
+      const detail = [errMsg, errCode && `code=${errCode}`, providerName && `provider=${providerName}`, errMeta && `meta=${errMeta}`]
+        .filter(Boolean).join(' · ');
+      throw new Error(`OpenRouter ${r.status}: ${detail}`);
     }
 
     const { image_base64, image_url } = extractImage(data);
