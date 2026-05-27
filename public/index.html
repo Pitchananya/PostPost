@@ -90,6 +90,11 @@ window.PP.state = window.PP.state || {
   // Index of the image slot currently being regenerated on the Creative
   // page (set by regenImageSlot, cleared in `finally`). -1 = none.
   genImageRegenIdx: -1,
+  // Two-phase "Generate All" progress on the Creative page —
+  // '' (idle) | 'caption' (writing caption) | 'images' (generating images).
+  // The Creative page reads this to draw a visible step indicator so the
+  // user can see caption finishes before images start.
+  genPhase: '',
 };
 const state = window.PP.state;
 
@@ -2349,8 +2354,18 @@ render();
     var toneLabel = toneV ? (state.lang==='th'?toneV.th:toneV.en) : (voiceLabels.join(', ') || '');
     var lenMap = { short:'สั้น ~80 คำ', medium:'ปานกลาง ~150 คำ', long:'ยาว ~250 คำ' };
     var lenLabel = lenMap[state.genLength||'medium'] || lenMap.medium;
-    state.genLoading = true; render();
-    toast(state.lang==='th'?'AI กำลังสร้าง Hook / Caption / Hashtag…':'AI is generating content…');
+    // ── Two-phase progress on the Creative tab ──────────────────────────
+    // The user explicitly asked: clicking "สร้างทั้งหมด" on Creative should
+    // run caption first, then auto-generate images. The flow already does
+    // that sequentially via /api/ai/content-brand (returns text+prompts in
+    // one shot) then genImagesForSlides() (one /gen-image call per slide).
+    // What was missing was VISIBLE phase feedback — we set genPhase here
+    // and render() reads it to draw the progress banner on Creative.
+    var onCreative = (state.page === 'creative');
+    state.genLoading = true;
+    state.genPhase = onCreative ? 'caption' : 'caption';
+    render();
+    toast(state.lang==='th'?'1/2 AI กำลังเขียนแคปชั่น…':'1/2 Writing caption…');
     try {
       var j = await api('/api/ai/content-brand', { method:'POST', body:{
         brandName: ab.name, businessType: ab.bizType||'', brandDesc: ab.desc||state.brandDesc||'',
@@ -2367,13 +2382,23 @@ render();
         state.genArticle = j.article || '';
         state.genImagePrompts = j.imagePrompts || [];
         state.selectedHook = 1;
-        if (state.page === 'creative' && state.genImagePrompts.length) {
+        if (onCreative) {
+          // Phase 2 — image gen. Fall back to using the topic as the
+          // prompt if the AI didn't return any image prompts, so a Creative
+          // generation never silently skips the image step.
+          if (!state.genImagePrompts.length) {
+            var nImg = state.imageCount || 4;
+            var fallbackPrompt = topic + (ab.bizType ? ' · ' + ab.bizType : '') + ' · brand ' + ab.name + ' · marketing-grade photographic shot, warm tones';
+            state.genImagePrompts = [];
+            for (var k = 0; k < nImg; k++) state.genImagePrompts.push(fallbackPrompt);
+          }
           state.genImages = [];
           state.previewIndex = 0;
-          toast(state.lang==='th'?'เขียนคอนเทนต์เสร็จ — AI กำลังสร้างรูป…':'Text done — generating images…','success');
+          state.genPhase = 'images';
+          toast(state.lang==='th'?'1/2 แคปชั่นเสร็จ ✓ — 2/2 AI กำลังสร้างรูป…':'1/2 Caption done ✓ — 2/2 Generating images…','success');
           render();
           await genImagesForSlides();
-          toast(state.lang==='th'?'สร้าง Hook/Caption/Hashtag + รูป เสร็จแล้ว ✓':'Content + images done ✓','success');
+          toast(state.lang==='th'?'2/2 สร้างรูปเสร็จ ✓':'2/2 Images done ✓','success');
         } else {
           toast(state.lang==='th'?'สร้างคอนเทนต์เสร็จแล้ว ✓':'Content generated ✓','success');
         }
@@ -2383,7 +2408,9 @@ render();
     } catch(e){
       toast((state.lang==='th'?'สร้างไม่สำเร็จ: ':'Failed: ')+(e.message||''),'error');
     } finally {
-      state.genLoading = false; render();
+      state.genLoading = false;
+      state.genPhase = '';
+      render();
     }
   }
   // ── Image-gen client dispatch ────────────────────────────────────────
