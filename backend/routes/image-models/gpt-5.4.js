@@ -40,9 +40,11 @@ import {
 
 export const MODEL = 'openai/gpt-5.4-image-2';
 
-// 4096 completion tokens is plenty for a single image + a one-line text
-// caption from the model. Bigger budgets only inflate the pre-charge.
-const MAX_TOKENS = 4096;
+// 2048 completion tokens is plenty for a single image + a one-line text
+// caption. Bigger budgets inflate OpenRouter's upfront pre-charge AND
+// give the model more rope to ramble in reasoning before the image,
+// which is exactly what was pushing this past Vercel's 60s ceiling.
+const MAX_TOKENS = 2048;
 
 // Vercel kills serverless functions at 60s. Fail at 55s so we can return
 // a useful error before the gateway times us out.
@@ -72,15 +74,19 @@ export async function handler(req, res) {
           messages: [{ role: 'user', content: fullPrompt }],
           modalities: ['image', 'text'],
           max_tokens: MAX_TOKENS,
-          // Tell OpenRouter to use the smallest possible reasoning
-          // budget — GPT-5.4 supports 'minimal' (per its
-          // supported_parameters in /api/v1/models). Without this, the
-          // hidden chain-of-thought pass eats so much wall time that
-          // Vercel's 60s function ceiling kills the call → 504.
-          // Keep it to JUST the documented `reasoning.effort` field;
-          // the experimental `exclude`/`include_reasoning` flags broke
-          // the request on some deploys (OpenRouter returned 400/500).
+          // Belt + braces to skip reasoning. OpenAI's native API uses
+          // a top-level `reasoning_effort`; OpenRouter docs use a
+          // nested `reasoning.effort`. Different providers in
+          // OpenRouter's pool honor different conventions, so we send
+          // BOTH — whichever one the upstream provider understands
+          // wins; the other is ignored.
+          reasoning_effort: 'minimal',
           reasoning: { effort: 'minimal' },
+          // Route to the highest-throughput provider OpenRouter has
+          // for this model, with fallbacks allowed. Without sort=
+          // 'throughput', OpenRouter sometimes picks a cheap-but-slow
+          // provider that pushes us past Vercel's 60s ceiling.
+          provider: { sort: 'throughput', allow_fallbacks: true },
         }),
       });
     } finally {

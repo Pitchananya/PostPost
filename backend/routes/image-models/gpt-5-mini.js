@@ -22,7 +22,7 @@ import {
 } from './_shared.js';
 
 export const MODEL = 'openai/gpt-5-image-mini';
-const MAX_TOKENS = 4096;
+const MAX_TOKENS = 2048;
 const TIMEOUT_MS = 45_000;  // mini is faster than full GPT-5
 
 export async function handler(req, res) {
@@ -45,7 +45,10 @@ export async function handler(req, res) {
           messages: [{ role: 'user', content: fullPrompt }],
           modalities: ['image', 'text'],
           max_tokens: MAX_TOKENS,
+          // Belt + braces — see gpt-5.4.js comment for the full rationale.
+          reasoning_effort: 'minimal',
           reasoning: { effort: 'minimal' },
+          provider: { sort: 'throughput', allow_fallbacks: true },
         }),
       });
     } finally { clearTimeout(timer); }

@@ -24,7 +24,7 @@ import {
 } from './_shared.js';
 
 export const MODEL = 'openai/gpt-5-image';
-const MAX_TOKENS = 4096;
+const MAX_TOKENS = 2048;
 const TIMEOUT_MS = 55_000;
 
 export async function handler(req, res) {
@@ -47,9 +47,12 @@ export async function handler(req, res) {
           messages: [{ role: 'user', content: fullPrompt }],
           modalities: ['image', 'text'],
           max_tokens: MAX_TOKENS,
-          // Skip the reasoning pass — same lesson as gpt-5.4.js. Without
-          // this the GPT family routinely exceeds Vercel's 60s ceiling.
+          // Belt + braces reasoning skip + throughput-prioritized
+          // provider routing — same trio as gpt-5.4.js. Without this
+          // the GPT family routinely exceeds Vercel's 60s ceiling.
+          reasoning_effort: 'minimal',
           reasoning: { effort: 'minimal' },
+          provider: { sort: 'throughput', allow_fallbacks: true },
         }),
       });
     } finally { clearTimeout(timer); }
