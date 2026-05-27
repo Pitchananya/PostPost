@@ -1165,6 +1165,7 @@ document.addEventListener('click', (e) => {
       console.log('[voice] mutated brand', _vab.id, '· _vab.voice =', JSON.stringify(_vab.voice));
       try {
         localStorage.setItem('postpost_brands', JSON.stringify(BRANDS));
+        localStorage.setItem('postpost_brands_savedAt', new Date().toISOString());
         console.log('[voice] ✓ localStorage saved · brand count =', BRANDS.length);
       } catch(saveErr){ console.warn('[voice] ✗ localStorage failed:', saveErr.message); }
       const hasSched = !!(window.PP && window.PP.schedCloudPush);
@@ -1253,6 +1254,7 @@ document.addEventListener('click', (e) => {
       console.log('[archetype] mutated brand', _aab.id, '· _aab.archetype =', _aab.archetype);
       try {
         localStorage.setItem('postpost_brands', JSON.stringify(BRANDS));
+        localStorage.setItem('postpost_brands_savedAt', new Date().toISOString());
         console.log('[archetype] ✓ localStorage saved');
       } catch(saveErr){ console.warn('[archetype] ✗ localStorage failed:', saveErr.message); }
       const hasSched = !!(window.PP && window.PP.schedCloudPush);
@@ -1714,6 +1716,17 @@ render();
     ab.voice = Array.isArray(state.voice) ? state.voice.slice() : [];
     ab.archetype = state.archetype || '';
     state.brandDesc = ab.desc || '';
+    // Mark every field this form touches as dirty so a slow cloudPullOnBoot
+    // can't revert what the user just saved (same race that voice/archetype
+    // protect against — see __ppDirtyFields handling in cloudPullOnBoot).
+    try {
+      window.__ppDirtyFields = window.__ppDirtyFields || {};
+      window.__ppDirtyFields[ab.id] = window.__ppDirtyFields[ab.id] || {};
+      var df = window.__ppDirtyFields[ab.id];
+      df.name = true; df.bizType = true; df.desc = true;
+      df.voice = true; df.archetype = true;
+      if (bt) df.sub = true;
+    } catch(_) {}
     saveBrands();
     toast(state.lang==='th'?'บันทึกโปรไฟล์แบรนด์แล้ว ✓':'Brand profile saved ✓','success');
     render();
@@ -1748,8 +1761,24 @@ render();
     if (t.id==='ppAvatarBgSearch') { state.avatarBgSearch = t.value; return; }
     if (t.id==='ppTtvPrompt') { state.ttvPrompt = t.value; return; }
     var ab = liveBrand(); if (!ab) return;
-    if (t.id==='ppBrandNameEdit') { ab.name = t.value; scheduleBrandSave(); }
-    else if (t.id==='ppBrandDesc') { ab.desc = t.value; state.brandDesc = t.value; scheduleBrandSave(); }
+    if (t.id==='ppBrandNameEdit') {
+      ab.name = t.value;
+      try {
+        window.__ppDirtyFields = window.__ppDirtyFields || {};
+        window.__ppDirtyFields[ab.id] = window.__ppDirtyFields[ab.id] || {};
+        window.__ppDirtyFields[ab.id].name = true;
+      } catch(_) {}
+      scheduleBrandSave();
+    }
+    else if (t.id==='ppBrandDesc') {
+      ab.desc = t.value; state.brandDesc = t.value;
+      try {
+        window.__ppDirtyFields = window.__ppDirtyFields || {};
+        window.__ppDirtyFields[ab.id] = window.__ppDirtyFields[ab.id] || {};
+        window.__ppDirtyFields[ab.id].desc = true;
+      } catch(_) {}
+      scheduleBrandSave();
+    }
     else if (t.id==='ppBrandAiInstruction') {
       ab.aiInstruction = String(t.value || '').slice(0, 8000);
       // Mark this brand's aiInstruction as user-touched so cloudPullOnBoot
@@ -1768,6 +1797,18 @@ render();
       var ab = liveBrand();
       if (ab) {
         ab.bizType = t.value;
+        // Also mirror into the brand tile subtitle so the change survives a re-render
+        // (and matches what saveBrandProfile does on explicit save).
+        var bt = BUSINESS_TYPES.filter(function(x){ return x.th===t.value || x.en===t.value; })[0];
+        if (bt) { ab.sub_th = bt.th; ab.sub_en = bt.en; }
+        // Protect this field from cloudPullOnBoot overwriting it back to the cloud
+        // value (cloud push is 250ms debounced — a fast refresh races with the push).
+        try {
+          window.__ppDirtyFields = window.__ppDirtyFields || {};
+          window.__ppDirtyFields[ab.id] = window.__ppDirtyFields[ab.id] || {};
+          window.__ppDirtyFields[ab.id].bizType = true;
+          if (bt) window.__ppDirtyFields[ab.id].sub = true;
+        } catch(_) {}
         // bizType is a select → fires once on change, save immediately (no debounce needed).
         // Use inline saveBrands — same divergence reason as the debounced scheduleBrandSave above.
         try { saveBrands(); } catch(_){}
@@ -4881,6 +4922,11 @@ render();
   // localStorage = instant write (offline cache) · cloud = debounced 2.5s (per-tenant via team_workspace.state)
   function saveBrands(){
     try { localStorage.setItem('postpost_brands', JSON.stringify(BRANDS)); } catch(e){}
+    // Stamp the local save time so cloudPullOnBoot can detect when local is
+    // newer than cloud (e.g. user clicked save then refreshed before the
+    // 250ms debounced push fired or completed). Without this, the next pull
+    // overwrites the freshly-saved local data with stale cloud data.
+    try { localStorage.setItem('postpost_brands_savedAt', new Date().toISOString()); } catch(_) {}
     schedCloudPush();
   }
 
@@ -5013,12 +5059,27 @@ render();
       }
       var localSnapshot = BRANDS.map(function(b){ return b.id + ':v=' + JSON.stringify(b.voice||[]) + ',a=' + (b.archetype||''); }).join(' | ');
       console.log('[cloud-pull] LOCAL  state voice/archetype snapshot:', localSnapshot);
+      // ── Local-is-newer check ──────────────────────────────────────────
+      // If the user saved locally AFTER the cloud's last successful push,
+      // local has changes the cloud doesn't know about yet. Skip the brands
+      // merge so we don't revert them, and re-schedule a push to catch up.
+      // Covers: save → refresh before debounced push completes (which is
+      // the common cause of "I saved but it didn't stick" bug reports).
+      var _localSavedAt = '';
+      try { _localSavedAt = localStorage.getItem('postpost_brands_savedAt') || ''; } catch(_) {}
+      var _cloudUpdatedAt = (s && s.updated_at) || '';
+      var _localIsNewer = _localSavedAt && _cloudUpdatedAt && _localSavedAt > _cloudUpdatedAt;
+      if (_localIsNewer) {
+        console.log('[cloud-pull] local brands newer than cloud — keeping local, re-pushing',
+          { localSavedAt: _localSavedAt, cloudUpdatedAt: _cloudUpdatedAt });
+        if (typeof schedCloudPush === 'function') schedCloudPush();
+      }
       // Merge brands by id — preserve local-only brands (cloud may not have them yet)
       // and keep cloud version when both exist (cloud is the canonical source).
       // EXCEPTION: if the user has already touched a field this session
       // (window.__ppDirtyFields), preserve the local value for that field
       // — otherwise a slow cloudPull can revert clicks the user just made.
-      if (Array.isArray(s.brands) && s.brands.length) {
+      if (!_localIsNewer && Array.isArray(s.brands) && s.brands.length) {
         var byId = {};
         BRANDS.forEach(function(b){ byId[b.id] = b; });
         var dirtyFields = (window.__ppDirtyFields) || {};
@@ -5029,12 +5090,24 @@ render();
           if (local) {
             if (df.voice) n.voice = Array.isArray(local.voice) ? local.voice.slice() : [];
             if (df.archetype) n.archetype = local.archetype || '';
+            // Brand-profile metadata — protect each field the user has edited
+            // this session so a slow cloud-pull doesn't revert their save.
+            if (df.name) n.name = local.name || n.name;
+            if (df.bizType) n.bizType = local.bizType || '';
+            if (df.desc) n.desc = local.desc || '';
+            if (df.sub) { n.sub_th = local.sub_th || n.sub_th; n.sub_en = local.sub_en || n.sub_en; }
+            if (df.aiInstruction) n.aiInstruction = typeof local.aiInstruction === 'string' ? local.aiInstruction : '';
           }
           byId[n.id] = n;
         });
         BRANDS.length = 0;
         Object.values(byId).forEach(function(b){ BRANDS.push(b); });
-        try { localStorage.setItem('postpost_brands', JSON.stringify(BRANDS)); } catch(_){}
+        try {
+          localStorage.setItem('postpost_brands', JSON.stringify(BRANDS));
+          // Align local savedAt with cloud — local now matches cloud, so the
+          // next boot's "local is newer" check shouldn't false-positive.
+          if (_cloudUpdatedAt) localStorage.setItem('postpost_brands_savedAt', _cloudUpdatedAt);
+        } catch(_){}
         dirty = true;
         var afterSnapshot = BRANDS.map(function(b){ return b.id + ':v=' + JSON.stringify(b.voice||[]) + ',a=' + (b.archetype||''); }).join(' | ');
         console.log('[cloud-pull] MERGED voice/archetype snapshot:', afterSnapshot);
