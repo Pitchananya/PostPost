@@ -1499,50 +1499,72 @@ function normalizeOpenAIImageModel(modelBody) {
   return modelBody || (process.env.GPT_IMAGE_MODEL || 'openai/gpt-image-1');
 }
 
-// 🎨 POST /ai/gen-image/openai — OpenAI's /v1/images/generations API.
-// Request body: { model, prompt, size, n, quality }
-// Response: { data: [{ b64_json | url }] }
-// Auth: OPENAI_API_KEY (NOT OpenRouter). Models: openai/gpt-image-1, openai/dall-e-3.
+// 🎨 POST /ai/gen-image/openai — OpenAI image models (gpt-image-1, dall-e-*).
+// Preferred path: OpenAI direct (/v1/images/generations) when OPENAI_API_KEY
+// is set. Falls back to OpenRouter when only OPENROUTER_API_KEY is available
+// (OpenRouter proxies gpt-image-1 and dall-e-3 fine via chat-completions).
+// The fallback keeps the per-provider URL stable on the client while letting
+// each deploy use whichever key it has configured.
 router.post('/gen-image/openai', async (req, res) => {
   const { prompt, model: modelBody } = req.body || {};
   if (!prompt || !String(prompt).trim()) return res.status(400).json({ error: 'prompt required' });
-  if (!process.env.OPENAI_API_KEY) return res.status(500).json({ error: 'OPENAI_API_KEY not set — required for /gen-image/openai' });
   const model = normalizeOpenAIImageModel(modelBody);
   if (!/^openai\/(gpt-image|dall-e)/i.test(model)) {
     return res.status(400).json({ error: `model ${model} not supported by /gen-image/openai — use /gen-image/google or /gen-image/openrouter` });
   }
+  if (!process.env.OPENAI_API_KEY && !process.env.OPENROUTER_API_KEY) {
+    return res.status(500).json({ error: 'neither OPENAI_API_KEY nor OPENROUTER_API_KEY is set — set one to use /gen-image/openai' });
+  }
   const t0 = Date.now();
+  const via = process.env.OPENAI_API_KEY ? 'openai_direct' : 'openrouter';
   try {
-    const r = await generateImageOpenAIDirect(String(prompt), model);
-    if (r.error) throw new Error(r.error);
-    console.log(`[ai/gen-image/openai] ✓ ${model} took=${Date.now()-t0}ms`);
-    res.json({ ok: true, provider: 'openai', model, image_base64: r.image_base64 || null, image_url: r.image_url || null });
+    let r;
+    if (via === 'openai_direct') {
+      r = await generateImageOpenAIDirect(String(prompt), model);
+      if (r.error) throw new Error(r.error);
+    } else {
+      const result = await tryOpenRouterImageGen(String(prompt), model, 'standard');
+      if (!result.ok || !result.url) throw new Error(result.error || 'no image returned');
+      r = parseImageUrlToReturn(result.url, model);
+    }
+    console.log(`[ai/gen-image/openai via ${via}] ✓ ${model} took=${Date.now()-t0}ms`);
+    res.json({ ok: true, provider: 'openai', via, model, image_base64: r.image_base64 || null, image_url: r.image_url || null });
   } catch (e) {
-    console.error(`[ai/gen-image/openai] ✗ ${model} after ${Date.now()-t0}ms: ${e.message}`);
-    res.status(500).json({ error: e.message, model, provider: 'openai' });
+    console.error(`[ai/gen-image/openai via ${via}] ✗ ${model} after ${Date.now()-t0}ms: ${e.message}`);
+    res.status(500).json({ error: e.message, model, provider: 'openai', via });
   }
 });
 
-// 🟦 POST /ai/gen-image/google — Google AI Studio's generateContent with
-// responseModalities: ['IMAGE','TEXT']. Returns inlineData base64.
-// Auth: GOOGLE_AI_API_KEY. Models: google/gemini-*-image, google/imagen-*.
+// 🟦 POST /ai/gen-image/google — Google image models (gemini-*-image, imagen-*).
+// Preferred path: Google AI Studio direct (better Thai text). Falls back to
+// OpenRouter when only OPENROUTER_API_KEY is set.
 router.post('/gen-image/google', async (req, res) => {
   const { prompt, model: modelBody } = req.body || {};
   if (!prompt || !String(prompt).trim()) return res.status(400).json({ error: 'prompt required' });
-  if (!process.env.GOOGLE_AI_API_KEY) return res.status(500).json({ error: 'GOOGLE_AI_API_KEY not set — required for /gen-image/google' });
   const model = modelBody || (process.env.GEMINI_IMAGE_MODEL || 'google/gemini-3.1-flash-image-preview');
   if (!/^google\/(gemini.*image|imagen)/i.test(model)) {
     return res.status(400).json({ error: `model ${model} not supported by /gen-image/google — use /gen-image/openai or /gen-image/openrouter` });
   }
+  if (!process.env.GOOGLE_AI_API_KEY && !process.env.OPENROUTER_API_KEY) {
+    return res.status(500).json({ error: 'neither GOOGLE_AI_API_KEY nor OPENROUTER_API_KEY is set — set one to use /gen-image/google' });
+  }
   const t0 = Date.now();
+  const via = process.env.GOOGLE_AI_API_KEY ? 'google_direct' : 'openrouter';
   try {
-    const r = await generateImageGoogleDirect(String(prompt), model);
-    if (r.error) throw new Error(r.error);
-    console.log(`[ai/gen-image/google] ✓ ${model} took=${Date.now()-t0}ms`);
-    res.json({ ok: true, provider: 'google', model, image_base64: r.image_base64 || null, image_url: r.image_url || null });
+    let r;
+    if (via === 'google_direct') {
+      r = await generateImageGoogleDirect(String(prompt), model);
+      if (r.error) throw new Error(r.error);
+    } else {
+      const result = await tryOpenRouterImageGen(String(prompt), model, 'standard');
+      if (!result.ok || !result.url) throw new Error(result.error || 'no image returned');
+      r = parseImageUrlToReturn(result.url, model);
+    }
+    console.log(`[ai/gen-image/google via ${via}] ✓ ${model} took=${Date.now()-t0}ms`);
+    res.json({ ok: true, provider: 'google', via, model, image_base64: r.image_base64 || null, image_url: r.image_url || null });
   } catch (e) {
-    console.error(`[ai/gen-image/google] ✗ ${model} after ${Date.now()-t0}ms: ${e.message}`);
-    res.status(500).json({ error: e.message, model, provider: 'google' });
+    console.error(`[ai/gen-image/google via ${via}] ✗ ${model} after ${Date.now()-t0}ms: ${e.message}`);
+    res.status(500).json({ error: e.message, model, provider: 'google', via });
   }
 });
 
