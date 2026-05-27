@@ -2457,22 +2457,89 @@ render();
     return '/api/ai/gen-image/' + slug;
   }
 
-  // Sequential image generation — one call per slide prompt, routed to the
-  // dedicated per-provider backend endpoint based on the picked model.
+  // ── Async path for slow models ───────────────────────────────────────
+  // GPT-5 family + Nano Banana Pro + FLUX.2 Max regularly exceed Vercel's
+  // 60s serverless ceiling on a single request, so calling /gen-image/*
+  // returns 504 with no payload. For those models the frontend submits a
+  // job (POST /api/ai/image-async → backend creates an image_jobs row +
+  // fires the Render worker, which has no wall-clock limit) and polls
+  // /api/ai/image-status?id=<job_id> every 3s until the worker writes
+  // 'done' or 'failed'. Fast models still take the direct sync path —
+  // no point queuing a 3-5s nano-banana call through a worker.
+  function isSlowImageModel(model) {
+    return /^openai\/gpt-/i.test(model)                              // every GPT image variant
+        || model === 'google/gemini-3-pro-image-preview'             // 2K/4K is slow
+        || model === 'black-forest-labs/flux.2-max';                 // top-tier = slow
+  }
+
+  // Poll /image-status until the job is done or failed, with a long
+  // overall budget (5 min — Render free tier handles GPT-5.4 in 90-150s).
+  // Returns { image_url, image_base64 } or throws.
+  async function pollImageJob(jobId, opts) {
+    var maxMs = (opts && opts.maxMs) || 5 * 60_000;
+    var intervalMs = (opts && opts.intervalMs) || 3000;
+    var t0 = Date.now();
+    while (Date.now() - t0 < maxMs) {
+      await new Promise(function(r){ setTimeout(r, intervalMs); });
+      var s;
+      try {
+        s = await api('/api/ai/image-status?id=' + encodeURIComponent(jobId));
+      } catch (e) {
+        // transient network error — keep polling rather than abort
+        console.warn('[image-async] poll error (will retry):', e.message);
+        continue;
+      }
+      if (s.status === 'done') {
+        return { image_url: s.image_url || null, image_base64: s.image_base64 || null };
+      }
+      if (s.status === 'failed') {
+        throw new Error(s.error || 'image-job failed');
+      }
+      // 'pending' or 'processing' → loop
+    }
+    throw new Error('image-job poll timeout (5 min)');
+  }
+
+  // Single-image generation that picks sync vs async based on model.
+  // Returns the URL string (data:image/png;base64,... or http(s)://...)
+  // or null if no image came back.
+  async function generateOneImage(prompt, model) {
+    if (isSlowImageModel(model)) {
+      // Async path — submit job, poll until done. The /image-async
+      // endpoint queues into Supabase image_jobs and triggers the
+      // Render worker (RENDER_WORKER_URL on the backend env).
+      var sub = await api('/api/ai/image-async', { method:'POST', body:{ prompt: prompt, model: model } });
+      if (!sub || !sub.job_id) throw new Error('no job_id returned');
+      var done = await pollImageJob(sub.job_id);
+      if (done.image_base64) return 'data:image/png;base64,' + done.image_base64;
+      if (done.image_url) return done.image_url;
+      return null;
+    }
+    // Sync path — direct call to the per-model handler.
+    var endpoint = pickGenImageEndpoint(model);
+    var r = await api(endpoint, { method:'POST', body:{ prompt: prompt, model: model } });
+    if (r && r.image_base64) return 'data:image/png;base64,' + r.image_base64;
+    if (r && r.image_url) return r.image_url;
+    return null;
+  }
+
+  // Sequential image generation — one call per slide prompt, routed
+  // through generateOneImage() which picks sync vs async based on
+  // model speed (GPT family + Nano Banana Pro + FLUX.2 Max → async;
+  // everything else → direct call).
   async function genImagesForSlides(){
     var prompts = state.genImagePrompts || [];
     var count = Math.min(state.imageCount || 4, prompts.length);
     var imgModel = resolveImageModel(state.imageModel);
-    var endpoint = pickGenImageEndpoint(imgModel);
+    var async = isSlowImageModel(imgModel);
     state.genImages = [];
     state.previewIndex = 0;
     for (var i = 0; i < count; i++) {
-      toast(state.lang==='th' ? ('กำลังสร้างรูป '+(i+1)+'/'+count+'…') : ('Generating image '+(i+1)+'/'+count+'…'));
+      var suffix = async ? (state.lang==='th'?' (โมเดลช้า, รอ ~2 นาที)':' (slow model, ~2 min)') : '';
+      toast(state.lang==='th' ? ('กำลังสร้างรูป '+(i+1)+'/'+count+'…'+suffix) : ('Generating image '+(i+1)+'/'+count+'…'+suffix));
       try {
-        var r = await api(endpoint, { method:'POST', body:{ prompt: prompts[i], model: imgModel } });
-        if (r && r.image_base64) state.genImages.push('data:image/png;base64,' + r.image_base64);
-        else if (r && r.image_url) state.genImages.push(r.image_url);
-        else state.genImages.push(null);
+        var url = await generateOneImage(prompts[i], imgModel);
+        state.genImages.push(url);
       } catch(e){
         state.genImages.push(null);
         toast((state.lang==='th'?'รูปที่ ':'Image ')+(i+1)+(state.lang==='th'?' ไม่สำเร็จ: ':' failed: ')+(e.message||''),'error');
@@ -2574,24 +2641,22 @@ render();
   // Per-image regenerate — re-runs gen-image for a single slot using the
   // prompt that produced it. Index is into state.genImagePrompts /
   // state.genImages parallel arrays. Caller already validated `idx`.
-  // Uses the same per-provider dispatch as the bulk gen so one slot's
-  // retry hits the same backend route the rest of the batch used.
+  // Routes through generateOneImage() so slow models use the async path.
   async function regenImageSlot(idx){
     var prompts = state.genImagePrompts || [];
     if (idx < 0 || idx >= prompts.length) return;
     var imgModel = resolveImageModel(state.imageModel);
-    var endpoint = pickGenImageEndpoint(imgModel);
     // Mark slot as "regenerating" with a null placeholder so the UI can
     // show a spinner immediately while the request is in flight.
     if (!Array.isArray(state.genImages)) state.genImages = [];
     while (state.genImages.length <= idx) state.genImages.push(null);
     state.genImageRegenIdx = idx;
     render();
-    toast(state.lang==='th' ? ('กำลังสร้างรูป '+(idx+1)+' ใหม่…') : ('Regenerating image '+(idx+1)+'…'));
+    var suffix = isSlowImageModel(imgModel) ? (state.lang==='th'?' (โมเดลช้า, รอ ~2 นาที)':' (slow model, ~2 min)') : '';
+    toast(state.lang==='th' ? ('กำลังสร้างรูป '+(idx+1)+' ใหม่…'+suffix) : ('Regenerating image '+(idx+1)+'…'+suffix));
     try {
-      var r = await api(endpoint, { method:'POST', body:{ prompt: prompts[idx], model: imgModel } });
-      var url = r.image_url || (r.image_base64 ? ('data:image/png;base64,' + r.image_base64) : null);
-      if (!url) throw new Error(r.error || 'no image returned');
+      var url = await generateOneImage(prompts[idx], imgModel);
+      if (!url) throw new Error('no image returned');
       state.genImages[idx] = url;
       toast(state.lang==='th' ? ('สร้างรูป '+(idx+1)+' สำเร็จ ✓') : ('Image '+(idx+1)+' ready ✓'),'success');
     } catch(e){
