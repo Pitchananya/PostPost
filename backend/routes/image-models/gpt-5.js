@@ -49,8 +49,7 @@ export async function handler(req, res) {
           max_tokens: MAX_TOKENS,
           // Skip the reasoning pass — same lesson as gpt-5.4.js. Without
           // this the GPT family routinely exceeds Vercel's 60s ceiling.
-          reasoning: { effort: 'minimal', exclude: true },
-          include_reasoning: false,
+          reasoning: { effort: 'minimal' },
         }),
       });
     } finally { clearTimeout(timer); }

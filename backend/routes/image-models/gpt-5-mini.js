@@ -45,8 +45,7 @@ export async function handler(req, res) {
           messages: [{ role: 'user', content: fullPrompt }],
           modalities: ['image', 'text'],
           max_tokens: MAX_TOKENS,
-          reasoning: { effort: 'minimal', exclude: true },
-          include_reasoning: false,
+          reasoning: { effort: 'minimal' },
         }),
       });
     } finally { clearTimeout(timer); }

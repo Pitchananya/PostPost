@@ -72,14 +72,15 @@ export async function handler(req, res) {
           messages: [{ role: 'user', content: fullPrompt }],
           modalities: ['image', 'text'],
           max_tokens: MAX_TOKENS,
-          // Disable the heavy reasoning pass — image-gen calls don't
-          // need chain-of-thought; skipping it is the main fix that
-          // unblocks this model from hitting Vercel's 60s ceiling.
-          // Belt + braces: 'effort: minimal' on the reasoning config
-          // AND 'include_reasoning: false' so the response stream
-          // doesn't carry any reasoning tokens back either.
-          reasoning: { effort: 'minimal', exclude: true },
-          include_reasoning: false,
+          // Tell OpenRouter to use the smallest possible reasoning
+          // budget — GPT-5.4 supports 'minimal' (per its
+          // supported_parameters in /api/v1/models). Without this, the
+          // hidden chain-of-thought pass eats so much wall time that
+          // Vercel's 60s function ceiling kills the call → 504.
+          // Keep it to JUST the documented `reasoning.effort` field;
+          // the experimental `exclude`/`include_reasoning` flags broke
+          // the request on some deploys (OpenRouter returned 400/500).
+          reasoning: { effort: 'minimal' },
         }),
       });
     } finally {

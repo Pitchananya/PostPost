@@ -2414,33 +2414,48 @@ render();
     }
   }
   // ── Image-gen client dispatch ────────────────────────────────────────
-  // OpenRouter currently lists 12 image-output models (see backend/routes/
-  // image-models/index.js for the full registry). Each one has its own
-  // dedicated backend route at /api/ai/gen-image/<slug> with model-
-  // specific request shape — pick the right slug here based on the
-  // model id the user selected.
-  //
-  // Stale state pointing at retired ids (gpt-image-1, dall-e-3, flux-
-  // schnell, imagen-4, etc.) gets rewritten to the closest current
-  // model so existing sessions never get stuck on a non-existent id.
+  // OpenRouter's live /api/v1/models endpoint serves exactly two image-
+  // output models right now: gpt-5.4-image-2 and gemini-3.1-flash-image-
+  // preview. The other 10 listed on openrouter.ai/collections/image-
+  // models are previews that haven't been turned on yet — their per-
+  // model files in backend/routes/image-models/ are wired and ready,
+  // but resolveImageModel() rewrites their ids to one of the two live
+  // models so the picker never dispatches to a model OpenRouter would
+  // 404. When OpenRouter flips the others live, drop those rewrites
+  // and they Just Work.
   function resolveImageModel(rawModel) {
     var IMG_LEGACY = {
       gemini: 'google/gemini-3.1-flash-image-preview',
       gpt: 'openai/gpt-5.4-image-2',
+      // Old / retired ids
       'openai/gpt-image-1': 'openai/gpt-5.4-image-2',
       'openai/gpt-image-2': 'openai/gpt-5.4-image-2',
       'openai/dall-e-3': 'openai/gpt-5.4-image-2',
-      'google/imagen-4': 'google/gemini-3-pro-image-preview',
-      'bytedance/seedream-4': 'bytedance-seed/seedream-4.5',
-      'black-forest-labs/flux-schnell': 'black-forest-labs/flux.2-klein-4b',
-      'black-forest-labs/flux-1.1-pro': 'black-forest-labs/flux.2-pro',
-      'black-forest-labs/flux-kontext-pro': 'black-forest-labs/flux.2-flex',
-      'xai/grok-2-image': 'x-ai/grok-imagine-image-quality',
+      'google/imagen-4': 'google/gemini-3.1-flash-image-preview',
+      'bytedance/seedream-4': 'google/gemini-3.1-flash-image-preview',
+      'black-forest-labs/flux-schnell': 'google/gemini-3.1-flash-image-preview',
+      'black-forest-labs/flux-1.1-pro': 'openai/gpt-5.4-image-2',
+      'black-forest-labs/flux-kontext-pro': 'openai/gpt-5.4-image-2',
+      'xai/grok-2-image': 'openai/gpt-5.4-image-2',
+      // Catalog ids that aren't live yet
+      'openai/gpt-5-image': 'openai/gpt-5.4-image-2',
+      'openai/gpt-5-image-mini': 'openai/gpt-5.4-image-2',
+      'google/gemini-2.5-flash-image': 'google/gemini-3.1-flash-image-preview',
+      'google/gemini-3-pro-image-preview': 'google/gemini-3.1-flash-image-preview',
+      'bytedance-seed/seedream-4.5': 'google/gemini-3.1-flash-image-preview',
+      'black-forest-labs/flux.2-pro': 'openai/gpt-5.4-image-2',
+      'black-forest-labs/flux.2-max': 'openai/gpt-5.4-image-2',
+      'black-forest-labs/flux.2-flex': 'openai/gpt-5.4-image-2',
+      'black-forest-labs/flux.2-klein-4b': 'google/gemini-3.1-flash-image-preview',
+      'x-ai/grok-imagine-image-quality': 'openai/gpt-5.4-image-2',
     };
     return IMG_LEGACY[rawModel] || rawModel || 'google/gemini-3.1-flash-image-preview';
   }
-  // Full model-id → backend-slug map. The slug matches the filename
-  // under backend/routes/image-models/ (one file per model).
+  // Full model-id → backend-slug map. After resolveImageModel() this
+  // only ever gets called with one of the two live model ids, but we
+  // keep the full table so the dormant per-model files (gpt-5, gpt-5-
+  // mini, flux-*, seedream-4.5, grok-imagine, gemini-2.5, gemini-3-pro)
+  // route correctly the day OpenRouter turns them on.
   var IMG_SLUG_BY_MODEL = {
     'google/gemini-2.5-flash-image':         'gemini-2.5',
     'google/gemini-3.1-flash-image-preview': 'nano-banana',
