@@ -65,33 +65,34 @@ export function pageCreative() {
         <div style="display:flex;align-items:center;gap:8px;margin-top:12px;padding-top:12px;border-top:1px dashed var(--line);flex-wrap:wrap">
           <span class="micro" style="font-weight:700">${raw(T('โมเดล AI สร้างรูป:', 'Image AI model:'))}</span>
           ${raw((() => {
-            // Map legacy provider keys + retired/fake model ids → real ids so old saved
-            // state picks something that actually exists. gpt-image-2 / gpt-5.4-image-2
-            // were never valid OpenRouter ids (the API returns "not a valid model ID"),
-            // so anything saved with those values is rewritten to gpt-image-1.
+            // Only the two models OpenRouter actually serves with
+            // output_modalities: ["image"] as of the live /api/v1/models
+            // catalog. All the previously-listed Flux / Seedream / Imagen /
+            // Grok / DALL-E / gpt-image-1 / gemini-2.5-flash-image entries
+            // returned "not a valid model ID" because they don't exist on
+            // OpenRouter as image-output models (some are FAL-only, some
+            // are text-only, some were never released).
             const LEGACY = {
-              gemini: 'google/gemini-2.5-flash-image',
-              gpt: 'openai/gpt-image-1',
-              'openai/gpt-image-2': 'openai/gpt-image-1',
-              'openai/gpt-5.4-image-2': 'openai/gpt-image-1',
+              gemini: 'google/gemini-3.1-flash-image-preview',
+              gpt: 'openai/gpt-5.4-image-2',
+              // Old picks that are no longer offered → rewrite to the
+              // closest real OpenRouter model so existing state still works.
+              'openai/gpt-image-1': 'openai/gpt-5.4-image-2',
+              'openai/gpt-image-2': 'openai/gpt-5.4-image-2',
+              'openai/dall-e-3': 'openai/gpt-5.4-image-2',
+              'google/gemini-2.5-flash-image': 'google/gemini-3.1-flash-image-preview',
+              'google/imagen-4': 'google/gemini-3.1-flash-image-preview',
+              'bytedance/seedream-4': 'openai/gpt-5.4-image-2',
+              'black-forest-labs/flux-schnell': 'openai/gpt-5.4-image-2',
+              'black-forest-labs/flux-1.1-pro': 'openai/gpt-5.4-image-2',
+              'black-forest-labs/flux-kontext-pro': 'openai/gpt-5.4-image-2',
+              'xai/grok-2-image': 'openai/gpt-5.4-image-2',
             };
-            const cur = LEGACY[state.imageModel] || state.imageModel || 'openai/gpt-image-1';
+            const cur = LEGACY[state.imageModel] || state.imageModel || 'openai/gpt-5.4-image-2';
             const opts = [
-              { group: T('⚡ ถูก/เร็ว', '⚡ Cheap/Fast'), items: [
-                ['google/gemini-2.5-flash-image',     'Gemini Nano Banana ⭐'],
-                ['google/gemini-3.1-flash-image-preview', 'Gemini 3.1 Flash'],
-                ['bytedance/seedream-4',              'Seedream 4.0 (ถูกสุด)'],
-                ['black-forest-labs/flux-schnell',    'Flux Schnell (เร็วสุด)'],
-              ]},
-              { group: T('🎨 Balanced', '🎨 Balanced'), items: [
-                ['google/imagen-4',                       'Imagen 4 (Google photo)'],
-                ['black-forest-labs/flux-1.1-pro',        'Flux 1.1 Pro (product)'],
-                ['black-forest-labs/flux-kontext-pro',    'Flux Kontext (แก้รูป)'],
-                ['xai/grok-2-image',                      'Grok 2 Image'],
-              ]},
-              { group: T('💎 พรีเมียม', '💎 Premium'), items: [
-                ['openai/gpt-image-1',     'GPT Image 1 / DALL-E HD 🏆'],
-                ['openai/dall-e-3',        'DALL-E 3'],
+              { group: T('โมเดลที่ใช้งานได้', 'Available models'), items: [
+                ['openai/gpt-5.4-image-2',                'GPT-5.4 Image 2 (OpenAI) 🏆'],
+                ['google/gemini-3.1-flash-image-preview', 'Nano Banana 2 (Gemini 3.1 Flash) ⭐'],
               ]},
             ];
             return '<select class="select" id="ppImageModel" style="height:32px;width:auto;padding:0 28px 0 10px;font-size:12px">'

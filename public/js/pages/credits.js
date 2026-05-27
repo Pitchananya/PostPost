@@ -51,20 +51,13 @@ const CATALOG = {
     note_th: 'รูปคุณภาพสูง (HD) คิดเครดิตมากกว่าเพราะต้นทุน provider แพงกว่า',
     note_en: 'HD images cost more credits because provider rates are higher',
     items: [
-      // Cheap
-      { id: 'google/gemini-2.5-flash-image',        label: 'Gemini Nano Banana',     tier: 'cheap',    cost: 5,  default: true },
-      { id: 'google/gemini-3.1-flash-image-preview', label: 'Gemini 3.1 Flash Image', tier: 'cheap',   cost: 5 },
-      { id: 'bytedance/seedream-4',                  label: 'Seedream 4.0',           tier: 'cheap',   cost: 3 },
-      { id: 'black-forest-labs/flux-schnell',        label: 'Flux Schnell',           tier: 'cheap',   cost: 1 },
-      // Balanced
-      { id: 'google/imagen-4',                       label: 'Imagen 4',               tier: 'balanced', cost: 6 },
-      { id: 'black-forest-labs/flux-1.1-pro',        label: 'Flux 1.1 Pro',           tier: 'balanced', cost: 5 },
-      { id: 'black-forest-labs/flux-kontext-pro',    label: 'Flux Kontext Pro',       tier: 'balanced', cost: 5 },
-      { id: 'xai/grok-2-image',                      label: 'Grok 2 Image',           tier: 'balanced', cost: 5 },
-      // Premium — only real OpenRouter ids (gpt-image-2 / gpt-5.4-image-2
-      // were never valid and produced "not a valid model ID" 400s).
-      { id: 'openai/gpt-image-1',                    label: 'GPT Image 1 / DALL-E HD', tier: 'premium', cost: 10 },
-      { id: 'openai/dall-e-3',                       label: 'DALL-E 3',               tier: 'premium', cost: 10 },
+      // Only the two REAL OpenRouter image-output models (verified against
+      // the live /api/v1/models catalog). Every other entry previously
+      // listed here (gpt-image-1, dall-e-3, gemini-2.5-flash-image, flux-*,
+      // seedream-4, imagen-4, grok-2-image) is not served by OpenRouter as
+      // image-output and would 400 with "not a valid model ID".
+      { id: 'openai/gpt-5.4-image-2',                label: 'GPT-5.4 Image 2 (OpenAI)',         tier: 'premium', cost: 15, default: true },
+      { id: 'google/gemini-3.1-flash-image-preview', label: 'Nano Banana 2 (Gemini 3.1 Flash)', tier: 'cheap',   cost: 5 },
     ],
   },
   video: {
