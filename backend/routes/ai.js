@@ -2942,6 +2942,35 @@ router.post('/get-asset-urls', async (req, res) => {
   }
 });
 
+// 📤 POST /ai/upload-media — host ANY image/video/audio data-URL on Supabase
+//    Storage and return its public URL. Used so drafts store a small shared URL
+//    instead of a heavy data-URL (keeps the per-tenant workspace state small +
+//    makes draft media visible to everyone in the same account, not just the
+//    browser that created it). body: { data_url, kind? } → { ok, url, ext }
+router.post('/upload-media', async (req, res) => {
+  const { data_url, kind } = req.body || {};
+  if (!data_url || typeof data_url !== 'string') return res.status(400).json({ error: 'data_url required' });
+  const mimeMatch = data_url.match(/^data:([^;]+);base64,/);
+  const mime = mimeMatch ? mimeMatch[1].toLowerCase() : '';
+  const EXT = {
+    'image/jpeg': 'jpg', 'image/jpg': 'jpg', 'image/png': 'png', 'image/webp': 'webp',
+    'image/gif': 'gif', 'image/avif': 'avif',
+    'video/mp4': 'mp4', 'video/webm': 'webm', 'video/quicktime': 'mov',
+    'audio/mp3': 'mp3', 'audio/mpeg': 'mp3', 'audio/wav': 'wav', 'audio/ogg': 'ogg', 'audio/webm': 'weba',
+  };
+  const ext = EXT[mime] || (mime.startsWith('video/') ? 'mp4' : mime.startsWith('audio/') ? 'mp3' : 'png');
+  const prefix = (kind === 'video' || mime.startsWith('video/')) ? 'draft-vid'
+    : (kind === 'audio' || mime.startsWith('audio/')) ? 'draft-aud' : 'draft-img';
+  try {
+    await ensureLipsyncBucket();
+    const url = await uploadDataUrlToBucket(data_url, prefix, ext);
+    res.json({ ok: true, url, ext });
+  } catch (e) {
+    console.error('[upload-media]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 router.post('/remove-bg', async (req, res) => {
   const { image_b64 } = req.body || {};
   const falKey = process.env.FAL_KEY;

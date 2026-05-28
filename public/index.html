@@ -5275,11 +5275,19 @@ render();
     var imgs = state.genImages || [];
     var draftId = 'dr' + Date.now();
     var imageIds = [];
+    var imageUrls = [];   // cloud-hosted URLs → shared with everyone in the same account
     for (var i = 0; i < imgs.length; i++){
-      if (!imgs[i]) { imageIds.push(null); continue; }
+      if (!imgs[i]) { imageIds.push(null); imageUrls.push(null); continue; }
       var iid = 'img_' + draftId + '_' + i;
-      try { await idbPutImage(iid, imgs[i]); imageIds.push(iid); }
-      catch(e){ imageIds.push(null); }
+      var savedLocal = false;
+      try { await idbPutImage(iid, imgs[i]); savedLocal = true; } catch(e){}
+      imageIds.push(savedLocal ? iid : null);
+      // Best-effort upload to Supabase Storage so the draft's images sync across
+      // logins/devices (the synced workspace only carries the small URL, not the
+      // heavy data-URL — also keeps us under the 5MB workspace cap).
+      var cloudUrl = null;
+      try { var up = await api('/api/ai/upload-media', { method:'POST', body:{ data_url: imgs[i] } }); cloudUrl = (up && up.url) || null; } catch(e){}
+      imageUrls.push(cloudUrl);
     }
     var thumb = imgs[0] ? await compressImageDataUrl(imgs[0], 360, 0.7) : '';
     var imageCount = imageIds.filter(Boolean).length;
@@ -5293,6 +5301,7 @@ render();
       hashtags: state.genHashtags || [],
       article: state.genArticle || '',
       imageIds: imageIds,
+      imageUrls: imageUrls,
       imageCount: imageCount,
       thumb: thumb,
       createdAt: Date.now(),
@@ -5376,23 +5385,51 @@ render();
       // (Blob URLs are session-scoped; they'd be dead after a reload.)
       var videoId = null;
       var videoUrl = '';
+      var videoDataUrl = '';
       if (typeof state.avatarVideo === 'string' && state.avatarVideo.indexOf('blob:') === 0) {
         try {
           var blob = await fetch(state.avatarVideo).then(function(r){ return r.blob(); });
-          var dataUrl = await new Promise(function(resolve, reject){
+          videoDataUrl = await new Promise(function(resolve, reject){
             var rd = new FileReader();
             rd.onload = function(){ resolve(rd.result); };
             rd.onerror = function(){ reject(new Error('read fail')); };
             rd.readAsDataURL(blob);
           });
           videoId = 'av_' + draftId;
-          await idbPutImage(videoId, dataUrl);     // idb generic key/value store (reused from Veo flow)
+          await idbPutImage(videoId, videoDataUrl);   // local fallback copy
         } catch (e) {
           videoId = null;
           toast(state.lang==='th'?'พื้นที่เก็บไม่พอ — บันทึกข้อมูลแต่ไม่บันทึกวิดีโอ':'Storage low — saved meta only, not video','error');
         }
       } else if (typeof state.avatarVideo === 'string') {
-        videoUrl = state.avatarVideo;             // http / data URL — store as-is
+        if (state.avatarVideo.indexOf('data:') === 0) videoDataUrl = state.avatarVideo;
+        else videoUrl = state.avatarVideo;          // http(s) — already shareable
+      }
+      // Upload the local/data-URL video to Supabase Storage so everyone in the
+      // account sees it (best-effort — clips over the API body limit stay local via videoId).
+      if (!videoUrl && videoDataUrl) {
+        try { var upv = await api('/api/ai/upload-media', { method:'POST', body:{ data_url: videoDataUrl, kind:'video' } }); if (upv && upv.url) videoUrl = upv.url; }
+        catch(e){}
+      }
+      // Host any user-uploaded (data-URL) storyboard backgrounds on Storage so the
+      // synced draft stays small and the bg shows for everyone in the account.
+      // Pexels http(s) URLs pass through untouched.
+      var sbSlots = [];
+      var sbSrc = state.avatarStoryboard || [];
+      for (var si = 0; si < sbSrc.length; si++){
+        var s = sbSrc[si];
+        var bgU = s.bg_url || '';
+        var prevU = s.preview || '';
+        if (bgU.indexOf('data:') === 0) {
+          try { var ubg = await api('/api/ai/upload-media', { method:'POST', body:{ data_url: bgU } }); if (ubg && ubg.url) { if (prevU === s.bg_url) prevU = ubg.url; bgU = ubg.url; } }
+          catch(e){}
+        }
+        if (prevU.indexOf('data:') === 0) {
+          try { var uprev = await api('/api/ai/upload-media', { method:'POST', body:{ data_url: prevU } }); if (uprev && uprev.url) prevU = uprev.url; }
+          catch(e){}
+        }
+        sbSlots.push({ idx:s.idx, start_at_sec:s.start_at_sec, duration_sec:s.duration_sec,
+          script_chunk_th:s.script_chunk_th, bg_query_en:s.bg_query_en, bg_url:bgU, preview:prevU });
       }
       var draft = {
         id: draftId,
@@ -5409,10 +5446,7 @@ render();
         lipsyncModel: state.avatarLipsyncModel || '',
         clipDuration: state.avatarClipDuration || 0,
         bgInterval: state.avatarBgInterval || 0,
-        storyboard: (state.avatarStoryboard||[]).map(function(s){
-          return { idx:s.idx, start_at_sec:s.start_at_sec, duration_sec:s.duration_sec,
-            script_chunk_th:s.script_chunk_th, bg_query_en:s.bg_query_en, bg_url:s.bg_url, preview:s.preview };
-        }),
+        storyboard: sbSlots,
         videoUrl: videoUrl,
         videoId: videoId,
         videoExt: state.avatarVideoExt || 'mp4',
@@ -5457,6 +5491,9 @@ render();
         videoId = 'vid_' + draftId;
         try { await idbPutImage(videoId, state.ttvVideo); }
         catch(e) { videoId = null; toast(state.lang==='th'?'พื้นที่เก็บไม่พอ — บันทึกแค่ลิงก์':'Storage low — saved link only','error'); }
+        // Also host on Storage so other logins in the account can play it.
+        try { var upvv = await api('/api/ai/upload-media', { method:'POST', body:{ data_url: state.ttvVideo, kind:'video' } }); if (upvv && upvv.url) videoUrl = upvv.url; }
+        catch(e){}
       } else {
         videoUrl = state.ttvVideo;
       }
@@ -5524,9 +5561,15 @@ render();
     state.genHooks = d.hook ? [{ text:d.hook, angle:'' }] : [];
     state.selectedHook = 1;
     var imgs = [];
-    if (Array.isArray(d.imageIds)) {
-      for (var i = 0; i < d.imageIds.length; i++){
-        var iid = d.imageIds[i];
+    var urls = Array.isArray(d.imageUrls) ? d.imageUrls : [];
+    var ids = Array.isArray(d.imageIds) ? d.imageIds : [];
+    var n = Math.max(urls.length, ids.length);
+    if (n) {
+      for (var i = 0; i < n; i++){
+        // Prefer the cloud URL — it works on every login/device. Fall back to
+        // this browser's IndexedDB copy (older drafts saved before cloud sync).
+        if (urls[i]) { imgs.push(urls[i]); continue; }
+        var iid = ids[i];
         if (!iid) { imgs.push(null); continue; }
         try { var v = await idbGetImage(iid); imgs.push(v || null); }
         catch(e){ imgs.push(null); }
