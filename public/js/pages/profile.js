@@ -121,10 +121,22 @@ export function pageProfile() {
           </div>
           ${b.id === state.brand ? `<span class="pill orange" style="height:20px;padding:2px 8px;font-size:10px">${T('กำลังแก้', 'Editing')}</span>` : ''}
         </div>
-        <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted)">
-          <div style="display:flex;gap:4px">${(b.ch || []).map((c) => I(c, 14, c === 'facebook' ? '#1877F2' : c === 'instagram' ? '#E1306C' : '#0F172A')).join('')}</div>
-          <span>·</span><span>${T('เชื่อมแล้ว', 'connected')}</span>
-        </div>
+        ${(function () {
+          // Count REAL connections (tokens in channelInfo), not seed `ch`
+          // membership — so a demo brand with no OAuth doesn't claim
+          // "เชื่อมแล้ว". Show the connected channels' icons + a count.
+          const ci = b.channelInfo || {};
+          const live = [];
+          if (ci.facebook && ci.facebook.page_token) live.push('facebook');
+          if (ci.instagram && ci.instagram.ig_business_id) live.push('instagram');
+          if (ci.tiktok && ci.tiktok.open_id) live.push('tiktok');
+          const color = (c) => c === 'facebook' ? '#1877F2' : c === 'instagram' ? '#E1306C' : '#0F172A';
+          return `<div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted)">
+            ${live.length
+              ? `<div style="display:flex;gap:4px">${live.map((c) => I(c, 14, color(c))).join('')}</div><span>·</span><span style="color:var(--green);font-weight:700">${T('เชื่อมแล้ว ' + live.length, live.length + ' connected')}</span>`
+              : `<span>${T('ยังไม่ได้เชื่อมช่องทาง', 'No channels connected')}</span>`}
+          </div>`;
+        })()}
       </button>`).join(''))}
       ${BRANDS.length < MAX_BRANDS ? raw(`<button class="brandTile add" data-addbrand="1">
         ${I('plus', 22)}
@@ -290,8 +302,19 @@ export function pageProfile() {
         { key: 'instagram', name: 'Instagram Business', color: '#E1306C' },
         { key: 'tiktok',    name: 'TikTok',             color: '#0F172A' },
       ].map((c) => {
-        const connected = (activeBrand.ch || []).indexOf(c.key) >= 0;
         const info = (activeBrand.channelInfo || {})[c.key] || {};
+        // "Connected" means a REAL OAuth credential exists in channelInfo —
+        // not just that the channel is listed in the brand's `ch` array.
+        // Seed/demo brands ship with ch:['facebook','instagram','tiktok']
+        // but no tokens, which used to show a misleading "เชื่อมแล้ว".
+        // Each provider stores a different identifying token after OAuth:
+        //   facebook  → page_token (from /me/accounts)
+        //   instagram → ig_business_id (linked IG business account)
+        //   tiktok    → open_id (from TikTok OAuth)
+        const connected = c.key === 'facebook'  ? !!info.page_token
+                        : c.key === 'instagram' ? !!info.ig_business_id
+                        : c.key === 'tiktok'    ? !!info.open_id
+                        : false;
         return `<div style="display:flex;align-items:center;gap:12px;border:1px solid var(--line);border-radius:14px;padding:12px 14px">
           <div style="width:40px;height:40px;border-radius:10px;background:${c.color}1a;display:grid;place-items:center;flex-shrink:0">${I(c.key, 20, c.color)}</div>
           <div style="flex:1;min-width:0">

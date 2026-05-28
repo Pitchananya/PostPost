@@ -864,7 +864,14 @@ function publishCardHTML() {
         {key:'instagram',label:'Instagram',color:'#E1306C'},
         {key:'tiktok',label:'TikTok',color:'#0F172A'},
       ].map(ch => {
-        const connected = _pubCh.indexOf(ch.key) >= 0;
+        // Real connection = an actual OAuth token in channelInfo, not just
+        // membership in the brand's `ch` array (seed brands ship with ch
+        // populated but no tokens). Mirrors the Profile page logic.
+        const _ci = _pubInfo[ch.key] || {};
+        const connected = ch.key === 'facebook'  ? !!_ci.page_token
+                        : ch.key === 'instagram' ? !!_ci.ig_business_id
+                        : ch.key === 'tiktok'    ? !!_ci.open_id
+                        : false;
         const handle = (_pubInfo[ch.key] && _pubInfo[ch.key].handle) || (_pubBrand ? _pubBrand.name : '');
         const on = connected && state.channels[ch.key] !== false;
         return `<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;background:${!connected?'var(--cream2)':on?'var(--orange-soft)':'#fff'};border:1px solid ${on?'var(--orange)':'var(--line)'};opacity:${connected?1:.75}">
