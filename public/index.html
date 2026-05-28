@@ -4550,6 +4550,11 @@ render();
       var inp = document.getElementById('ppUploadAvatarInput'); if (inp) inp.click();
       return;
     }
+    if (e.target.closest('[data-uploadttsaudio]')) {
+      e.preventDefault();
+      var audInp = document.getElementById('ppTtsAudioUploadInput'); if (audInp) audInp.click();
+      return;
+    }
     var bgBtn = e.target.closest('[data-bgscene]');
     if (bgBtn) {
       e.preventDefault();
@@ -4677,6 +4682,20 @@ render();
       };
       rd.readAsDataURL(f);
       t.value = '';  // allow re-uploading the same file
+      return;
+    }
+    if (t && t.id === 'ppTtsAudioUploadInput' && t.files && t.files[0]) {
+      var fa = t.files[0];
+      if (fa.size > 25*1024*1024) { toast(state.lang==='th'?'ไฟล์เสียงต้องไม่เกิน 25MB':'≤25MB','error'); return; }
+      var rda = new FileReader();
+      rda.onload = function(){
+        state.ttsAudio = rda.result;
+        state.ttsAutoplayPending = false;
+        render();
+        toast(state.lang==='th'?'ใส่เสียงแล้ว ✓ — พร้อมสร้างวิดีโอ':'Audio added ✓ — ready to make video','success');
+      };
+      rda.readAsDataURL(fa);
+      t.value = '';
       return;
     }
     if (t && t.id === 'ppAvatarBgUploadInput' && t.files && t.files[0]) {

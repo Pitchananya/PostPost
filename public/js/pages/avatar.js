@@ -395,6 +395,10 @@ export function pageAvatar() {
       <button class="btn primary sm" data-tts="1" ${state.ttsLoading ? 'disabled' : ''} style="flex:0 0 auto">
         ${state.ttsLoading ? I('refresh', 13) : I('play', 13)} ${state.ttsLoading ? T('กำลังสังเคราะห์เสียง…', 'Synthesizing…') : T('ฟังเสียง (Azure TTS)', 'Listen (Azure TTS)')}
       </button>
+      <button class="btn ghost sm" data-uploadttsaudio="1" style="flex:0 0 auto;color:var(--blue)">
+        ${I('upload', 13)} ${T('อัปโหลดเสียงเอง', 'Upload your own audio')}
+      </button>
+      <input type="file" accept="audio/*" id="ppTtsAudioUploadInput" style="display:none"/>
       ${ttsBlock}
     </div>
   </div>`;
