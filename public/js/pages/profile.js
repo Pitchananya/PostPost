@@ -318,9 +318,9 @@ export function pageProfile() {
         return `<div style="display:flex;align-items:center;gap:12px;border:1px solid var(--line);border-radius:14px;padding:12px 14px">
           <div style="width:40px;height:40px;border-radius:10px;background:${c.color}1a;display:grid;place-items:center;flex-shrink:0">${I(c.key, 20, c.color)}</div>
           <div style="flex:1;min-width:0">
-            <div style="font-size:13px;font-weight:700;color:var(--purple)">${c.name}</div>
+            <div style="font-size:13px;font-weight:700;color:var(--purple);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${connected && info.handle ? escText(info.handle) : c.name}</div>
             ${connected
-              ? `<div style="font-size:11.5px;color:var(--green);font-weight:700">${I('check', 11, '#16A34A')} ${T('เชื่อมแล้ว', 'Connected')}${info.handle ? ' · ' + info.handle : ''}</div>`
+              ? `<div style="font-size:11.5px;color:var(--green);font-weight:700">${I('check', 11, '#16A34A')} ${c.name} · ${T('เชื่อมแล้ว', 'Connected')}</div>`
               : `<div style="font-size:11.5px;color:var(--muted)">${T('ยังไม่ได้เชื่อมกับแบรนด์นี้', 'Not connected for this brand')}</div>`}
           </div>
           ${connected
