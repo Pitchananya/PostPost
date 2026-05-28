@@ -368,17 +368,24 @@ function pageLanding() {
 // ====================================================================
 // SHARED DATA
 // ====================================================================
+// Seed = a single neutral starter brand. The old demo brands
+// (HappyPrice / MintNature / คาเฟ่บ้านน้ำใจ / คุรุเทพ) were removed.
+// stripDemoBrands() below also clears them from any localStorage/cloud
+// state a returning user still carries, so nobody sees mock data.
 let BRANDS = [
-  { id:'hp', name:'HappyPrice Shop', sub_th:'สกินแคร์ · 34 สินค้า', sub_en:'Skincare · 34 products', mark:'HP', color:'linear-gradient(135deg,#FB923C,#F97316)', ch:['facebook','instagram'],
-    bizType:'ความงาม & สกินแคร์' },
-  { id:'mn', name:'MintNature', sub_th:'ชาสมุนไพร · 12 สินค้า', sub_en:'Herbal tea · 12 products', mark:'MN', color:'linear-gradient(135deg,#818CF8,#4F46E5)', ch:['facebook','tiktok'],
-    bizType:'อาหาร & เครื่องดื่ม' },
-  { id:'bc', name_th:'คาเฟ่บ้านน้ำใจ', name_en:'Baan Café', sub_th:'คาเฟ่ · 8 สาขา', sub_en:'Café · 8 locations', mark:'คา', color:'linear-gradient(135deg,#34D399,#059669)', ch:['facebook','instagram','tiktok'],
-    bizType:'อาหาร & เครื่องดื่ม' },
-  { id:'kuru', name_th:'คุรุเทพ', name_en:'Kurutep', sub_th:'สายมู · ดูดวง', sub_en:'Spiritual · tarot', mark:'คุ', color:'linear-gradient(135deg,#4A0E2C,#D4AF37)', ch:['facebook','instagram','tiktok'],
-    bizType:'สายมู & ดูดวง' },
+  { id:'mybrand', name:'แบรนด์ของฉัน', sub_th:'ตั้งค่าแบรนด์ของคุณ', sub_en:'Set up your brand', mark:'MY', color:'linear-gradient(135deg,#FB923C,#F97316)', ch:[], bizType:'' },
 ];
 const MAX_BRANDS = 5;
+
+// IDs of the retired demo/seed brands. Removed on boot + after cloud-pull
+// from any persisted state so a returning user whose cloud workspace still
+// has them gets a clean slate. New user-created brands use random ids
+// (b<rand>) so they're never matched here.
+const DEMO_BRAND_IDS = ['hp', 'mn', 'bc', 'kuru'];
+function stripDemoBrands(arr) {
+  if (!Array.isArray(arr)) return arr;
+  return arr.filter(function (b) { return b && DEMO_BRAND_IDS.indexOf(b.id) < 0; });
+}
 function normalizeBrand(b){
   return {
     id: b.id || ('b' + Math.random().toString(36).slice(2,7)),
@@ -416,6 +423,19 @@ try {
     if (Array.isArray(_pb) && _pb.length) BRANDS = _pb.map(normalizeBrand);
   }
 } catch(e){}
+// Strip retired demo brands from whatever was persisted. If that empties
+// the list, fall back to a single starter brand so the app never runs
+// with zero brands (lots of code assumes BRANDS[0] exists).
+(function () {
+  var before = BRANDS.length;
+  BRANDS = stripDemoBrands(BRANDS);
+  if (BRANDS.length !== before) {
+    if (!BRANDS.length) {
+      BRANDS = [normalizeBrand({ id:'mybrand', name:'แบรนด์ของฉัน', sub_th:'ตั้งค่าแบรนด์ของคุณ', sub_en:'Set up your brand', mark:'MY' })];
+    }
+    try { localStorage.setItem('postpost_brands', JSON.stringify(BRANDS)); } catch(_){}
+  }
+})();
 
 // Business types — diverse set for Thai SME / online sellers
 const BUSINESS_TYPES = [
@@ -1915,6 +1935,13 @@ render();
       var sb = localStorage.getItem('postpost_active_brand');
       if (sb && BRANDS.some(function(b){ return b.id===sb; })) state.brand = sb;
     } catch(e){}
+    // If the active brand no longer exists (e.g. it was a removed demo
+    // brand like 'hp'/'kuru', or default state.brand='hp' before any
+    // saved value), point at the first real brand so the app doesn't
+    // render a blank/active-less workspace.
+    if (!BRANDS.some(function(b){ return b.id===state.brand; })) {
+      state.brand = (BRANDS[0] && BRANDS[0].id) || 'mybrand';
+    }
     try {
       var _dr = localStorage.getItem('postpost_drafts');
       if (_dr) state.drafts = JSON.parse(_dr) || [];
@@ -5478,6 +5505,23 @@ render();
         });
         BRANDS.length = 0;
         Object.values(byId).forEach(function(b){ BRANDS.push(b); });
+        // Strip retired demo brands that the cloud workspace still carries
+        // (cloud was seeded from them at first login). If the strip changes
+        // the list, push the cleaned version back so the demo brands don't
+        // resurrect on the next pull.
+        var _preStrip = BRANDS.length;
+        var _stripped = stripDemoBrands(BRANDS);
+        if (_stripped.length !== _preStrip) {
+          BRANDS.length = 0;
+          Object.values(_stripped).forEach(function(b){ BRANDS.push(b); });
+          if (!BRANDS.length) {
+            BRANDS.push(normalizeBrand({ id:'mybrand', name:'แบรนด์ของฉัน', sub_th:'ตั้งค่าแบรนด์ของคุณ', sub_en:'Set up your brand', mark:'MY' }));
+          }
+          if (!BRANDS.some(function(b){ return b.id===state.brand; })) {
+            state.brand = (BRANDS[0] && BRANDS[0].id) || 'mybrand';
+          }
+          if (typeof schedCloudPush === 'function') schedCloudPush();  // persist cleaned list to cloud
+        }
         try {
           localStorage.setItem('postpost_brands', JSON.stringify(BRANDS));
           // Align local savedAt with cloud — local now matches cloud, so the

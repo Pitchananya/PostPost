@@ -20,11 +20,13 @@
 import { normalizeBrand } from './brand-normalize.js';
 export { normalizeBrand };
 
+// Seed = one neutral starter brand. The old demo brands (HappyPrice /
+// MintNature / คาเฟ่บ้านน้ำใจ / คุรุเทพ) were removed; the inline boot in
+// index.html (stripDemoBrands) also clears them from persisted/cloud state.
+// The inline BRANDS is the source of truth and syncs into this module via
+// main.js, so this seed only shows for a brand-new session before that sync.
 const SEED_BRANDS = [
-  { id: 'hp',   name: 'HappyPrice Shop', sub_th: 'สกินแคร์ · 34 สินค้า', sub_en: 'Skincare · 34 products', mark: 'HP', color: 'linear-gradient(135deg,#FB923C,#F97316)', ch: ['facebook', 'instagram'], bizType: 'ความงาม & สกินแคร์' },
-  { id: 'mn',   name: 'MintNature',       sub_th: 'ชาสมุนไพร · 12 สินค้า', sub_en: 'Herbal tea · 12 products', mark: 'MN', color: 'linear-gradient(135deg,#818CF8,#4F46E5)', ch: ['facebook', 'tiktok'],  bizType: 'อาหาร & เครื่องดื่ม' },
-  { id: 'bc',   name_th: 'คาเฟ่บ้านน้ำใจ', name_en: 'Baan Café', sub_th: 'คาเฟ่ · 8 สาขา', sub_en: 'Café · 8 locations', mark: 'คา', color: 'linear-gradient(135deg,#34D399,#059669)', ch: ['facebook', 'instagram', 'tiktok'], bizType: 'อาหาร & เครื่องดื่ม' },
-  { id: 'kuru', name_th: 'คุรุเทพ',       name_en: 'Kurutep',   sub_th: 'สายมู · ดูดวง',   sub_en: 'Spiritual · tarot', mark: 'คุ', color: 'linear-gradient(135deg,#4A0E2C,#D4AF37)', ch: ['facebook', 'instagram', 'tiktok'], bizType: 'สายมู & ดูดวง' },
+  { id: 'mybrand', name: 'แบรนด์ของฉัน', sub_th: 'ตั้งค่าแบรนด์ของคุณ', sub_en: 'Set up your brand', mark: 'MY', color: 'linear-gradient(135deg,#FB923C,#F97316)', ch: [], bizType: '' },
 ];
 
 export const MAX_BRANDS = 5;
