@@ -3042,6 +3042,19 @@ render();
       state.storyboardSlotCands['_loading_'+slotIdx] = false; render();
     }
   }
+  // Recompute idx + start_at_sec across all storyboard slots from their durations,
+  // and mirror the first slot's media into the live phone preview.
+  function recalcStoryboardTimes(){
+    var acc = 0;
+    (state.avatarStoryboard||[]).forEach(function(s, idx){
+      s.idx = idx;
+      s.start_at_sec = acc;
+      s.duration_sec = Math.max(1, Math.min(120, parseInt(s.duration_sec, 10) || 5));
+      acc += s.duration_sec;
+    });
+    var first = (state.avatarStoryboard||[])[0];
+    if (first) state.avatarPreviewBgUrl = first.preview || first.bg_url || state.avatarPreviewBgUrl;
+  }
   document.addEventListener('click', function(e){
     if (e.target.closest('[data-genstoryboard]')) { e.preventDefault(); genStoryboard(); return; }
     var st = e.target.closest('[data-slottoggle]');
@@ -3072,24 +3085,45 @@ render();
       var imgInp = document.getElementById('ppStoryboardImgInput'); if (imgInp) imgInp.click();
       return;
     }
-    // Upload a single image as the whole-clip background (no AI storyboard needed)
-    if (e.target.closest('[data-uploadbgimg]')) {
+    // Add uploaded media as a NEW manual storyboard slot (image or video)
+    if (e.target.closest('[data-addmediaimg]')) {
       e.preventDefault();
-      state.storyboardUploadSlot = 'bg';
-      var bgImgInp = document.getElementById('ppStoryboardImgInput'); if (bgImgInp) bgImgInp.click();
+      state.storyboardUploadSlot = 'add';
+      var addImgInp = document.getElementById('ppStoryboardImgInput'); if (addImgInp) addImgInp.click();
       return;
     }
-    if (e.target.closest('[data-uploadbgvideo]')) {
+    if (e.target.closest('[data-addmediavid]')) {
       e.preventDefault();
-      state.storyboardUploadSlot = 'bg';
-      var bgVidInp = document.getElementById('ppStoryboardVidInput'); if (bgVidInp) bgVidInp.click();
+      state.storyboardUploadSlot = 'add';
+      var addVidInp = document.getElementById('ppStoryboardVidInput'); if (addVidInp) addVidInp.click();
       return;
     }
-    if (e.target.closest('[data-clearbgimg]')) {
+    // Reorder a slot up/down
+    var smv = e.target.closest('[data-slotmove]');
+    if (smv) {
       e.preventDefault();
-      state.avatarBgPickedUrl = '';
-      state.avatarPreviewBgUrl = '';
-      render();
+      var mvParts = smv.getAttribute('data-slotmove').split('|');
+      var mvIdx = parseInt(mvParts[0], 10);
+      var mvTgt = mvIdx + (mvParts[1] === 'up' ? -1 : 1);
+      var mvArr = state.avatarStoryboard || [];
+      if (mvArr[mvIdx] && mvArr[mvTgt]) {
+        var mvTmp = mvArr[mvIdx]; mvArr[mvIdx] = mvArr[mvTgt]; mvArr[mvTgt] = mvTmp;
+        recalcStoryboardTimes();
+        render();
+      }
+      return;
+    }
+    // Delete a slot
+    var sdl = e.target.closest('[data-slotdel]');
+    if (sdl) {
+      e.preventDefault();
+      var dlIdx = parseInt(sdl.getAttribute('data-slotdel'), 10);
+      if (state.avatarStoryboard && state.avatarStoryboard[dlIdx]) {
+        state.avatarStoryboard.splice(dlIdx, 1);
+        if (state.storyboardOpenSlot === dlIdx) state.storyboardOpenSlot = -1;
+        recalcStoryboardTimes();
+        render();
+      }
       return;
     }
     var sp = e.target.closest('[data-slotpickurl]');
@@ -3201,8 +3235,32 @@ render();
       state.ttsLoading = false; render();
     }
   }
+  // 🎙️ Transcribe the uploaded/TTS audio into the script textarea (Gemini speech-to-text).
+  async function genTranscribe(){
+    if (state.transcribeLoading) return;
+    if (!state.ttsAudio) { toast(state.lang==='th'?'ยังไม่มีเสียง — อัปโหลดหรือสร้างเสียงก่อน':'No audio yet — upload or generate first','error'); return; }
+    state.transcribeLoading = true; render();
+    toast(state.lang==='th'?'กำลังถอดเสียงเป็นข้อความ…':'Transcribing audio…');
+    try {
+      var j = await api('/api/ai/transcribe', { method:'POST', body:{ audio_base64: state.ttsAudio, lang: 'th' } });
+      if (!j || !j.text) throw new Error((j && (j.hint || j.error)) || 'no transcript returned');
+      state.avatarScript = j.text;
+      var el = document.getElementById('ppAvatarScript'); if (el) el.value = j.text;
+      toast(state.lang==='th'?'ถอดเสียงเป็นสคริปต์แล้ว ✓':'Transcribed to script ✓','success');
+    } catch(e){
+      var msg = (e&&e.message)||'';
+      if (/GOOGLE_AI_API_KEY/i.test(msg)) {
+        toast(state.lang==='th'?'ยังไม่ได้ตั้ง GOOGLE_AI_API_KEY — ไปที่ Vercel → Settings → Environment Variables':'Set GOOGLE_AI_API_KEY in env','error');
+      } else {
+        toast((state.lang==='th'?'ถอดเสียงไม่สำเร็จ: ':'Transcribe failed: ')+msg, 'error');
+      }
+    } finally {
+      state.transcribeLoading = false; render();
+    }
+  }
   document.addEventListener('click', function(e){
     if (e.target.closest('[data-tts]')) { e.preventDefault(); genTts(); }
+    if (e.target.closest('[data-transcribe]')) { e.preventDefault(); genTranscribe(); }
     if (e.target.closest('[data-avatarvideo]')) { e.preventDefault(); genAvatarVideo(); }
   });
 
@@ -4704,6 +4762,17 @@ render();
   // File-input change → read base64, store
   document.addEventListener('change', function(e){
     var t = e.target;
+    // Per-slot duration (seconds) — recompute the whole timeline.
+    if (t && t.hasAttribute && t.hasAttribute('data-slotdur')) {
+      var durIdx = parseInt(t.getAttribute('data-slotdur'), 10);
+      var slotD = state.avatarStoryboard && state.avatarStoryboard[durIdx];
+      if (slotD) {
+        slotD.duration_sec = Math.max(1, Math.min(120, parseInt(t.value, 10) || 5));
+        recalcStoryboardTimes();
+        render();
+      }
+      return;
+    }
     if (t && t.id === 'ppUploadAvatarInput' && t.files && t.files[0]) {
       var f = t.files[0];
       if (f.size > 5*1024*1024) { toast(state.lang==='th'?'รูปต้องไม่เกิน 5MB':'≤5MB','error'); return; }
@@ -4753,18 +4822,23 @@ render();
         var media = isVidUp
           ? rdmedia.result
           : await compressImageDataUrl(rdmedia.result, 1280, 0.85).catch(function(){ return rdmedia.result; });
-        if (slotIdx === 'bg') {
-          // Whole-clip background — render Mode C (single scene, full duration).
-          state.avatarBgPickedUrl = media;
-          state.avatarPreviewBgUrl = media;
-          state.avatarBgInterval = 0;     // lock to one static bg (no rotation)
-          state.avatarBgScene = 'auto';
+        if (slotIdx === 'add') {
+          // Append a new manual slot (default 5s) and recompute the timeline.
+          state.avatarStoryboard = state.avatarStoryboard || [];
+          state.avatarStoryboard.push({
+            idx: state.avatarStoryboard.length,
+            start_at_sec: 0, duration_sec: 5,
+            script_chunk_th: '', bg_query_en: '',
+            bg_url: media, preview: media, manual: true,
+          });
+          recalcStoryboardTimes();
         } else {
+          // Replace an existing slot's media.
           var slot = state.avatarStoryboard && state.avatarStoryboard[slotIdx];
           if (slot) {
             slot.bg_url = media;
             slot.preview = media;
-            if (slotIdx === 0) state.avatarPreviewBgUrl = media;
+            recalcStoryboardTimes();
           }
         }
         state.storyboardUploadSlot = -1;

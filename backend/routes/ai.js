@@ -3820,6 +3820,93 @@ router.post('/tts', async (req, res) => {
   }
 });
 
+// 🎙️ POST /ai/transcribe — speech-to-text via Gemini (uploaded audio → Thai script)
+// body: { audio_base64 (raw base64 OR full data: URL), mime?, lang='th' }
+// returns: { ok, text, model }
+router.post('/transcribe', async (req, res) => {
+  let { audio_base64, mime, lang = 'th', model: modelOverride } = req.body || {};
+  if (!audio_base64 || typeof audio_base64 !== 'string') {
+    return res.status(400).json({ error: 'audio_base64 required (string)' });
+  }
+  // Accept a full data URL too — strip the "data:<mime>;base64," prefix.
+  const m = audio_base64.match(/^data:([^;]+);base64,(.*)$/s);
+  if (m) { if (!mime) mime = m[1]; audio_base64 = m[2]; }
+  mime = mime || 'audio/mp3';
+  if (mime === 'audio/mpeg') mime = 'audio/mp3';   // Gemini expects audio/mp3
+
+  // ~7MB binary ≈ 9.3MB base64 — stay clear of the 10mb json body limit.
+  if (audio_base64.length > 9_000_000) {
+    return res.status(413).json({ error: 'audio too large — keep it under ~6MB / 60s for transcription' });
+  }
+
+  const apiKey = process.env.GOOGLE_AI_API_KEY;
+  if (!apiKey) return res.status(400).json({ error: 'GOOGLE_AI_API_KEY not set — ตั้ง env ก่อนใช้ถอดเสียง (ดู .env.example)' });
+
+  // Try models in order — different API keys are provisioned for different
+  // models, and individual models throttle (503). Fall through on those.
+  const models = [
+    modelOverride || process.env.GEMINI_TRANSCRIBE_MODEL,
+    'gemini-2.0-flash',
+    'gemini-flash-latest',
+    'gemini-2.5-flash',
+  ].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i);
+
+  const langName = lang === 'th' ? 'Thai' : (lang || 'the original language');
+  const prompt = `Transcribe this audio to ${langName} text exactly as spoken. `
+    + `Output ONLY the transcript text — no timestamps, no speaker labels, no quotation marks, no commentary.`;
+  const reqBody = JSON.stringify({
+    contents: [{ parts: [
+      { text: prompt },
+      { inline_data: { mime_type: mime, data: audio_base64 } },
+    ] }],
+    generationConfig: { temperature: 0 },
+  });
+
+  let lastErr = '';
+  let sawQuota = false, sawDenied = false;
+  for (const model of models) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort('transcribe timeout 60s'), 60_000);
+    try {
+      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+        method: 'POST',
+        signal: ctrl.signal,
+        headers: { 'Content-Type': 'application/json' },
+        body: reqBody,
+      });
+      clearTimeout(timer);
+      if (!r.ok) {
+        const err = (await r.text()).slice(0, 300);
+        console.warn(`[ai/transcribe] ${model} → ${r.status}: ${err.slice(0, 160)}`);
+        lastErr = `Gemini ${r.status}: ${err.slice(0, 160)}`;
+        if (r.status === 429) sawQuota = true;
+        if (r.status === 403) sawDenied = true;
+        // 403 (denied)/404 (no access)/503 (busy) → try next model; else stop.
+        if ([403, 404, 429, 503].includes(r.status)) continue;
+        return res.status(500).json({ error: lastErr });
+      }
+      const data = await r.json();
+      const parts = data?.candidates?.[0]?.content?.parts || [];
+      const text = parts.map((p) => p?.text || '').join('').trim();
+      if (!text) {
+        console.error('[ai/transcribe] empty transcript. raw=', JSON.stringify(data).slice(0, 500));
+        lastErr = 'no transcript returned — เสียงอาจสั้น/เงียบเกินไป หรือฟอร์แมตไม่รองรับ';
+        continue;
+      }
+      return res.json({ ok: true, text, model });
+    } catch (e) {
+      clearTimeout(timer);
+      console.warn(`[ai/transcribe] ${model} threw: ${e.message}`);
+      lastErr = e.message;
+    }
+  }
+  let hint = '';
+  if (sawQuota) hint = 'Google AI key โควต้าหมด — เปิด billing บน Google AI Studio หรือรอโควต้า reset (หรือใส่ OPENAI_API_KEY เพื่อใช้ Whisper)';
+  else if (sawDenied) hint = 'Google AI key ไม่มีสิทธิ์เข้าโมเดลถอดเสียง — เช็คว่าเปิด Generative Language API + billing แล้ว';
+  // api() on the frontend surfaces `error`, so lead with the actionable hint.
+  res.status(500).json({ error: hint || lastErr || 'transcription failed across all models', detail: lastErr, hint });
+});
+
 // 🎬 POST /ai/video-script — generate 9:16 Reel script (hook + body + cta) for a topic
 // body: { course='PFB', topic, brandVoice?, duration_sec=45, brief? }
 //   - brief (optional): full creative brief ยาว — เมื่อใส่ AI จะ preserve character + per-scene cinematography

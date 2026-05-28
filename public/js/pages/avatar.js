@@ -384,7 +384,10 @@ export function pageAvatar() {
     <div class="eyebrow" style="margin-bottom:8px">${T('ขั้นที่ 5 · สคริปต์', 'Step 5 · Script')}</div>
     <div class="cardHeader">
       <h3 class="cardTitle">${T('สคริปต์พูด (Thai)', 'Speaking script')}</h3>
-      <button class="btn ghost sm" data-avatarscript="1" style="color:var(--blue)" ${state.avatarScriptLoading ? 'disabled' : ''}>${I('sparkles', 13, '#2563EB')} ${state.avatarScriptLoading ? T('AI กำลังเขียน…', 'AI is writing…') : T('ให้ AI เขียนให้', 'AI write for me')}</button>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
+        ${state.ttsAudio ? `<button class="btn ghost sm" data-transcribe="1" style="color:var(--purple)" ${state.transcribeLoading ? 'disabled' : ''}>${state.transcribeLoading ? I('refresh', 13, '#7C3AED') : I('mic', 13, '#7C3AED')} ${state.transcribeLoading ? T('กำลังถอดเสียง…', 'Transcribing…') : T('ถอดจากเสียง', 'From audio')}</button>` : ''}
+        <button class="btn ghost sm" data-avatarscript="1" style="color:var(--blue)" ${state.avatarScriptLoading ? 'disabled' : ''}>${I('sparkles', 13, '#2563EB')} ${state.avatarScriptLoading ? T('AI กำลังเขียน…', 'AI is writing…') : T('ให้ AI เขียนให้', 'AI write for me')}</button>
+      </div>
     </div>
     <textarea class="textarea" rows="5" id="ppAvatarScript" placeholder="${placeholderScript}" style="font-size:14px;line-height:1.65">${escText(state.avatarScript || '')}</textarea>
     <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:11px;color:var(--muted)">
@@ -488,32 +491,16 @@ export function pageAvatar() {
 
   let storyboardBody = '';
   if (!state.avatarStoryboard || state.avatarStoryboard.length === 0) {
-    const pickedBg = state.avatarBgPickedUrl || '';
-    const isUserImg = /^data:image\//i.test(pickedBg);
-    const isUserVid = /^data:video\//i.test(pickedBg);
-    const hasUserMedia = isUserImg || isUserVid;
-    const uploadButtons = `<button class="btn outline" data-uploadbgimg="1" style="height:30px;font-size:10.5px;padding:0 12px;color:var(--blue)">${I('upload', 12)} ${T('อัปโหลดรูป', 'Upload image')}</button>`
-      + `<button class="btn outline" data-uploadbgvideo="1" style="height:30px;font-size:10.5px;padding:0 12px;color:var(--blue)">${I('video', 12)} ${T('อัปโหลดวิดีโอ', 'Upload video')}</button>`;
-    const mediaThumb = isUserVid
-      ? `<video src="${pickedBg}" muted playsinline style="width:46px;aspect-ratio:9/16;object-fit:cover;border-radius:6px;flex-shrink:0;border:1px solid var(--line)"></video>`
-      : `<div style="width:46px;aspect-ratio:9/16;border-radius:6px;background-image:url(${pickedBg});background-size:cover;background-position:center;flex-shrink:0;border:1px solid var(--line)"></div>`;
-    const bgImgControls = hasUserMedia
-      ? `<div style="display:flex;align-items:center;justify-content:center;gap:10px">
-           ${mediaThumb}
-           <div style="text-align:left;font-size:11px;color:var(--ink2)">${isUserVid ? T('วิดีโอของคุณ — ใช้เป็นพื้นหลังทั้งคลิป', 'Your video — background for the whole clip') : T('รูปของคุณ — ใช้เป็นพื้นหลังทั้งคลิป', 'Your image — background for the whole clip')}</div>
-         </div>
-         <div style="display:flex;gap:8px;justify-content:center;margin-top:10px;flex-wrap:wrap">
-           ${uploadButtons}
-           <button class="btn outline" data-clearbgimg="1" style="height:30px;font-size:10.5px;padding:0 12px">${I('x', 12)} ${T('ลบ', 'Remove')}</button>
-         </div>`
-      : `<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">${uploadButtons}</div>
-         <div style="font-size:10px;color:var(--muted);margin-top:6px">${T('ใช้เป็นพื้นหลังทั้งคลิป', 'Used as the background for the whole clip')}</div>`;
     storyboardBody = `<div style="padding:20px;text-align:center;background:#fff;border-radius:10px;border:1px dashed var(--line);font-size:12px;color:var(--muted);line-height:1.7">
       ${I('info', 16, 'var(--muted)')}
       <div style="margin-top:6px">${T('เขียนสคริปต์ + ตั้งความยาวก่อน — แล้วกด "ให้ AI จัด bg ทั้งหมด"', 'Write a script + set duration first — then hit "AI plan all bgs"')}</div>
       <div style="font-size:10.5px;margin-top:4px;opacity:.8">${T('AI จะแยก script เป็น N ช่วง และเลือก Pexels bg ที่เข้ากันให้แต่ละช่วง', 'AI splits the script into N segments and picks a matching Pexels bg for each')}</div>
-      <div style="display:flex;align-items:center;gap:8px;margin:14px 0 10px"><div style="flex:1;height:1px;background:var(--line)"></div><span style="font-size:10px;font-weight:700;color:var(--muted)">${T('หรือ', 'OR')}</span><div style="flex:1;height:1px;background:var(--line)"></div></div>
-      ${bgImgControls}
+      <div style="display:flex;align-items:center;gap:8px;margin:14px 0 10px"><div style="flex:1;height:1px;background:var(--line)"></div><span style="font-size:10px;font-weight:700;color:var(--muted)">${T('หรือ ใส่สื่อของคุณเอง', 'OR add your own media')}</span><div style="flex:1;height:1px;background:var(--line)"></div></div>
+      <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+        <button class="btn outline" data-addmediaimg="1" style="height:32px;font-size:11px;padding:0 14px;color:var(--blue)">${I('plus', 12)} ${T('เพิ่มรูป', 'Add image')}</button>
+        <button class="btn outline" data-addmediavid="1" style="height:32px;font-size:11px;padding:0 14px;color:var(--blue)">${I('video', 12)} ${T('เพิ่มวิดีโอ', 'Add video')}</button>
+      </div>
+      <div style="font-size:10px;color:var(--muted);margin-top:6px">${T('เพิ่มได้หลายรูป/วิดีโอ · เรียงลำดับ + ตั้งวินาทีของแต่ละอันได้', 'Add multiple images/videos · reorder + set per-item seconds')}</div>
     </div>`;
   } else {
     const slotRows = state.avatarStoryboard.map((slot, i) => {
@@ -524,14 +511,19 @@ export function pageAvatar() {
       const endM = Math.floor(endSec / 60);
       const endS = String(endSec % 60).padStart(2, '0');
       const thumb = slot.preview || '';
-      const thumbStyle = thumb
-        ? 'background-image:url(' + thumb + ');background-size:cover;background-position:center'
-        : 'background:linear-gradient(135deg,#1a0033,#4A0E2C)';
+      const slotIsVid = /^data:video\//i.test(slot.bg_url || '') || /^data:video\//i.test(thumb);
       let row = '<div style="background:#fff;border-radius:10px;border:1px solid var(--line);overflow:hidden">';
       row += '<div style="display:flex;align-items:center;gap:10px;padding:10px">';
-      row += '<div style="width:46px;aspect-ratio:9/16;border-radius:6px;' + thumbStyle + ';flex-shrink:0;position:relative">';
-      if (!slot.bg_url) row += '<div style="position:absolute;inset:0;display:grid;place-items:center;color:#fff">' + I('image', 12, '#fff') + '</div>';
-      row += '</div>';
+      if (slotIsVid) {
+        row += '<video src="' + (slot.bg_url || thumb) + '" muted playsinline style="width:46px;aspect-ratio:9/16;object-fit:cover;border-radius:6px;flex-shrink:0;border:1px solid var(--line)"></video>';
+      } else {
+        const thumbStyle = thumb
+          ? 'background-image:url(' + thumb + ');background-size:cover;background-position:center'
+          : 'background:linear-gradient(135deg,#1a0033,#4A0E2C)';
+        row += '<div style="width:46px;aspect-ratio:9/16;border-radius:6px;' + thumbStyle + ';flex-shrink:0;position:relative">';
+        if (!slot.bg_url) row += '<div style="position:absolute;inset:0;display:grid;place-items:center;color:#fff">' + I('image', 12, '#fff') + '</div>';
+        row += '</div>';
+      }
       row += '<div style="flex:1;min-width:0">';
       row += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">';
       row += '<span style="font-size:10px;font-weight:800;color:var(--orange);background:var(--orange-soft);padding:2px 7px;border-radius:99px">⏱ ' + startM + ':' + startS + '-' + endM + ':' + endS + '</span>';
@@ -539,6 +531,7 @@ export function pageAvatar() {
       row += '</div>';
       row += '<div style="font-size:11.5px;color:var(--ink2);line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">';
       if (slot.script_chunk_th) row += '💬 ' + escText(slot.script_chunk_th);
+      else if (slot.manual) row += '<span style="color:var(--ink2)">' + (slotIsVid ? T('วิดีโอของคุณ', 'Your video') : T('รูปของคุณ', 'Your image')) + '</span>';
       else row += '<span style="color:var(--muted);font-style:italic">' + T('ไม่มีสคริปต์ในช่วงนี้', 'No script for this slot') + '</span>';
       row += '</div>';
       if (slot.bg_query_en) row += '<div style="font-size:9.5px;color:var(--muted);margin-top:3px">🔍 ' + escText(slot.bg_query_en) + '</div>';
@@ -546,6 +539,15 @@ export function pageAvatar() {
       row += '<button class="btn outline" data-slottoggle="' + i + '" style="height:28px;font-size:10.5px;padding:0 10px;flex-shrink:0">';
       row += (open ? I('x', 11) + ' ' + T('ปิด', 'Close') : I('refresh', 11) + ' ' + T('เปลี่ยน', 'Change'));
       row += '</button>';
+      row += '</div>';
+      // ── Controls bar: duration (sec) + reorder + delete ──────────────
+      row += '<div style="display:flex;align-items:center;gap:6px;padding:0 10px 10px">';
+      row += '<span style="display:inline-flex;align-items:center;gap:4px;font-size:10px;color:var(--muted)">' + I('clock', 12, '#9C8BB8')
+        + '<input type="number" min="1" max="120" step="1" value="' + slot.duration_sec + '" data-slotdur="' + i + '" class="input" style="width:54px;height:28px;font-size:11px;padding:0 6px;text-align:center"/>' + T('วิ', 'sec') + '</span>';
+      row += '<span style="flex:1"></span>';
+      row += '<button class="btn outline" data-slotmove="' + i + '|up"' + (i === 0 ? ' disabled' : '') + ' style="height:28px;min-width:30px;padding:0 8px;font-size:13px;font-weight:800">↑</button>';
+      row += '<button class="btn outline" data-slotmove="' + i + '|down"' + (i === state.avatarStoryboard.length - 1 ? ' disabled' : '') + ' style="height:28px;min-width:30px;padding:0 8px;font-size:13px;font-weight:800">↓</button>';
+      row += '<button class="btn outline" data-slotdel="' + i + '" style="height:28px;min-width:30px;padding:0 8px;color:#DC2626">' + I('x', 12, '#DC2626') + '</button>';
       row += '</div>';
       if (open) {
         row += '<div style="padding:10px;border-top:1px dashed var(--line);background:#FAF6EF">';
@@ -584,8 +586,13 @@ export function pageAvatar() {
       row += '</div>';
       return row;
     }).join('');
+    const totalDur = state.avatarStoryboard.reduce((a, s) => a + (s.duration_sec || 0), 0);
     storyboardBody = '<div style="display:flex;flex-direction:column;gap:8px">' + slotRows + '</div>'
-      + '<div style="font-size:9.5px;color:var(--muted);margin-top:8px;text-align:right">' + T('คลิปจาก Pexels (ใช้ฟรี · เครดิตที่ pexels.com)', 'Clips from Pexels (free · credit pexels.com)') + '</div>';
+      + '<div style="display:flex;gap:8px;justify-content:center;margin-top:10px;flex-wrap:wrap">'
+      +   '<button class="btn outline" data-addmediaimg="1" style="height:30px;font-size:10.5px;padding:0 12px;color:var(--blue)">' + I('plus', 12) + ' ' + T('เพิ่มรูป', 'Add image') + '</button>'
+      +   '<button class="btn outline" data-addmediavid="1" style="height:30px;font-size:10.5px;padding:0 12px;color:var(--blue)">' + I('video', 12) + ' ' + T('เพิ่มวิดีโอ', 'Add video') + '</button>'
+      + '</div>'
+      + '<div style="font-size:9.5px;color:var(--muted);margin-top:8px;text-align:right">' + T('รวม ', 'Total ') + totalDur + T(' วิ', 's') + ' · ' + T('คลิป Pexels เครดิต pexels.com', 'Pexels clips · credit pexels.com') + '</div>';
   }
 
   const storyboardPanel = `
