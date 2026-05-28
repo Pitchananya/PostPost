@@ -45,10 +45,9 @@ export async function handler(req, res) {
           messages: [{ role: 'user', content: fullPrompt }],
           modalities: ['image', 'text'],
           max_tokens: MAX_TOKENS,
-          // Belt + braces — see gpt-5.4.js comment for the full rationale.
-          reasoning_effort: 'minimal',
-          reasoning: { effort: 'minimal' },
-          provider: { sort: 'throughput', allow_fallbacks: true },
+          // ⚠️ NO reasoning / provider fields — gpt-5-image* use an internal
+          // image_gen tool that OpenAI won't run alongside reasoning config.
+          // GPT models route through the async Render worker anyway.
         }),
       });
     } finally { clearTimeout(timer); }

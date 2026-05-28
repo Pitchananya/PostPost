@@ -74,19 +74,13 @@ export async function handler(req, res) {
           messages: [{ role: 'user', content: fullPrompt }],
           modalities: ['image', 'text'],
           max_tokens: MAX_TOKENS,
-          // Belt + braces to skip reasoning. OpenAI's native API uses
-          // a top-level `reasoning_effort`; OpenRouter docs use a
-          // nested `reasoning.effort`. Different providers in
-          // OpenRouter's pool honor different conventions, so we send
-          // BOTH — whichever one the upstream provider understands
-          // wins; the other is ignored.
-          reasoning_effort: 'minimal',
-          reasoning: { effort: 'minimal' },
-          // Route to the highest-throughput provider OpenRouter has
-          // for this model, with fallbacks allowed. Without sort=
-          // 'throughput', OpenRouter sometimes picks a cheap-but-slow
-          // provider that pushes us past Vercel's 60s ceiling.
-          provider: { sort: 'throughput', allow_fallbacks: true },
+          // ⚠️ NO reasoning / provider fields. The GPT-5 image family
+          // generates via an internal image_gen tool, and OpenAI 400s
+          // if reasoning config is present alongside it ("tools cannot
+          // be used with reasoning.effort 'minimal': image_gen"). This
+          // sync route is a fallback anyway — GPT models normally run
+          // through the async Render worker (no Vercel 60s ceiling, so
+          // no need to skip reasoning to save time).
         }),
       });
     } finally {

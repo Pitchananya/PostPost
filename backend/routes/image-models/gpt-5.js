@@ -47,12 +47,11 @@ export async function handler(req, res) {
           messages: [{ role: 'user', content: fullPrompt }],
           modalities: ['image', 'text'],
           max_tokens: MAX_TOKENS,
-          // Belt + braces reasoning skip + throughput-prioritized
-          // provider routing — same trio as gpt-5.4.js. Without this
-          // the GPT family routinely exceeds Vercel's 60s ceiling.
-          reasoning_effort: 'minimal',
-          reasoning: { effort: 'minimal' },
-          provider: { sort: 'throughput', allow_fallbacks: true },
+          // ⚠️ NO reasoning / provider fields — gpt-5-image* generate via an
+          // internal image_gen tool, and OpenAI 400s if reasoning is set
+          // ("tools cannot be used with reasoning.effort 'minimal':
+          // image_gen"). This sync route is a fallback; GPT models normally
+          // run through the async Render worker (no Vercel 60s ceiling).
         }),
       });
     } finally { clearTimeout(timer); }

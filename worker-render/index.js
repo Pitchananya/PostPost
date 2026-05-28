@@ -241,29 +241,31 @@ async function processJob(jobId) {
 
 Style: warm, professional. Aspect: vertical 4:5. Maximum quality, photorealistic detail.`;
 
-    // Per-family request body tuning. The OpenAI image models all run a
-    // hidden reasoning pass that EATS wall time — set reasoning effort
-    // to 'minimal' so they go straight to image gen. Non-GPT models
-    // ignore the field.
+    // ⚠️ DO NOT send `reasoning` for the GPT-5 image family.
+    // openai/gpt-5-image and gpt-5-image-mini generate images via an
+    // internal `image_gen` TOOL, and OpenAI rejects the request with
+    //   "The following tools cannot be used with reasoning.effort
+    //    'minimal': image_gen." (400 invalid_request_error, param=tools)
+    // when any reasoning config is present alongside the tool.
+    //
+    // We added `reasoning: { effort: 'minimal' }` originally to dodge
+    // Vercel's 60s ceiling — but this worker runs on Render with NO
+    // wall-clock limit (5-min OpenRouter timeout below), so we don't
+    // need to skip reasoning at all here. Plain request body for every
+    // model — let each one run as long as it needs.
+    //
+    // (gpt-5.4-image-2 tolerated the reasoning field earlier because it
+    // doesn't expose the image_gen tool the same way; but the safe
+    // common denominator is to omit reasoning for all of them.)
     const isGptFamily = /^openai\/gpt-5/i.test(model);
     const requestBody = {
       model,
       messages: [{ role: 'user', content: fullPrompt }],
       modalities: ['image', 'text'],
-      max_tokens: isGptFamily ? 2048 : 8192,
+      // GPT image models pre-charge on max_tokens; keep modest. Other
+      // models bill actual usage so a larger budget is harmless.
+      max_tokens: isGptFamily ? 4096 : 8192,
     };
-    if (isGptFamily) {
-      // ⚠️ Keep the GPT-family request body MINIMAL — the previous version
-      // sent `reasoning_effort` (OpenAI flat), `reasoning.effort` (OpenRouter
-      // nested), AND `provider: { sort: 'throughput' }`. Combined, OpenRouter
-      // returned a fast 400 "Provider returned error" because at least one
-      // of those fields isn't honored on the openai/gpt-5-image* route.
-      //
-      // The single documented + working field is the nested
-      // `reasoning: { effort: 'minimal' }` (matches OpenRouter's reasoning
-      // tokens docs for OpenAI models). Drop the others.
-      requestBody.reasoning = { effort: 'minimal' };
-    }
 
     console.log(`[worker] [job ${jobId}] step 3/5 — calling OpenRouter model=${model} family=${isGptFamily ? 'gpt' : 'other'}`);
     const t0 = Date.now();
