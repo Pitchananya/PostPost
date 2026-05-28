@@ -118,6 +118,14 @@ router.get('/oauth/start', async (req, res) => {
     response_type: 'code',
     display: 'popup',
   });
+  // reselect=1 → force Facebook to re-show the "which Pages do you allow?"
+  // consent screen even if the user already authorized the app. Without
+  // this, FB silently reuses the previously-granted page set, so a user
+  // who only granted 1 page on first connect can never reach the others.
+  // auth_type=reauthorize triggers the asset re-selection step.
+  if (req.query.reselect) {
+    params.set('auth_type', 'reauthorize');
+  }
   res.redirect(`https://www.facebook.com/v21.0/dialog/oauth?${params.toString()}`);
 });
 
