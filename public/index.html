@@ -5427,6 +5427,12 @@ render();
     // 250ms debounced push fired or completed). Without this, the next pull
     // overwrites the freshly-saved local data with stale cloud data.
     try { localStorage.setItem('postpost_brands_savedAt', new Date().toISOString()); } catch(_) {}
+    // Keep the MODULE BRANDS array in lock-step with this inline one. After
+    // cloudPullOnBoot rebuilds the inline BRANDS with fresh objects, the two
+    // arrays hold different refs — so a channel connection mutated here (e.g.
+    // FB page picked → ab.channelInfo.facebook) wouldn't show on the module-
+    // rendered Profile until reload. Re-sharing the objects fixes that.
+    try { if (window.PP && window.PP.setBrands) window.PP.setBrands(BRANDS); } catch(_) {}
     schedCloudPush();
   }
 
@@ -5727,6 +5733,11 @@ render();
         brands: BRANDS, drafts: state.drafts||[], customAvatars: state.customAvatars||[],
         activeBrandId: state.brand, workspaceName: state.workspaceName||'', updated_at: s.updated_at,
       });
+      // The merge above rebuilt the inline BRANDS with fresh normalizeBrand()
+      // objects — re-share them into the MODULE BRANDS so module-rendered pages
+      // (Profile channel cards, etc.) read the same objects the inline handlers
+      // mutate. Without this, a channel connected after boot wouldn't display.
+      try { if (window.PP && window.PP.setBrands) window.PP.setBrands(BRANDS); } catch(_) {}
       if (dirty && typeof render === 'function') render();
       console.log('[cloud-sync] pulled', { brands: (s.brands||[]).length, drafts: (s.drafts||[]).length, avatars: (s.customAvatars||[]).length, cleaned: cleaned });
     } catch (e) {

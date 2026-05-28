@@ -161,6 +161,18 @@ window.PP.setProducts = function(arr) {
   const next = Array.isArray(arr) ? arr : [];
   PRODUCTS.splice(0, PRODUCTS.length, ...next);
 };
+// Same lock-step fix for BRANDS. The inline boot + cloudPullOnBoot REBUILD
+// the inline BRANDS with fresh normalizeBrand() objects, so the module's
+// BRANDS array ends up holding DIFFERENT object refs than the inline copy.
+// Pages rendered from the module (e.g. Profile's channel cards reading
+// activeBrand.channelInfo) then show stale data — a freshly-connected FB
+// page mutates the inline object but the module object never sees it.
+// Splicing in the inline objects re-establishes shared references so
+// subsequent inline mutations propagate to module renders.
+window.PP.setBrands = function(arr) {
+  const next = Array.isArray(arr) ? arr : [];
+  BRANDS.splice(0, BRANDS.length, ...next);
+};
 
 // Also expose render globally so the inline auth-wiring script can wrap
 // it (login-form pre-fill) AND so the inline event delegators that fire
