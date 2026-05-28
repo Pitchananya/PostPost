@@ -111,6 +111,11 @@ export function pageProfile() {
         <button class="btn outline sm" data-addbrand="1">${raw(I('plus', 14))} ${raw(T('เพิ่มแบรนด์', 'Add brand'))}</button>
       </div>
     </div>
+    <div class="field" style="max-width:360px;margin-bottom:16px">
+      <label class="label">${raw(T('ชื่อ Workspace (โปรไฟล์รวม)', 'Workspace name'))}</label>
+      <input class="input" id="ppWorkspaceName" value="${state.workspaceName || ''}" placeholder="${T('เช่น HappyPrice Shop', 'e.g. HappyPrice Shop')}" />
+      <div class="hint">${raw(T('ชื่อนี้แสดงบนแถบด้านซ้าย · บันทึกลง cloud อัตโนมัติ', 'Shown in the left sidebar · auto-saved to cloud'))}</div>
+    </div>
     <div class="grid g4">
       ${raw(BRANDS.map((b) => `<button class="brandTile ${b.id === state.brand ? 'active' : ''}" data-brand="${b.id}">
         <div class="bInfo">
@@ -218,7 +223,7 @@ export function pageProfile() {
       </div>
       <hr class="divider" style="margin-top:14px"/>
       <label class="label">${raw(T('คำอธิบายเสียงเพิ่มเติม (ไม่จำเป็น)', 'Free-form voice notes (optional)'))}</label>
-      <textarea class="textarea" rows="2">${T('ใช้คำว่า "คุณลูกค้า" แทน "คุณ" · ลงท้ายด้วย "ค่ะ" เกือบทุกครั้ง · ห้ามใช้ "การันตี 100%" · ใส่ emoji 🌸 ตอนพูดถึงสินค้า', 'Use "dear customer" · end politely · never say "100% guaranteed" · add 🌸 when mentioning products')}</textarea>
+      <textarea class="textarea" rows="2" id="ppVoiceNotes" placeholder="${T('เช่น ใช้คำว่า "คุณลูกค้า" แทน "คุณ" · ลงท้ายด้วย "ค่ะ" เกือบทุกครั้ง · ห้ามใช้ "การันตี 100%" · ใส่ emoji 🌸 ตอนพูดถึงสินค้า', 'e.g. use "dear customer" · end politely · never say "100% guaranteed" · add 🌸 when mentioning products')}">${activeBrand.voiceNotes || ''}</textarea>
     </div>
   </div>
 

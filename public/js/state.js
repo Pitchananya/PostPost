@@ -84,6 +84,7 @@ const DEFAULTS = {
   previewIndex: 0,         // current slide in carousel
   sidebarOpen: false,      // mobile drawer state (≤768px) — toggled by the hamburger button
   profileMenuOpen: false,  // topbar profile dropdown — opened by clicking the .profilePill
+  workspaceName: '',       // account-level workspace name (the "โปรไฟล์รวม" shown in the sidebar) — cloud-synced
 };
 
 // If a pre-boot IIFE in index.html already published window.PP.state, adopt
@@ -139,6 +140,10 @@ export function loadState() {
   try {
     const ca = localStorage.getItem('postpost_custom_avatars');
     if (ca) state.customAvatars = JSON.parse(ca) || [];
+  } catch (_) {}
+  try {
+    const wn = localStorage.getItem('postpost_workspace_name');
+    if (wn != null) state.workspaceName = wn;
   } catch (_) {}
 }
 

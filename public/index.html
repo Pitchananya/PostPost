@@ -1900,6 +1900,16 @@ render();
     if (t.id==='ppAvatarScript') { state.avatarScript = t.value; return; }
     if (t.id==='ppAvatarBgSearch') { state.avatarBgSearch = t.value; return; }
     if (t.id==='ppTtvPrompt') { state.ttvPrompt = t.value; return; }
+    if (t.id==='ppWorkspaceName') {
+      state.workspaceName = t.value;
+      try {
+        window.__ppDirtyFields = window.__ppDirtyFields || {};
+        window.__ppDirtyFields.__workspace = true;
+      } catch(_) {}
+      try { localStorage.setItem('postpost_workspace_name', t.value); } catch(_){}
+      try { (window.PP && window.PP.schedCloudPush || function(){})(); } catch(_){}
+      return;
+    }
     var ab = liveBrand(); if (!ab) return;
     if (t.id==='ppBrandNameEdit') {
       ab.name = t.value;
@@ -1916,6 +1926,15 @@ render();
         window.__ppDirtyFields = window.__ppDirtyFields || {};
         window.__ppDirtyFields[ab.id] = window.__ppDirtyFields[ab.id] || {};
         window.__ppDirtyFields[ab.id].desc = true;
+      } catch(_) {}
+      scheduleBrandSave();
+    }
+    else if (t.id==='ppVoiceNotes') {
+      ab.voiceNotes = t.value;
+      try {
+        window.__ppDirtyFields = window.__ppDirtyFields || {};
+        window.__ppDirtyFields[ab.id] = window.__ppDirtyFields[ab.id] || {};
+        window.__ppDirtyFields[ab.id].voiceNotes = true;
       } catch(_) {}
       scheduleBrandSave();
     }
@@ -5453,6 +5472,7 @@ render();
       drafts: state.drafts || [],
       customAvatars: state.customAvatars || [],
       activeBrandId: state.brand,
+      workspaceName: state.workspaceName || '',
       updated_at: new Date().toISOString(),
     };
     // Quick voice/archetype diagnostic on the body about to be pushed
@@ -5578,6 +5598,7 @@ render();
             if (df.desc) n.desc = local.desc || '';
             if (df.sub) { n.sub_th = local.sub_th || n.sub_th; n.sub_en = local.sub_en || n.sub_en; }
             if (df.aiInstruction) n.aiInstruction = typeof local.aiInstruction === 'string' ? local.aiInstruction : '';
+            if (df.voiceNotes) n.voiceNotes = typeof local.voiceNotes === 'string' ? local.voiceNotes : '';
           }
           byId[n.id] = n;
         });
@@ -5625,6 +5646,12 @@ render();
       // Active brand
       if (s.activeBrandId && BRANDS.some(function(b){ return b.id===s.activeBrandId; })) {
         state.brand = s.activeBrandId;
+      }
+      // Workspace name (account-level) — adopt cloud value unless the user is
+      // mid-edit this session (guard against a slow pull reverting a keystroke).
+      if (typeof s.workspaceName === 'string' && !(window.__ppDirtyFields && window.__ppDirtyFields.__workspace)) {
+        state.workspaceName = s.workspaceName;
+        try { localStorage.setItem('postpost_workspace_name', state.workspaceName); } catch(_){}
       }
       // ──────────────────────────────────────────────────────────────
       // CRITICAL: re-derive state.voice / state.archetype / state.brandDesc
@@ -5698,7 +5725,7 @@ render();
       }
       _cloudPushLastBody = JSON.stringify({
         brands: BRANDS, drafts: state.drafts||[], customAvatars: state.customAvatars||[],
-        activeBrandId: state.brand, updated_at: s.updated_at,
+        activeBrandId: state.brand, workspaceName: state.workspaceName||'', updated_at: s.updated_at,
       });
       if (dirty && typeof render === 'function') render();
       console.log('[cloud-sync] pulled', { brands: (s.brands||[]).length, drafts: (s.drafts||[]).length, avatars: (s.customAvatars||[]).length, cleaned: cleaned });

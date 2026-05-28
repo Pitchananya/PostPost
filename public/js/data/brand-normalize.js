@@ -8,7 +8,7 @@
 // Canonical shape:
 //   { id, name, mark, color, sub_th, sub_en, ch, logo, bizType, desc,
 //     voice, products, shopStats, shopUrl, channelInfo, archetype, topics,
-//     aiInstruction }
+//     aiInstruction, voiceNotes }
 
 export function normalizeBrand(b) {
   return {
@@ -34,5 +34,7 @@ export function normalizeBrand(b) {
     // BEFORE the standard brand profile block, so it overrides default tone but
     // still gets the structured brand data (voice/archetype/products) appended.
     aiInstruction: typeof b.aiInstruction === 'string' ? b.aiInstruction : '',
+    // Free-form Brand Voice notes (the "คำอธิบายเสียงเพิ่มเติม" textarea).
+    voiceNotes: typeof b.voiceNotes === 'string' ? b.voiceNotes : '',
   };
 }

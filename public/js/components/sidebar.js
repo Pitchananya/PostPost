@@ -13,6 +13,7 @@ import { state } from '../state.js';
 import { T, t } from '../i18n.js';
 import { I, LOGO_ICON } from '../icons.js';
 import { NAV } from '../data/nav.js';
+import { escText } from '../escape.js';
 
 export function sidebarHTML() {
   const navItem = (n) => `<button class="navBtn ${state.page === n.id ? 'active' : ''}" data-go="${n.id}">
@@ -30,9 +31,9 @@ export function sidebarHTML() {
       <div style="color:#9C8BB8;font-size:10.5px;letter-spacing:.05em;font-weight:600;padding-left:2px">${T('AI Content Command Center', 'AI Content Command Center')}</div>
     </div>
     <div class="workspace" data-go="profile">
-      <div class="mark">HP</div>
+      <div class="mark">${escText((state.workspaceName || 'HappyPrice Shop').trim().slice(0, 2).toUpperCase())}</div>
       <div class="wsInfo">
-        <b>HappyPrice Shop</b>
+        <b>${escText(state.workspaceName || 'HappyPrice Shop')}</b>
         <small>${T('Pro · 2 ทีม · Shopee sync', 'Pro · 2 seats · Shopee sync')}</small>
       </div>
       ${I('chev_down', 14, '#CFC3DF')}
