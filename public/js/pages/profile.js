@@ -259,7 +259,7 @@ export function pageProfile() {
           <div style="display:flex;align-items:center;gap:10px">
             <h3 class="cardTitle">${raw(T('AI Instruction (Advanced)', 'AI Instruction (Advanced)'))}</h3>
             <span class="pill purple">${raw(T('Power user', 'Power user'))}</span>
-            ${activeBrand.aiInstruction ? `<span class="pill green" style="font-size:10px">${T('ตั้งแล้ว', 'Set')} · ${activeBrand.aiInstruction.length} ${T('ตัวอักษร', 'chars')}</span>` : ''}
+            ${activeBrand.aiInstruction ? raw(`<span class="pill green" style="font-size:10px">${T('ตั้งแล้ว', 'Set')} · ${activeBrand.aiInstruction.length} ${T('ตัวอักษร', 'chars')}</span>`) : ''}
           </div>
           <p class="cardSub">${raw(T(
             'system prompt แบบยาวให้ AI — paste IDENTITY / WORKFLOW / FRAMEWORKS / RULES ของคุณ · ใช้เมื่อต้องการควบคุม AI ลึกกว่า Brand Voice + Archetype',
@@ -282,7 +282,7 @@ export function pageProfile() {
             'e.g.: [INSTRUCTION: AI Content Creative Specialist] · 1. IDENTITY — you are Fatin, personal assistant · 2. PERSONA & TONE · 3. GOALS — 30 topics/month · 4. WORKFLOW · 5. RULES · 6. HOOK FRAMEWORKS · ... · 10. Business data (PFB)'
           )}"
           style="font-family:var(--mono);font-size:12px;line-height:1.7;resize:vertical;min-height:280px"
-        >${escText(activeBrand.aiInstruction || '')}</textarea>
+        >${activeBrand.aiInstruction || ''}</textarea>
         <div class="micro" style="margin-top:6px;color:var(--muted);line-height:1.55">
           💡 ${raw(T(
             'AI จะใช้ instruction นี้นำหน้า prompt มาตรฐาน (brand profile + voice + archetype ยังถูกส่งให้ AI ด้วย) · บันทึกอัตโนมัติ 2 วินาทีหลังหยุดพิมพ์ · max 8,000 ตัวอักษร',
