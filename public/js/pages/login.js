@@ -46,7 +46,7 @@ export function pageLogin() {
       </label>
       <button class="btn primary lg" style="width:100%" data-go="onboarding" data-set-step="1">${raw(T('เข้าสู่ระบบ','Sign in'))} ${raw(I('chev_right',16))}</button>
       <p style="text-align:center;margin:18px 0 0;font-size:13px;color:var(--muted)">
-        ${raw(T('ยังไม่มีบัญชี?','No account yet?'))} <a style="color:var(--orange);font-weight:700;cursor:pointer" data-go="onboarding" data-set-step="1">${raw(T('สมัครใช้ฟรี 14 วัน','Start 14-day free trial'))}</a>
+        ${raw(T('ยังไม่มีบัญชี?','No account yet?'))} <a style="color:var(--orange);font-weight:700;cursor:pointer" data-go="onboarding" data-set-step="1" data-signup="1">${raw(T('สมัครสมาชิก','Sign up'))}</a>
       </p>
     </div>
 

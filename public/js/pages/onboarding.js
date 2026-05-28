@@ -43,45 +43,34 @@ export function pageOnboarding() {
   if (step === 1) {
     content = html`
     <div class="kicker">${raw(T('ขั้นที่ 1 จาก 3', 'Step 1 of 3'))}</div>
-    <h1 class="title">${raw(T('เริ่มต้นด้วย Workspace ของคุณ', 'Set up your Workspace'))}</h1>
-    <p class="subtitle">${raw(T('AI จะใช้ข้อมูลนี้ในการสร้างคอนเทนต์ที่ตรงกับแบรนด์ คุณเปลี่ยนภายหลังได้', 'AI uses this to generate on-brand content. You can change it anytime.'))}</p>
+    <h1 class="title">${raw(T('สร้างบัญชีของคุณ', 'Create your account'))}</h1>
+    <p class="subtitle">${raw(T('กรอกอีเมล + รหัสผ่านเพื่อสร้างบัญชีและ Workspace ใหม่', 'Enter an email + password to create your account and Workspace.'))}</p>
     <div class="card" style="margin-top:24px;padding:28px">
       <div class="grid g2">
         <div class="field">
-          <label class="label">${raw(T('ชื่อ Workspace', 'Workspace name'))}</label>
-          <input class="input" value="HappyPrice Shop" />
+          <label class="label">${raw(T('อีเมล', 'Email'))} <span style="color:var(--red)">*</span></label>
+          <input class="input" id="ppSignupEmail" type="email" placeholder="you@example.com" autocomplete="email" />
         </div>
         <div class="field">
-          <label class="label">${raw(T('ประเภทธุรกิจ', 'Business type'))}</label>
-          <select class="select">${raw(businessOptions())}</select>
+          <label class="label">${raw(T('รหัสผ่าน (อย่างน้อย 8 ตัว)', 'Password (min 8 chars)'))} <span style="color:var(--red)">*</span></label>
+          <input class="input" id="ppSignupPassword" type="password" placeholder="••••••••" autocomplete="new-password" />
         </div>
       </div>
       <div class="field">
-        <label class="label">${raw(T('คำอธิบายแบรนด์', 'Brand description'))}</label>
-        <textarea class="textarea" rows="3">${T('ร้าน HappyPrice ขายสกินแคร์ออร์แกนิคจากดอกกุหลาบเขาใหญ่ เน้นผิวบอบบางแพ้ง่าย กลุ่มลูกค้าหญิงวัย 25-40 ปี', 'HappyPrice sells organic skincare from Khao Yai roses, focused on sensitive skin, for women aged 25-40.')}</textarea>
+        <label class="label">${raw(T('ชื่อ Workspace (ไม่บังคับ)', 'Workspace name (optional)'))}</label>
+        <input class="input" id="ppSignupWorkspace" placeholder="${T('เช่น ร้านของฉัน', 'e.g. My Shop')}" />
+        <div class="hint">${raw(T('เว้นว่างได้ — ระบบจะตั้งให้อัตโนมัติจากอีเมล', 'Leave blank — we name it from your email'))}</div>
       </div>
-      <div class="field">
-        <label class="label">${raw(T('เลือกโทนเสียงของแบรนด์ (Brand voice) — ผสมได้สูงสุด 3 โทน', 'Brand voice — combine up to 3 tones'))}</label>
-        <div class="grid g2" style="gap:10px">
-          ${raw([
-            { id: 'friendly', emoji: '🤗', th: 'เป็นกันเอง', en: 'Friendly', sample_th: 'สวัสดีค่ะคุณลูกค้า วันนี้พีร์มีของดีมาฝาก ✨', sample_en: 'Hi! We picked something just for you ✨' },
-            { id: 'pro',      emoji: '👔', th: 'มืออาชีพ',    en: 'Professional', sample_th: 'ผลิตภัณฑ์ผ่านการรับรองจากผู้เชี่ยวชาญ', sample_en: 'Dermatologist-tested and certified safe.' },
-            { id: 'fun',      emoji: '✨', th: 'สนุกสดใส',    en: 'Playful', sample_th: 'หยิบเลย! ผิวสวยรอไม่ไหวแล้ว 🌸', sample_en: "Snag it now! Your skin won't wait 🌸" },
-            { id: 'lux',      emoji: '💎', th: 'พรีเมียม',     en: 'Luxury', sample_th: 'สัมผัสประสบการณ์ความหรูที่คุณคู่ควร', sample_en: 'Indulge in the luxury you deserve.' },
-          ].map((v) => `<button class="toneTile ${state.voice.includes(v.id) ? 'active' : ''}" data-voice="${v.id}">
-            <div class="toneEmoji">${v.emoji}</div>
-            <div class="tInfo">
-              <div class="tName">${T(v.th, v.en)}</div>
-              <div class="tSamp">"${T(v.sample_th, v.sample_en)}"</div>
-            </div>
-            ${state.voice.includes(v.id) ? '<span style="position:absolute;top:8px;right:8px;width:18px;height:18px;border-radius:99px;background:var(--orange);color:#fff;display:grid;place-items:center;font-size:11px;font-weight:900">✓</span>' : ''}
-          </button>`).join(''))}
-        </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:6px">
+        <div style="flex:1;height:1px;background:var(--line)"></div>
+        <span class="micro">${raw(T('หรือ', 'or'))}</span>
+        <div style="flex:1;height:1px;background:var(--line)"></div>
       </div>
+      <button class="btn outline" style="width:100%;height:46px;margin-top:12px" data-google-signin="1">${raw(I('google', 16))} ${raw(T('สมัครด้วย Google', 'Sign up with Google'))}</button>
     </div>
     <div style="display:flex;justify-content:space-between;margin-top:24px">
-      <button class="btn outline" data-go="login">${raw(I('chev_left', 14))} ${raw(T('ย้อนกลับ', 'Back'))}</button>
-      <button class="btn primary lg" data-set-step="2">${raw(T('ถัดไป', 'Continue'))} ${raw(I('chev_right', 16))}</button>
+      <button class="btn outline" data-go="login">${raw(I('chev_left', 14))} ${raw(T('มีบัญชีแล้ว? เข้าสู่ระบบ', 'Have an account? Sign in'))}</button>
+      <button class="btn primary lg" data-set-step="2">${raw(T('สมัคร', 'Create account'))} ${raw(I('chev_right', 16))}</button>
     </div>`;
   } else if (step === 2) {
     content = html`

@@ -1487,6 +1487,36 @@ render();
     }
   }
 
+  // Sign up — onboarding step 1 collects email + password + workspace,
+  // POST /api/auth/signup creates tenant + owner user, returns a JWT.
+  // On success we store the token and advance to step 2 of onboarding.
+  async function doSignup(){
+    var L = function(th,en){ return state.lang==='th'?th:en; };
+    var em = (document.getElementById('ppSignupEmail')   || {}).value || '';
+    var pw = (document.getElementById('ppSignupPassword')|| {}).value || '';
+    var ws = (document.getElementById('ppSignupWorkspace')|| {}).value || '';
+    em = em.trim();
+    if (!em) { toast(L('⚠ กรอกอีเมลก่อน','⚠ Enter your email'),'error'); return; }
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)) { toast(L('⚠ รูปแบบอีเมลไม่ถูกต้อง','⚠ Invalid email'),'error'); return; }
+    if (!pw) { toast(L('⚠ ตั้งรหัสผ่านก่อน','⚠ Set a password'),'error'); return; }
+    if (pw.length < 8) { toast(L('⚠ รหัสผ่านต้องยาวอย่างน้อย 8 ตัว','⚠ Password must be at least 8 chars'),'error'); return; }
+    toast(L('⏳ กำลังสร้างบัญชี…','⏳ Creating account…'));
+    try {
+      var d = await api('/api/auth/signup', { method:'POST', body:{ email: em, password: pw, workspace_name: ws.trim() || undefined } });
+      if (!d || !d.token) throw new Error('no token in response');
+      setTok(d.token);
+      toast(L('✓ สร้างบัญชีสำเร็จ','✓ Account created'),'success');
+      try { window.PP && window.PP.track && window.PP.track('signup', { email: em }); } catch(_){}
+      state.onboardStep = 2; render();   // continue the onboarding wizard, now logged in
+    } catch(e){
+      var msg = e.message || 'unknown error';
+      if (/409|already|ถูกใช้/i.test(msg)) msg = L('อีเมลนี้ถูกใช้แล้ว — กดเข้าสู่ระบบแทน','Email already in use — sign in instead');
+      else if (/8 ตัว|8 char|password/i.test(msg)) msg = L('รหัสผ่านต้องยาวอย่างน้อย 8 ตัว','Password must be at least 8 chars');
+      else if (/503|supabase/i.test(msg)) msg = L('ระบบสมัครยังไม่พร้อม (ต้องเชื่อม Supabase)','Signup unavailable (needs Supabase)');
+      toast((L('✗ สมัครไม่สำเร็จ: ','✗ Signup failed: ')) + msg,'error');
+    }
+  }
+
   // Google Sign-In — open the OAuth popup, wait for the token via
   // postMessage from /api/auth/google/callback, then store it + enter app.
   function doGoogleSignin(){
@@ -1531,7 +1561,18 @@ render();
     var dest = go.dataset.go;
     if (state.page === 'login' && dest === 'onboarding') {
       e.preventDefault(); e.stopImmediatePropagation();
-      doLogin();
+      // The "Sign in" button and the "Sign up" link both carry
+      // data-go="onboarding"; the signup link adds data-signup="1".
+      // Signup → go to the onboarding wizard (step 1 is the real signup
+      // form). No data-signup → it's the sign-in submit button.
+      if (go.dataset.signup) { state.page = 'onboarding'; state.onboardStep = 1; render(); }
+      else doLogin();
+      return;
+    }
+    // Onboarding step 1 "ถัดไป/สมัคร" creates the account before advancing.
+    if (state.page === 'onboarding' && state.onboardStep === 1 && go.dataset.setStep === '2') {
+      e.preventDefault(); e.stopImmediatePropagation();
+      doSignup();
       return;
     }
     if (dest === 'landing' && go.classList.contains('logout')) {
