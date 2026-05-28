@@ -435,7 +435,11 @@ export function pageAvatar() {
     const src = (scene === 'upload') ? (state.avatarBgUploadUrl || '') : (state.avatarPreviewBgUrl || '');
     if (!src) return '';
     const rotate = (state.avatarBgInterval || 0) > 0 && (state.avatarBgCandidates || []).length > 1 && scene !== 'upload';
-    return `<video src="${src}" autoplay loop muted playsinline ${rotate ? 'data-rotate-bg="1" ' : ''}style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0;transition:opacity .35s ease"></video>`
+    const isImg = /^data:image\//i.test(src) || /\.(jpe?g|png|gif|webp|avif)(\?|$)/i.test(src);
+    const layer = isImg
+      ? `<img src="${src}" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0;transition:opacity .35s ease"/>`
+      : `<video src="${src}" autoplay loop muted playsinline ${rotate ? 'data-rotate-bg="1" ' : ''}style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0;transition:opacity .35s ease"></video>`;
+    return layer
       + `<div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.55) 0%,rgba(0,0,0,.1) 25%,rgba(0,0,0,.1) 60%,rgba(0,0,0,.75) 100%);z-index:1"></div>`;
   }
 
@@ -531,6 +535,7 @@ export function pageAvatar() {
         row += '</div>';
         row += '<button class="btn outline" data-slotsearch="' + i + '" style="height:30px;font-size:10.5px;padding:0 10px">' + T('ค้นหา', 'Go') + '</button>';
         row += '</div>';
+        row += '<button class="btn outline" data-slotuploadimg="' + i + '" style="width:100%;height:30px;font-size:10.5px;margin-bottom:8px;color:var(--blue)">' + I('upload', 12) + ' ' + T('อัปโหลดรูปเอง', 'Upload your own image') + '</button>';
         const cands = (state.storyboardSlotCands && state.storyboardSlotCands[i]) || [];
         if (state.storyboardSlotCands && state.storyboardSlotCands['_loading_' + i]) {
           row += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px">'
@@ -576,6 +581,7 @@ export function pageAvatar() {
     </div>
     ${storyboardBody}
     <input type="file" accept="video/*" id="ppAvatarBgUploadInput" style="display:none"/>
+    <input type="file" accept="image/*" id="ppStoryboardImgInput" style="display:none"/>
   </div>`;
 
   // ── Action row ─────────────────────────────────────────────────────
