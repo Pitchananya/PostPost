@@ -3072,6 +3072,20 @@ render();
       var imgInp = document.getElementById('ppStoryboardImgInput'); if (imgInp) imgInp.click();
       return;
     }
+    // Upload a single image as the whole-clip background (no AI storyboard needed)
+    if (e.target.closest('[data-uploadbgimg]')) {
+      e.preventDefault();
+      state.storyboardUploadSlot = 'bg';
+      var bgImgInp = document.getElementById('ppStoryboardImgInput'); if (bgImgInp) bgImgInp.click();
+      return;
+    }
+    if (e.target.closest('[data-clearbgimg]')) {
+      e.preventDefault();
+      state.avatarBgPickedUrl = '';
+      state.avatarPreviewBgUrl = '';
+      render();
+      return;
+    }
     var sp = e.target.closest('[data-slotpickurl]');
     if (sp) {
       e.preventDefault();
@@ -4728,11 +4742,19 @@ render();
       rdimg.onload = async function(){
         // Shrink before storing — bg_url is persisted into drafts, so keep it light.
         var compressed = await compressImageDataUrl(rdimg.result, 1280, 0.85).catch(function(){ return rdimg.result; });
-        var slot = state.avatarStoryboard && state.avatarStoryboard[slotIdx];
-        if (slot) {
-          slot.bg_url = compressed;
-          slot.preview = compressed;
-          if (slotIdx === 0) state.avatarPreviewBgUrl = compressed;
+        if (slotIdx === 'bg') {
+          // Whole-clip background — render Mode C (single scene, full duration).
+          state.avatarBgPickedUrl = compressed;
+          state.avatarPreviewBgUrl = compressed;
+          state.avatarBgInterval = 0;     // lock to one static bg (no rotation)
+          state.avatarBgScene = 'auto';
+        } else {
+          var slot = state.avatarStoryboard && state.avatarStoryboard[slotIdx];
+          if (slot) {
+            slot.bg_url = compressed;
+            slot.preview = compressed;
+            if (slotIdx === 0) state.avatarPreviewBgUrl = compressed;
+          }
         }
         state.storyboardUploadSlot = -1;
         render();

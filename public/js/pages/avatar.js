@@ -488,10 +488,23 @@ export function pageAvatar() {
 
   let storyboardBody = '';
   if (!state.avatarStoryboard || state.avatarStoryboard.length === 0) {
+    const userBgImg = /^data:image\//i.test(state.avatarBgPickedUrl || '') ? state.avatarBgPickedUrl : '';
+    const bgImgControls = userBgImg
+      ? `<div style="display:flex;align-items:center;justify-content:center;gap:10px">
+           <div style="width:46px;aspect-ratio:9/16;border-radius:6px;background-image:url(${userBgImg});background-size:cover;background-position:center;flex-shrink:0;border:1px solid var(--line)"></div>
+           <div style="text-align:left;font-size:11px;color:var(--ink2)">${T('รูปของคุณ — ใช้เป็นพื้นหลังทั้งคลิป', 'Your image — background for the whole clip')}</div>
+         </div>
+         <div style="display:flex;gap:8px;justify-content:center;margin-top:10px">
+           <button class="btn outline" data-uploadbgimg="1" style="height:30px;font-size:10.5px;padding:0 12px;color:var(--blue)">${I('refresh', 12)} ${T('เปลี่ยนรูป', 'Change image')}</button>
+           <button class="btn outline" data-clearbgimg="1" style="height:30px;font-size:10.5px;padding:0 12px">${I('x', 12)} ${T('ลบ', 'Remove')}</button>
+         </div>`
+      : `<button class="btn outline" data-uploadbgimg="1" style="height:32px;font-size:11px;padding:0 16px;color:var(--blue)">${I('upload', 13)} ${T('อัปโหลดรูปเอง (ใช้ทั้งคลิป)', 'Upload your own image (whole clip)')}</button>`;
     storyboardBody = `<div style="padding:20px;text-align:center;background:#fff;border-radius:10px;border:1px dashed var(--line);font-size:12px;color:var(--muted);line-height:1.7">
       ${I('info', 16, 'var(--muted)')}
       <div style="margin-top:6px">${T('เขียนสคริปต์ + ตั้งความยาวก่อน — แล้วกด "ให้ AI จัด bg ทั้งหมด"', 'Write a script + set duration first — then hit "AI plan all bgs"')}</div>
       <div style="font-size:10.5px;margin-top:4px;opacity:.8">${T('AI จะแยก script เป็น N ช่วง และเลือก Pexels bg ที่เข้ากันให้แต่ละช่วง', 'AI splits the script into N segments and picks a matching Pexels bg for each')}</div>
+      <div style="display:flex;align-items:center;gap:8px;margin:14px 0 10px"><div style="flex:1;height:1px;background:var(--line)"></div><span style="font-size:10px;font-weight:700;color:var(--muted)">${T('หรือ', 'OR')}</span><div style="flex:1;height:1px;background:var(--line)"></div></div>
+      ${bgImgControls}
     </div>`;
   } else {
     const slotRows = state.avatarStoryboard.map((slot, i) => {
