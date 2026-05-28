@@ -3079,6 +3079,12 @@ render();
       var bgImgInp = document.getElementById('ppStoryboardImgInput'); if (bgImgInp) bgImgInp.click();
       return;
     }
+    if (e.target.closest('[data-uploadbgvideo]')) {
+      e.preventDefault();
+      state.storyboardUploadSlot = 'bg';
+      var bgVidInp = document.getElementById('ppStoryboardVidInput'); if (bgVidInp) bgVidInp.click();
+      return;
+    }
     if (e.target.closest('[data-clearbgimg]')) {
       e.preventDefault();
       state.avatarBgPickedUrl = '';
@@ -4734,33 +4740,38 @@ render();
       t.value = '';
       return;
     }
-    if (t && t.id === 'ppStoryboardImgInput' && t.files && t.files[0]) {
-      var fimg = t.files[0];
-      if (fimg.size > 10*1024*1024) { toast(state.lang==='th'?'รูปต้องไม่เกิน 10MB':'≤10MB','error'); return; }
+    if (t && (t.id === 'ppStoryboardImgInput' || t.id === 'ppStoryboardVidInput') && t.files && t.files[0]) {
+      var isVidUp = t.id === 'ppStoryboardVidInput';
+      var fmedia = t.files[0];
+      var maxMB = isVidUp ? 25 : 10;
+      if (fmedia.size > maxMB*1024*1024) { toast((state.lang==='th'?(isVidUp?'วิดีโอต้องไม่เกิน ':'รูปต้องไม่เกิน '):'')+ '≤'+maxMB+'MB','error'); return; }
       var slotIdx = state.storyboardUploadSlot;
-      var rdimg = new FileReader();
-      rdimg.onload = async function(){
-        // Shrink before storing — bg_url is persisted into drafts, so keep it light.
-        var compressed = await compressImageDataUrl(rdimg.result, 1280, 0.85).catch(function(){ return rdimg.result; });
+      var rdmedia = new FileReader();
+      rdmedia.onload = async function(){
+        // Images: shrink before storing (bg_url can be persisted into drafts).
+        // Videos: keep as-is — compressImageDataUrl is image-only.
+        var media = isVidUp
+          ? rdmedia.result
+          : await compressImageDataUrl(rdmedia.result, 1280, 0.85).catch(function(){ return rdmedia.result; });
         if (slotIdx === 'bg') {
           // Whole-clip background — render Mode C (single scene, full duration).
-          state.avatarBgPickedUrl = compressed;
-          state.avatarPreviewBgUrl = compressed;
+          state.avatarBgPickedUrl = media;
+          state.avatarPreviewBgUrl = media;
           state.avatarBgInterval = 0;     // lock to one static bg (no rotation)
           state.avatarBgScene = 'auto';
         } else {
           var slot = state.avatarStoryboard && state.avatarStoryboard[slotIdx];
           if (slot) {
-            slot.bg_url = compressed;
-            slot.preview = compressed;
-            if (slotIdx === 0) state.avatarPreviewBgUrl = compressed;
+            slot.bg_url = media;
+            slot.preview = media;
+            if (slotIdx === 0) state.avatarPreviewBgUrl = media;
           }
         }
         state.storyboardUploadSlot = -1;
         render();
-        toast(state.lang==='th'?'ใส่รูปแล้ว ✓':'Image added ✓','success');
+        toast(state.lang==='th'?(isVidUp?'ใส่วิดีโอแล้ว ✓':'ใส่รูปแล้ว ✓'):(isVidUp?'Video added ✓':'Image added ✓'),'success');
       };
-      rdimg.readAsDataURL(fimg);
+      rdmedia.readAsDataURL(fmedia);
       t.value = '';
       return;
     }

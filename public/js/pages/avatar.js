@@ -488,17 +488,26 @@ export function pageAvatar() {
 
   let storyboardBody = '';
   if (!state.avatarStoryboard || state.avatarStoryboard.length === 0) {
-    const userBgImg = /^data:image\//i.test(state.avatarBgPickedUrl || '') ? state.avatarBgPickedUrl : '';
-    const bgImgControls = userBgImg
+    const pickedBg = state.avatarBgPickedUrl || '';
+    const isUserImg = /^data:image\//i.test(pickedBg);
+    const isUserVid = /^data:video\//i.test(pickedBg);
+    const hasUserMedia = isUserImg || isUserVid;
+    const uploadButtons = `<button class="btn outline" data-uploadbgimg="1" style="height:30px;font-size:10.5px;padding:0 12px;color:var(--blue)">${I('upload', 12)} ${T('อัปโหลดรูป', 'Upload image')}</button>`
+      + `<button class="btn outline" data-uploadbgvideo="1" style="height:30px;font-size:10.5px;padding:0 12px;color:var(--blue)">${I('video', 12)} ${T('อัปโหลดวิดีโอ', 'Upload video')}</button>`;
+    const mediaThumb = isUserVid
+      ? `<video src="${pickedBg}" muted playsinline style="width:46px;aspect-ratio:9/16;object-fit:cover;border-radius:6px;flex-shrink:0;border:1px solid var(--line)"></video>`
+      : `<div style="width:46px;aspect-ratio:9/16;border-radius:6px;background-image:url(${pickedBg});background-size:cover;background-position:center;flex-shrink:0;border:1px solid var(--line)"></div>`;
+    const bgImgControls = hasUserMedia
       ? `<div style="display:flex;align-items:center;justify-content:center;gap:10px">
-           <div style="width:46px;aspect-ratio:9/16;border-radius:6px;background-image:url(${userBgImg});background-size:cover;background-position:center;flex-shrink:0;border:1px solid var(--line)"></div>
-           <div style="text-align:left;font-size:11px;color:var(--ink2)">${T('รูปของคุณ — ใช้เป็นพื้นหลังทั้งคลิป', 'Your image — background for the whole clip')}</div>
+           ${mediaThumb}
+           <div style="text-align:left;font-size:11px;color:var(--ink2)">${isUserVid ? T('วิดีโอของคุณ — ใช้เป็นพื้นหลังทั้งคลิป', 'Your video — background for the whole clip') : T('รูปของคุณ — ใช้เป็นพื้นหลังทั้งคลิป', 'Your image — background for the whole clip')}</div>
          </div>
-         <div style="display:flex;gap:8px;justify-content:center;margin-top:10px">
-           <button class="btn outline" data-uploadbgimg="1" style="height:30px;font-size:10.5px;padding:0 12px;color:var(--blue)">${I('refresh', 12)} ${T('เปลี่ยนรูป', 'Change image')}</button>
+         <div style="display:flex;gap:8px;justify-content:center;margin-top:10px;flex-wrap:wrap">
+           ${uploadButtons}
            <button class="btn outline" data-clearbgimg="1" style="height:30px;font-size:10.5px;padding:0 12px">${I('x', 12)} ${T('ลบ', 'Remove')}</button>
          </div>`
-      : `<button class="btn outline" data-uploadbgimg="1" style="height:32px;font-size:11px;padding:0 16px;color:var(--blue)">${I('upload', 13)} ${T('อัปโหลดรูปเอง (ใช้ทั้งคลิป)', 'Upload your own image (whole clip)')}</button>`;
+      : `<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">${uploadButtons}</div>
+         <div style="font-size:10px;color:var(--muted);margin-top:6px">${T('ใช้เป็นพื้นหลังทั้งคลิป', 'Used as the background for the whole clip')}</div>`;
     storyboardBody = `<div style="padding:20px;text-align:center;background:#fff;border-radius:10px;border:1px dashed var(--line);font-size:12px;color:var(--muted);line-height:1.7">
       ${I('info', 16, 'var(--muted)')}
       <div style="margin-top:6px">${T('เขียนสคริปต์ + ตั้งความยาวก่อน — แล้วกด "ให้ AI จัด bg ทั้งหมด"', 'Write a script + set duration first — then hit "AI plan all bgs"')}</div>
@@ -595,6 +604,7 @@ export function pageAvatar() {
     ${storyboardBody}
     <input type="file" accept="video/*" id="ppAvatarBgUploadInput" style="display:none"/>
     <input type="file" accept="image/*" id="ppStoryboardImgInput" style="display:none"/>
+    <input type="file" accept="video/*" id="ppStoryboardVidInput" style="display:none"/>
   </div>`;
 
   // ── Action row ─────────────────────────────────────────────────────
