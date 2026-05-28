@@ -24,7 +24,7 @@ export function pageLogin() {
       <p style="color:var(--muted);font-size:14.5px;margin:0 0 32px">${raw(T('จัดการหลายแบรนด์ สินค้าจาก Shopee และ workflow โพสต์อัตโนมัติ','Manage multi-brand workspaces, Shopee products, and auto-posting workflows.'))}</p>
 
       <div class="authSocial">
-        <button class="btn outline" style="height:46px">${raw(I('google',16))} Google</button>
+        <button class="btn outline" style="height:46px" data-google-signin="1">${raw(I('google',16))} Google</button>
         <button class="btn outline" style="height:46px">${raw(I('facebook',16,'#1877F2'))} Facebook</button>
       </div>
       <div class="authDivider">${raw(T('หรือใช้อีเมล','or with email'))}</div>

@@ -1487,8 +1487,45 @@ render();
     }
   }
 
+  // Google Sign-In — open the OAuth popup, wait for the token via
+  // postMessage from /api/auth/google/callback, then store it + enter app.
+  function doGoogleSignin(){
+    var L = function(th,en){ return state.lang==='th'?th:en; };
+    var w = 480, h = 640;
+    var left = (window.outerWidth - w) / 2 + (window.screenX || 0);
+    var top  = (window.outerHeight - h) / 2 + (window.screenY || 0);
+    var popup = window.open('/api/auth/google/start', 'pp-google-oauth',
+      'width='+w+',height='+h+',left='+Math.max(0,left)+',top='+Math.max(0,top)+',scrollbars=yes');
+    if (!popup) { toast(L('Browser block popup — อนุญาต popup ของเว็บนี้ก่อน','Popup blocked — allow popups for this site'),'error'); return; }
+    toast(L('⏳ กำลังเปิด Google…','⏳ Opening Google…'));
+    function onMsg(ev){
+      if (ev.origin !== location.origin) return;
+      var d = ev.data || {};
+      if (d.type === 'pp-google-auth') {
+        window.removeEventListener('message', onMsg);
+        var tok = d.payload && d.payload.token;
+        if (!tok) { toast(L('✗ ไม่ได้รับ token จาก Google','✗ No token from Google'),'error'); return; }
+        setTok(tok);
+        state.page = 'profile'; render();
+        toast(L('✓ เข้าสู่ระบบด้วย Google สำเร็จ','✓ Signed in with Google'),'success');
+        try { window.PP && window.PP.track && window.PP.track('signin_google', { email: (d.payload.user||{}).email || '' }); } catch(_){}
+      } else if (d.type === 'pp-google-auth-error') {
+        window.removeEventListener('message', onMsg);
+        toast((L('✗ Google ไม่สำเร็จ: ','✗ Google failed: ')) + (d.message || 'unknown'),'error');
+      }
+    }
+    window.addEventListener('message', onMsg);
+    setTimeout(function(){ window.removeEventListener('message', onMsg); }, 5 * 60 * 1000);
+  }
+
   // capture-phase click — intercept auth before the prototype router runs
   document.addEventListener('click', function(e){
+    // Google Sign-In button (login page) — handle before the data-go router
+    if (e.target.closest('[data-google-signin]')) {
+      e.preventDefault(); e.stopImmediatePropagation();
+      doGoogleSignin();
+      return;
+    }
     var go = e.target.closest('[data-go]');
     if (!go) return;
     var dest = go.dataset.go;
