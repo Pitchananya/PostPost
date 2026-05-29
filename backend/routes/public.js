@@ -6,8 +6,8 @@ const router = Router();
 
 export const PLATFORM_RATIOS = {
   tiktok:    { w: 1080, h: 1920, format: 'jpeg' }, // 9:16 vertical (TikTok native) + JPG (TikTok ไม่รับ PNG บางกรณี)
-  facebook:  { w: 1080, h: 1080, format: 'png' },  // 1:1
-  instagram: { w: 1080, h: 1080, format: 'png' },  // 1:1
+  facebook:  { w: 1080, h: 1350, format: 'png' },  // 4:5 portrait — matches the in-app preview + FB feed best practice (was 1:1, which squished posts)
+  instagram: { w: 1080, h: 1350, format: 'png' },  // 4:5 portrait (IG feed max portrait)
 };
 
 export async function resizeForPlatform(buffer, platform) {
