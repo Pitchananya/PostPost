@@ -140,28 +140,46 @@ export function pageCreative() {
             <p class="cardSub">${raw(T('AI คิด prompt + สร้างรูปอัตโนมัติเมื่อกด "สร้างทั้งหมด"', 'AI writes prompts + generates images on "Generate All"'))}</p>
           </div>
         </div>
-        ${genImages.length
-          ? raw(`<div class="grid g2" style="gap:14px">
-            ${genImages.map((img, i) => {
+        ${(genImages.length || state.genLoading) ? raw((function () {
+            const sel = state.imageSel || [];
+            const loading = !!state.genLoading;
+            const n = genImages.length;
+            const target = loading ? Math.max(n, state.imageCount || n) : n;   // show pending slots while generating
+            let cards = '';
+            for (let i = 0; i < target; i++) {
+              const img = genImages[i];
               const isRegen = state.genImageRegenIdx === i;
-              return `<div class="productCard" style="padding:12px;position:relative">
-              <div style="position:absolute;top:8px;left:8px;z-index:2;background:var(--purple);color:#fff;width:24px;height:24px;border-radius:7px;display:grid;place-items:center;font-weight:800;font-size:12px">${i + 1}</div>
-              <button class="btn ${img ? 'ghost' : 'primary'} sm iconOnly" data-regenimg="${i}" title="${T('สร้างใหม่', 'Regenerate')}" ${isRegen ? 'disabled' : ''} style="position:absolute;top:8px;right:8px;z-index:2;background:${img ? 'rgba(255,255,255,.92)' : 'var(--orange)'};color:${img ? 'var(--ink)' : '#fff'};box-shadow:0 2px 6px rgba(0,0,0,.12);width:28px;height:28px">${I(isRegen ? 'clock' : 'refresh', 13)}</button>
-              <div class="productImg" style="aspect-ratio:1;background:#f3f0ea;overflow:hidden">
-                ${img
-                  ? `<img src="${img}" alt="" style="width:100%;height:100%;object-fit:cover${isRegen ? ';opacity:.55' : ''}"/>`
-                  : (isRegen
-                    ? `<div style="display:grid;place-items:center;height:100%;color:var(--orange);font-size:11px;text-align:center;padding:8px;gap:6px"><div style="font-size:22px">⏳</div>${T('กำลังสร้างใหม่…', 'Regenerating…')}</div>`
-                    : `<div style="display:grid;place-items:center;height:100%;color:var(--muted);font-size:11px;text-align:center;padding:8px;gap:6px"><div style="font-size:20px;color:#DC2626">⚠</div>${T('สร้างรูปไม่สำเร็จ — กด ↻ ลองใหม่', 'Image failed — tap ↻ to retry')}</div>`)}
-              </div>
-              <div style="font-size:11px;color:var(--muted);margin-top:6px;line-height:1.45;max-height:50px;overflow:hidden">${escText((state.genImagePrompts || [])[i] || '')}</div>
-            </div>`;
-            }).join('')}
-          </div>`)
-          : raw(`<div style="padding:32px 20px;text-align:center;color:var(--muted)">
-            <div style="font-size:28px;margin-bottom:8px">🖼️</div>
-            <div style="font-size:13px;line-height:1.6">${state.genLoading ? T('AI กำลังคิด prompt และสร้างรูป…', 'AI is writing prompts and generating images…') : T('กด "สร้างทั้งหมด" ด้านบน — AI จะคิด prompt แต่ละสไลด์แล้วสร้างรูปอัตโนมัติ', 'Hit "Generate All" — AI writes a prompt per slide and generates images')}</div>
-          </div>`)}
+              if (i >= n && loading) {   // not-yet-generated slot → loading state
+                cards += '<div class="productCard" style="padding:12px;position:relative">'
+                  + '<div style="position:absolute;top:8px;left:8px;z-index:2;background:var(--purple);color:#fff;width:24px;height:24px;border-radius:7px;display:grid;place-items:center;font-weight:800;font-size:12px">' + (i + 1) + '</div>'
+                  + '<div class="productImg" style="aspect-ratio:1;background:#f3f0ea;display:grid;place-items:center">'
+                  + '<div style="text-align:center;color:var(--orange);font-size:11px;font-weight:700"><div style="font-size:24px;margin-bottom:4px">⏳</div>' + T('กำลังโหลดรูป…', 'Loading image…') + '</div>'
+                  + '</div></div>';
+                continue;
+              }
+              const on = sel[i] !== false;   // default = selected (will post)
+              cards += '<div class="productCard" style="padding:12px;position:relative;' + (on ? '' : 'opacity:.5;filter:grayscale(.4)') + '">'
+                + '<div style="position:absolute;top:8px;left:8px;z-index:2;background:var(--purple);color:#fff;width:24px;height:24px;border-radius:7px;display:grid;place-items:center;font-weight:800;font-size:12px">' + (i + 1) + '</div>'
+                + '<button class="btn ' + (img ? 'ghost' : 'primary') + ' sm iconOnly" data-regenimg="' + i + '" title="' + T('สร้างใหม่', 'Regenerate') + '" ' + (isRegen ? 'disabled' : '') + ' style="position:absolute;top:8px;right:8px;z-index:2;background:' + (img ? 'rgba(255,255,255,.92)' : 'var(--orange)') + ';color:' + (img ? 'var(--ink)' : '#fff') + ';box-shadow:0 2px 6px rgba(0,0,0,.12);width:28px;height:28px">' + I(isRegen ? 'clock' : 'refresh', 13) + '</button>'
+                + '<div class="productImg" style="aspect-ratio:1;background:#f3f0ea;overflow:hidden">'
+                + (img
+                    ? '<img src="' + img + '" alt="" style="width:100%;height:100%;object-fit:cover' + (isRegen ? ';opacity:.55' : '') + '"/>'
+                    : (isRegen
+                        ? '<div style="display:grid;place-items:center;height:100%;color:var(--orange);font-size:11px;text-align:center;padding:8px;gap:6px"><div style="font-size:22px">⏳</div>' + T('กำลังสร้างใหม่…', 'Regenerating…') + '</div>'
+                        : '<div style="display:grid;place-items:center;height:100%;color:var(--muted);font-size:11px;text-align:center;padding:8px;gap:6px"><div style="font-size:20px;color:#DC2626">⚠</div>' + T('สร้างรูปไม่สำเร็จ — กด ↻ ลองใหม่', 'Image failed — tap ↻ to retry') + '</div>'))
+                + '</div>'
+                + '<div style="font-size:11px;color:var(--muted);margin-top:6px;line-height:1.45;max-height:34px;overflow:hidden">' + escText((state.genImagePrompts || [])[i] || '') + '</div>'
+                + '<div style="display:flex;align-items:center;gap:6px;margin-top:8px">'
+                +   '<button data-imgsel="' + i + '" class="btn ' + (on ? 'primary' : 'outline') + ' sm" style="flex:1;height:30px;font-size:11.5px;justify-content:center">' + (on ? (I('check', 12) + ' ' + T('จะโพสต์', 'Posting')) : T('ข้าม', 'Skip')) + '</button>'
+                +   '<button data-imgup="' + i + '" class="btn ghost sm iconOnly" title="' + T('เลื่อนขึ้น', 'Move up') + '" ' + (i === 0 ? 'disabled' : '') + ' style="width:30px;height:30px">' + I('chev_up', 14) + '</button>'
+                +   '<button data-imgdown="' + i + '" class="btn ghost sm iconOnly" title="' + T('เลื่อนลง', 'Move down') + '" ' + (i >= n - 1 ? 'disabled' : '') + ' style="width:30px;height:30px">' + I('chev_down', 14) + '</button>'
+                +   '<button data-imgdel="' + i + '" class="btn ghost sm iconOnly" title="' + T('ลบ', 'Delete') + '" style="width:30px;height:30px;color:var(--red)">' + I('x', 14, '#DC2626') + '</button>'
+                + '</div>'
+                + '</div>';
+            }
+            return '<div class="grid g2" style="gap:14px">' + cards + '</div>';
+          })())
+          : raw('<div style="padding:32px 20px;text-align:center;color:var(--muted)"><div style="font-size:28px;margin-bottom:8px">🖼️</div><div style="font-size:13px;line-height:1.6">' + T('กด "สร้างทั้งหมด" ด้านบน — AI จะคิด prompt แต่ละสไลด์แล้วสร้างรูปอัตโนมัติ', 'Hit "Generate All" — AI writes a prompt per slide and generates images') + '</div></div>')}
       </div>
     </div>
 

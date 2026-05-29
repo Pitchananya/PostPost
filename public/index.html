@@ -808,7 +808,7 @@ function generateInputHTML() {
 function postPreviewHTML() {
   var ab = BRANDS.find(b=>b.id===state.brand) || BRANDS[0];
   var hookObj = (state.genHooks||[])[((state.selectedHook||1)-1)];
-  var imgs = (state.genImages||[]).filter(Boolean);
+  var imgs = (state.genImages||[]).filter(function(u,i){ return u && (state.imageSel||[])[i] !== false; });
   var n = imgs.length;
   var idx = Math.min(Math.max(0, state.previewIndex||0), Math.max(0, n-1));
   var aspect = state.previewAspect || '4:5';
@@ -2383,7 +2383,7 @@ render();
     // Match the preview: it renders the Boolean-filtered list, so index the
     // same way (skips failed/null slots) — otherwise a null-first array posts
     // text-only even though the preview shows a real image.
-    var imgs = (state.genImages || []).filter(Boolean);
+    var imgs = (state.genImages || []).filter(function(u,i){ return u && (state.imageSel||[])[i] !== false; });
     if (!imgs.length && !caption && !hook) {
       toast(L('ยังไม่มีคอนเทนต์ — กด "สร้างทั้งหมด" ให้ AI สร้างรูป/แคปชั่นก่อน','No content yet — generate image/caption first'),'error');
       return;
@@ -2849,6 +2849,7 @@ render();
             for (var k = 0; k < nImg; k++) state.genImagePrompts.push(fallbackPrompt);
           }
           state.genImages = [];
+          state.imageSel = [];
           state.previewIndex = 0;
           state.genPhase = 'images';
           toast(state.lang==='th'?'1/2 แคปชั่นเสร็จ ✓ — 2/2 AI กำลังสร้างรูป…':'1/2 Caption done ✓ — 2/2 Generating images…','success');
@@ -3033,6 +3034,7 @@ render();
     var imgModel = resolveImageModel(state.imageModel);
     var async = isSlowImageModel(imgModel);
     state.genImages = [];
+    state.imageSel = [];
     state.previewIndex = 0;
     for (var i = 0; i < count; i++) {
       var suffix = async ? (state.lang==='th'?' (โมเดลช้า, รอ ~2 นาที)':' (slow model, ~2 min)') : '';
@@ -3123,6 +3125,44 @@ render();
       e.preventDefault();
       var idx = parseInt(regenEl.getAttribute('data-regenimg'), 10);
       if (!isNaN(idx) && typeof regenImageSlot === 'function') regenImageSlot(idx);
+      return;
+    }
+    // Per-image controls on the Creative grid: select-to-post / reorder / delete.
+    var selEl = e.target.closest('[data-imgsel]');
+    if (selEl) {
+      e.preventDefault();
+      var si = parseInt(selEl.getAttribute('data-imgsel'), 10);
+      if (!isNaN(si)) { state.imageSel = state.imageSel || []; state.imageSel[si] = (state.imageSel[si] === false); render(); }
+      return;
+    }
+    var upEl = e.target.closest('[data-imgup]');
+    var dnEl = e.target.closest('[data-imgdown]');
+    if (upEl || dnEl) {
+      e.preventDefault();
+      var mi = parseInt((upEl || dnEl).getAttribute(upEl ? 'data-imgup' : 'data-imgdown'), 10);
+      var mj = mi + (upEl ? -1 : 1);
+      var arr = state.genImages || [];
+      if (!isNaN(mi) && mj >= 0 && mj < arr.length) {
+        state.imageSel = state.imageSel || [];
+        while (state.imageSel.length < arr.length) state.imageSel.push(true);
+        [state.genImages, state.genImagePrompts, state.imageSel].forEach(function(a){
+          if (Array.isArray(a) && a.length > Math.max(mi, mj)) { var t = a[mi]; a[mi] = a[mj]; a[mj] = t; }
+        });
+        render();
+      }
+      return;
+    }
+    var delEl = e.target.closest('[data-imgdel]');
+    if (delEl) {
+      e.preventDefault();
+      var di = parseInt(delEl.getAttribute('data-imgdel'), 10);
+      if (!isNaN(di) && Array.isArray(state.genImages)) {
+        state.genImages.splice(di, 1);
+        if (Array.isArray(state.genImagePrompts)) state.genImagePrompts.splice(di, 1);
+        if (Array.isArray(state.imageSel)) state.imageSel.splice(di, 1);
+        if ((state.previewIndex || 0) >= state.genImages.length) state.previewIndex = Math.max(0, state.genImages.length - 1);
+        render();
+      }
       return;
     }
   });
@@ -4903,7 +4943,7 @@ render();
     document.body.appendChild(a); a.click(); a.remove();
   }
   async function downloadCurrentPng(){
-    var imgs = (state.genImages||[]).filter(Boolean);
+    var imgs = (state.genImages||[]).filter(function(u,i){ return u && (state.imageSel||[])[i] !== false; });
     if (!imgs.length) { toast(state.lang==='th'?'ยังไม่มีรูป':'No image yet','error'); return; }
     var aspect = state.previewAspect || '4:5';
     var idx = Math.min(Math.max(0, state.previewIndex||0), imgs.length-1);
@@ -4914,7 +4954,7 @@ render();
     } catch(e) { toast('Download failed: '+e.message,'error'); }
   }
   async function downloadAllPng(){
-    var imgs = (state.genImages||[]).filter(Boolean);
+    var imgs = (state.genImages||[]).filter(function(u,i){ return u && (state.imageSel||[])[i] !== false; });
     if (!imgs.length) { toast(state.lang==='th'?'ยังไม่มีรูป':'No image yet','error'); return; }
     var aspect = state.previewAspect || '4:5';
     toast(state.lang==='th'?('กำลังบันทึก '+imgs.length+' รูป…'):('Saving '+imgs.length+' files…'),'info');
@@ -5611,10 +5651,12 @@ render();
       try { localStorage.setItem('postpost_drafts', JSON.stringify(state.drafts)); } catch(_){}
       toast(state.lang==='th'?'พื้นที่ใกล้เต็ม — ภาพปกหายไป (รูปฉบับเต็มยังอยู่)':'Storage tight — cover thumbnail dropped (full images still saved)','error');
     }
+    state.page = 'library';   // jump to the Content Library so the user sees the saved draft
     render();
+    try { var _m = document.querySelector('.main'); if (_m && _m.scrollTo) _m.scrollTo({ top: 0 }); window.scrollTo(0, 0); } catch(_){}
     var msg = state.lang==='th'
-      ? ('บันทึกดราฟแล้ว — '+imageCount+' รูป (ดูได้ที่ "คลังคอนเทนต์")')
-      : ('Saved as Draft — '+imageCount+' images (see Library)');
+      ? ('บันทึกดราฟแล้ว — '+imageCount+' รูป')
+      : ('Saved as Draft — '+imageCount+' images');
     toast(msg,'success');
   }
   document.addEventListener('click', function(e){
@@ -6623,7 +6665,7 @@ render();
     + '[data-saveproduct],[data-newimgclear],[data-newimg],[data-proddelete],[data-usetopic],[data-genall],[data-savedraft],[data-savevideodraft],[data-saveavatardraft],[data-editdraft],[data-deletedraft],[data-schedule],[data-avatarscript],[data-veogen],[data-newavatar],[data-rmbgavatar],'
     + '[data-uploadavatar],[data-uploadref],[data-clearref],[data-pickrefproduct],[data-refclose],[data-refpick],[data-genvideoprompt],[data-delavatar],[data-addtoday],[data-pickdraft],[data-pickdraftclose],[data-pickdraftgo],[data-tts],[data-pickfbpage],[data-avatarvideo],[data-pastevideourl],[data-pastelipsyncurl],[data-clearlipsyncurl],[data-hflipsync],[data-locallocaltoggle],[data-bgscene],[data-bgpick],[data-bgsearch],[data-bgsearchclear],[data-bginterval],[data-clipdur],[data-avatarabort],[data-genstoryboard],[data-slottoggle],[data-slotsearch],[data-slotpickurl],[data-mobilemenu],[data-mobilebackdrop],[data-profilemenu],[data-profileview],[data-profileclose],[data-signout],'
     + '[data-previewaspect],[data-previewidx],[data-downloadpng],'
-    + '[data-editcap],[data-editarticle],[data-edithashtags],[data-copycap],[data-copyarticle],[data-regenimg],'
+    + '[data-editcap],[data-editarticle],[data-edithashtags],[data-copycap],[data-copyarticle],[data-regenimg],[data-imgsel],[data-imgup],[data-imgdown],[data-imgdel],'
     + '[data-fbreconnect],[data-fbpickclose],'
     + '[data-analytics-days],[data-automation-refresh],'
     + '[data-schedmode],[data-publishpost],[data-calnav],[data-logview],[data-logclose],[data-logretry],[data-logdelete]';
