@@ -28,6 +28,13 @@ const publishCardHTML = () => PP().publishCardHTML ? PP().publishCardHTML() : ''
 export function pageCreative() {
   const genImages = state.genImages || [];
 
+  // Single = exactly 1 image; Album = 2–10. Clamp the count to the format so
+  // the dropdown + generation stay in sync when the user switches format.
+  const fmt = state.creativeFormat || 'album';
+  if (fmt === 'single') { if (state.imageCount !== 1) state.imageCount = 1; }
+  else if ((state.imageCount || 0) < 2) { state.imageCount = Math.max(2, state.imageCount || 4); }
+  const countOpts = fmt === 'single' ? [1] : [2, 3, 4, 5, 6, 7, 8, 9, 10];
+
   const actions = `<button class="btn outline sm">${I('library', 14)} ${T('เทมเพลต', 'Templates')}</button>`;
 
   return html`${raw(head('CREATE', T('สร้าง Creative · รูป + อัลบั้ม', 'Generate creative · image + album'),
@@ -119,8 +126,8 @@ export function pageCreative() {
               + '</select>';
           })())}
           <span class="micro" style="font-weight:700;margin-left:6px">${raw(T('จำนวนรูป:', 'Images:'))}</span>
-          <select class="select" id="ppImageCount" style="height:32px;width:auto;padding:0 28px 0 10px;font-size:12px">
-            ${raw([1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => `<option value="${n}" ${(state.imageCount || 4) === n ? 'selected' : ''}>${n} ${T('รูป', 'imgs')}</option>`).join(''))}
+          <select class="select" id="ppImageCount" ${fmt === 'single' ? 'disabled' : ''} title="${fmt === 'single' ? T('รูปเดี่ยว = 1 รูป', 'Single = 1 image') : ''}" style="height:32px;width:auto;padding:0 28px 0 10px;font-size:12px${fmt === 'single' ? ';opacity:.6;cursor:not-allowed' : ''}">
+            ${raw(countOpts.map((n) => `<option value="${n}" ${state.imageCount === n ? 'selected' : ''}>${n} ${T('รูป', 'imgs')}</option>`).join(''))}
           </select>
         </div>
       </div>

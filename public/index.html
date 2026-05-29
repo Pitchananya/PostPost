@@ -764,7 +764,7 @@ function generateInputHTML() {
       <button class="btn ghost sm" style="position:absolute;bottom:12px;right:12px;color:var(--muted)">${I('sparkles',13)} ${T('ปรับให้สั้น','Shorten')}</button>
     </div>
     <div style="margin-top:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-      <div style="display:flex;align-items:center;gap:6px"><span class="micro" style="font-weight:700">${T('โทน:','Tone:')}</span>
+      ${state.page === 'creative' ? '' : `<div style="display:flex;align-items:center;gap:6px"><span class="micro" style="font-weight:700">${T('โทน:','Tone:')}</span>
         <select class="select" id="ppGenTone" style="height:34px;width:auto;padding:0 30px 0 10px;font-size:12px">
           ${VOICES.map(v=>`<option value="${v.id}" ${(state.genTone||(state.voice&&state.voice[0])||'friendly')===v.id?'selected':''}>${v.emoji} ${T(v.th,v.en)}</option>`).join('')}
         </select></div>
@@ -796,7 +796,7 @@ function generateInputHTML() {
           <optgroup label="${T('🧠 Reasoning','🧠 Reasoning')}">
             <option value="deepseek/deepseek-r1" ${state.textModel==='deepseek/deepseek-r1'?'selected':''}>DeepSeek R1</option>
           </optgroup>
-        </select></div>
+        </select></div>`}
       <div style="margin-left:auto;display:flex;gap:8px">
         <button class="btn outline">${I('upload',15)} ${T('อัปโหลดรูป','Upload')}</button>
         <button class="btn primary" data-genall="1" ${state.genLoading?'disabled':''}>${I('sparkles',16)} ${state.genLoading?T('AI กำลังสร้าง…','Generating…'):T('สร้างทั้งหมด','Generate All')}</button>
