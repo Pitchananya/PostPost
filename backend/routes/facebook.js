@@ -348,7 +348,10 @@ router.get('/connections-all', async (req, res) => {
 });
 
 router.post('/post', async (req, res) => {
-  const { pageId, pageToken } = await getCreds();
+  // Scope creds to the brand (course = brand id) so multi-brand posts hit the
+  // right Page. Falls back to default creds when no course is given.
+  const course = req.body?.course || req.query.course || null;
+  const { pageId, pageToken } = await getCreds(course);
   if (!pageId || !pageToken) return res.status(400).json({ error: 'FB credentials missing' });
 
   const { hook = '', caption = '', image_url, image_base64, hashtags = [], scheduled_at } = req.body || {};

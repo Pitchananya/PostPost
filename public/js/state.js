@@ -82,6 +82,10 @@ const DEFAULTS = {
   storyboardSearch: {},       // { [slotIdx]: 'free-text query' } — per-slot custom search override
   previewAspect: '4:5',    // 1:1 | 4:5 | 9:16  — aspect for post preview + PNG download
   previewIndex: 0,         // current slide in carousel
+  scheduleMode: 'now',     // publish card: 'now' | 'schedule' | 'ai'
+  scheduleDate: '',        // YYYY-MM-DD for scheduled post (empty = today)
+  scheduleTime: '19:00',   // HH:MM for scheduled post
+  publishing: false,       // true while a publish/schedule request is in-flight
   sidebarOpen: false,      // mobile drawer state (≤768px) — toggled by the hamburger button
   profileMenuOpen: false,  // topbar profile dropdown — opened by clicking the .profilePill
   workspaceName: '',       // account-level workspace name (the "โปรไฟล์รวม" shown in the sidebar) — cloud-synced
