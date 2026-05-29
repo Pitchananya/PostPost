@@ -31,7 +31,9 @@ export function sidebarHTML() {
       <div style="color:#9C8BB8;font-size:10.5px;letter-spacing:.05em;font-weight:600;padding-left:2px">${T('AI Content Command Center', 'AI Content Command Center')}</div>
     </div>
     <div class="workspace" data-go="profile">
-      <div class="mark">${escText((state.workspaceName || 'HappyPrice Shop').trim().slice(0, 2).toUpperCase())}</div>
+      <div class="mark" style="overflow:hidden">${state.workspaceLogo
+        ? `<img src="${escText(state.workspaceLogo)}" alt="" style="width:100%;height:100%;object-fit:cover;display:block"/>`
+        : escText((state.workspaceName || 'HappyPrice Shop').trim().slice(0, 2).toUpperCase())}</div>
       <div class="wsInfo">
         <b>${escText(state.workspaceName || 'HappyPrice Shop')}</b>
         <small>${T('Pro · 2 ทีม · Shopee sync', 'Pro · 2 seats · Shopee sync')}</small>

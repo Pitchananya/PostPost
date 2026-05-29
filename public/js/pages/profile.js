@@ -111,10 +111,21 @@ export function pageProfile() {
         <button class="btn outline sm" data-addbrand="1">${raw(I('plus', 14))} ${raw(T('เพิ่มแบรนด์', 'Add brand'))}</button>
       </div>
     </div>
-    <div class="field" style="max-width:360px;margin-bottom:16px">
-      <label class="label">${raw(T('ชื่อ Workspace (โปรไฟล์รวม)', 'Workspace name'))}</label>
-      <input class="input" id="ppWorkspaceName" value="${state.workspaceName || ''}" placeholder="${T('เช่น HappyPrice Shop', 'e.g. HappyPrice Shop')}" />
-      <div class="hint">${raw(T('ชื่อนี้แสดงบนแถบด้านซ้าย · บันทึกลง cloud อัตโนมัติ', 'Shown in the left sidebar · auto-saved to cloud'))}</div>
+    <div style="display:flex;align-items:flex-start;gap:14px;max-width:460px;margin-bottom:16px">
+      <div>
+        <label class="label">${raw(T('รูป Workspace', 'Logo'))}</label>
+        <button data-changewslogo="1" title="${T('เปลี่ยนรูป', 'Change logo')}" style="width:56px;height:56px;border-radius:14px;border:1px solid var(--line);background:${state.workspaceLogo ? '#fff' : 'linear-gradient(135deg,#FF7A1A,#EC4899)'};color:#fff;display:grid;place-items:center;font-size:18px;font-weight:900;cursor:pointer;overflow:hidden;padding:0">
+          ${state.workspaceLogo
+            ? raw(`<img src="${escText(state.workspaceLogo)}" alt="" style="width:100%;height:100%;object-fit:cover"/>`)
+            : escText((state.workspaceName || 'HappyPrice Shop').trim().slice(0, 2).toUpperCase())}
+        </button>
+        ${state.workspaceLogo ? raw(`<button class="btn ghost sm" data-clearwslogo="1" style="color:var(--red);height:24px;padding:0 6px;font-size:10.5px;margin-top:4px;width:56px">${I('x', 10, '#DC2626')} ${T('ลบ', 'Remove')}</button>`) : ''}
+      </div>
+      <div class="field" style="flex:1;margin-bottom:0">
+        <label class="label">${raw(T('ชื่อ Workspace (โปรไฟล์รวม)', 'Workspace name'))}</label>
+        <input class="input" id="ppWorkspaceName" value="${state.workspaceName || ''}" placeholder="${T('เช่น HappyPrice Shop', 'e.g. HappyPrice Shop')}" />
+        <div class="hint">${raw(T('ชื่อ + รูปนี้แสดงบนแถบด้านซ้าย · บันทึกลง cloud อัตโนมัติ', 'Name + logo show in the left sidebar · auto-saved to cloud'))}</div>
+      </div>
     </div>
     <div class="grid g4">
       ${raw(BRANDS.map((b) => `<button class="brandTile ${b.id === state.brand ? 'active' : ''}" data-brand="${b.id}">

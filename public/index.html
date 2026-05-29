@@ -5816,6 +5816,7 @@ render();
       customAvatars: state.customAvatars || [],
       activeBrandId: state.brand,
       workspaceName: state.workspaceName || '',
+      workspaceLogo: state.workspaceLogo || '',
       updated_at: new Date().toISOString(),
     };
     // Quick voice/archetype diagnostic on the body about to be pushed
@@ -5992,9 +5993,15 @@ render();
       }
       // Workspace name (account-level) — adopt cloud value unless the user is
       // mid-edit this session (guard against a slow pull reverting a keystroke).
-      if (typeof s.workspaceName === 'string' && !(window.__ppDirtyFields && window.__ppDirtyFields.__workspace)) {
-        state.workspaceName = s.workspaceName;
-        try { localStorage.setItem('postpost_workspace_name', state.workspaceName); } catch(_){}
+      if (!(window.__ppDirtyFields && window.__ppDirtyFields.__workspace)) {
+        if (typeof s.workspaceName === 'string') {
+          state.workspaceName = s.workspaceName;
+          try { localStorage.setItem('postpost_workspace_name', state.workspaceName); } catch(_){}
+        }
+        if (typeof s.workspaceLogo === 'string') {
+          state.workspaceLogo = s.workspaceLogo;
+          try { localStorage.setItem('postpost_workspace_logo', state.workspaceLogo); } catch(_){}
+        }
       }
       // ──────────────────────────────────────────────────────────────
       // CRITICAL: re-derive state.voice / state.archetype / state.brandDesc
@@ -6068,7 +6075,7 @@ render();
       }
       _cloudPushLastBody = JSON.stringify({
         brands: BRANDS, drafts: state.drafts||[], customAvatars: state.customAvatars||[],
-        activeBrandId: state.brand, workspaceName: state.workspaceName||'', updated_at: s.updated_at,
+        activeBrandId: state.brand, workspaceName: state.workspaceName||'', workspaceLogo: state.workspaceLogo||'', updated_at: s.updated_at,
       });
       // The merge above rebuilt the inline BRANDS with fresh normalizeBrand()
       // objects — re-share them into the MODULE BRANDS so module-rendered pages
@@ -6194,6 +6201,54 @@ render();
   }
   document.addEventListener('click', function(e){
     if (e.target.closest('[data-changelogo]')) changeLogo();
+  });
+
+  // Change the account-level WORKSPACE logo (the image in the sidebar card).
+  // Stored on state (cloud-synced like workspaceName), not on a brand.
+  function changeWorkspaceLogo(){
+    var inp = document.createElement('input');
+    inp.type = 'file'; inp.accept = 'image/*';
+    inp.onchange = function(){
+      var file = inp.files && inp.files[0];
+      if (!file) return;
+      var reader = new FileReader();
+      reader.onload = function(){
+        var img = new Image();
+        img.onload = function(){
+          var size = 160;
+          var cv = document.createElement('canvas');
+          cv.width = size; cv.height = size;
+          var ctx = cv.getContext('2d');
+          var s = Math.min(img.width, img.height);
+          ctx.drawImage(img, (img.width-s)/2, (img.height-s)/2, s, s, 0, 0, size, size);
+          state.workspaceLogo = cv.toDataURL('image/jpeg', 0.85);
+          try { localStorage.setItem('postpost_workspace_logo', state.workspaceLogo); } catch(_){}
+          try {
+            window.__ppDirtyFields = window.__ppDirtyFields || {};
+            window.__ppDirtyFields.__workspace = true;
+          } catch(_) {}
+          try { (window.PP && window.PP.schedCloudPush || function(){})(); } catch(_){}
+          render();
+          toast(state.lang==='th'?'เปลี่ยนรูป workspace แล้ว':'Workspace logo updated','success');
+        };
+        img.onerror = function(){ toast(state.lang==='th'?'ไฟล์รูปไม่ถูกต้อง':'Invalid image file','error'); };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    };
+    inp.click();
+  }
+  document.addEventListener('click', function(e){
+    if (e.target.closest('[data-changewslogo]')) { e.preventDefault(); changeWorkspaceLogo(); return; }
+    if (e.target.closest('[data-clearwslogo]')) {
+      e.preventDefault();
+      state.workspaceLogo = '';
+      try { localStorage.removeItem('postpost_workspace_logo'); } catch(_){}
+      try { window.__ppDirtyFields = window.__ppDirtyFields || {}; window.__ppDirtyFields.__workspace = true; } catch(_) {}
+      try { (window.PP && window.PP.schedCloudPush || function(){})(); } catch(_){}
+      render();
+      return;
+    }
   });
 
   // Shopee scraper — Re-sync button runs the real scrape
