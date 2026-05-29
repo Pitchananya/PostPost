@@ -2351,23 +2351,15 @@ render();
       if (!state.scheduleDate) { toast(L('เลือกวันที่ก่อน','Pick a date first'),'error'); return; }
       var dt = new Date(state.scheduleDate + 'T' + (state.scheduleTime || '19:00'));
       if (isNaN(dt.getTime())) { toast(L('วัน/เวลาไม่ถูกต้อง','Invalid date/time'),'error'); return; }
-      // FB requires scheduled posts ≥10 min ahead. If too soon/past, SNAP the
-      // picker fields to the next clean 5-min valid slot and ask the user to
-      // tap again — so the input and the confirm dialog always show the same
-      // time (no silent mismatch).
-      var _minTs = Date.now() + 10 * 60 * 1000;
-      if (dt.getTime() < _minTs) {
-        var _b = new Date(_minTs + 60 * 1000);
-        _b.setSeconds(0, 0);
-        _b.setMinutes(_b.getMinutes() + ((5 - (_b.getMinutes() % 5)) % 5));
-        state.scheduleDate = _b.getFullYear() + '-' + String(_b.getMonth() + 1).padStart(2, '0') + '-' + String(_b.getDate()).padStart(2, '0');
-        state.scheduleTime = String(_b.getHours()).padStart(2, '0') + ':' + String(_b.getMinutes()).padStart(2, '0');
-        toast(L('เวลาใกล้/ผ่านไปแล้ว — ปรับเป็น ' + state.scheduleTime + ' น. · กด "ตั้งเวลาโพสต์" อีกครั้งเพื่อยืนยัน',
-                'Too soon — moved to ' + state.scheduleTime + '. Tap "Schedule" again to confirm'));
-        render();
-        return;
+      // No 10-min restriction on what the user can pick. FB can only NATIVELY
+      // schedule ≥10 min ahead, so: far enough → real FB schedule; sooner than
+      // that (or past) → just post now instead of blocking.
+      if (dt.getTime() >= Date.now() + 10 * 60 * 1000) {
+        scheduled_at = dt.toISOString();
+      } else {
+        toast(L('เวลาที่เลือกใกล้เกินกว่า FB จะตั้งเวลาได้ (ขั้นต่ำ 10 นาที) — โพสต์ทันทีแทน',
+                'Too soon for FB to schedule (10-min minimum) — posting now instead'));
       }
-      scheduled_at = dt.toISOString();
     }
     var pageName = (ci.facebook && ci.facebook.handle) || ab.name;
     var igTtOn = ((state.channels && state.channels.instagram !== false) && ci.instagram && ci.instagram.ig_business_id)
