@@ -2347,13 +2347,34 @@ render();
       if (/^https?:\/\//.test(u)) return { image_url: u };
       return null;
     }
-    var slides = imgs.map(_imgPayload).filter(Boolean);
+    // Host any base64 (data:) image on Supabase Storage and return its public
+    // URL, so the post/schedule request carries small URLs. Inline base64
+    // carousels exceed Vercel's ~4.5MB body limit and fail with 413. Each image
+    // is uploaded in its OWN request (a single image stays under the limit),
+    // then we send only URLs. http(s) URLs (async models) pass through.
+    async function _hostSlides(list){
+      var needsHost = list.some(function(u){ return /^data:/.test(u); });
+      if (needsHost) toast(L('กำลังอัปโหลดรูป…','Uploading images…'));
+      var out = [];
+      for (var i=0;i<list.length;i++){
+        var u = list[i];
+        if (/^https?:\/\//.test(u)) { out.push(u); continue; }
+        if (/^data:/.test(u)) {
+          try {
+            var up = await api('/api/ai/upload-media', { method:'POST', body:{ data_url: u, kind:'image' } });
+            if (up && up.url) { out.push(up.url); continue; }
+          } catch(_){}
+        }
+        out.push(u); // hosting unavailable — keep as-is (small images may still post)
+      }
+      return out;
+    }
     // Hashtags fold into the caption we store/send — the cron joins only
     // hook + caption when it posts, so hashtags must live inside caption.
     var captionFull = [caption, (hashtags && hashtags.length ? hashtags.join(' ') : '')].filter(Boolean).join('\n\n');
     var fw = (hookObj && hookObj.framework) || 'F1';
     var pageName = (ci.facebook && ci.facebook.handle) || ab.name;
-    var nImg = slides.length;
+    var nImg = imgs.length;
     var imgNote = nImg >= 2 ? L(' · '+nImg+' รูป (carousel)', ' · '+nImg+' images (carousel)')
                 : (nImg === 1 ? L(' · 1 รูป',' · 1 image') : L(' · ข้อความอย่างเดียว',' · text only'));
 
@@ -2368,19 +2389,21 @@ render();
       if (dt.getTime() <= Date.now()) { toast(L('เวลาที่เลือกผ่านไปแล้ว — เลือกเวลาในอนาคต','That time is in the past — pick a future time'),'error'); return; }
       if (!confirm(L('ตั้งเวลาโพสต์ '+dt.toLocaleString()+imgNote+' ไปที่เพจ "'+pageName+'"?',
                      'Schedule '+dt.toLocaleString()+imgNote+' to page "'+pageName+'"?'))) return;
-      var sbody = {
-        course: ab.id,
-        hook: hook || captionFull.slice(0,120) || L('โพสต์','Post'),
-        caption: captionFull, framework: fw,
-        platforms: ['facebook'], status: 'scheduled', scheduled_at: dt.toISOString(),
-      };
-      if (slides.length >= 2) { sbody.series_images_b64 = imgs; }        // raw data:/http strings — cron maps each
-      else if (slides.length === 1) {
-        if (slides[0].image_url) sbody.media_url = slides[0].image_url;
-        else if (slides[0].image_base64) sbody.image_base64 = slides[0].image_base64;
-      }
       state.publishing = true; render();
       try {
+        var hosted = await _hostSlides(imgs);
+        var hslides = hosted.map(_imgPayload).filter(Boolean);
+        var sbody = {
+          course: ab.id,
+          hook: hook || captionFull.slice(0,120) || L('โพสต์','Post'),
+          caption: captionFull, framework: fw,
+          platforms: ['facebook'], status: 'scheduled', scheduled_at: dt.toISOString(),
+        };
+        if (hslides.length >= 2) { sbody.series_images_b64 = hosted; }   // hosted URLs — small payload + cron maps each
+        else if (hslides.length === 1) {
+          if (hslides[0].image_url) sbody.media_url = hslides[0].image_url;
+          else if (hslides[0].image_base64) sbody.image_base64 = hslides[0].image_base64;
+        }
         var rs = await api('/api/content', { method:'POST', body: sbody });
         if (rs && rs.content) {
           toast(L('ตั้งเวลาโพสต์แล้ว ✓ — ระบบจะโพสต์ให้ตอน '+dt.toLocaleString(), 'Scheduled ✓ — will post at '+dt.toLocaleString()),'success');
@@ -2402,6 +2425,8 @@ render();
     if (!confirm(confirmMsg)) return;
     state.publishing = true; render();
     try {
+      var hosted2 = await _hostSlides(imgs);
+      var slides = hosted2.map(_imgPayload).filter(Boolean);
       var r;
       if (slides.length >= 2) {
         r = await api('/api/facebook/post-carousel', { method:'POST', body:{
