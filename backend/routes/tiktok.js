@@ -22,6 +22,19 @@ async function getCreds(course = null) {
   };
 }
 
+// Build the OAuth redirect URI from the domain the user is ACTUALLY browsing,
+// so a stale PUBLIC_URL / TIKTOK_REDIRECT_URI (e.g. an old *.vercel.app that no
+// longer exists → 404) can't send the callback to a dead deployment. start and
+// callback both derive it from the same request host, so they always match.
+// NOTE: this exact URL must be registered in the TikTok developer portal.
+function ttRedirectUri(req) {
+  const proto = String(req.headers['x-forwarded-proto'] || req.protocol || 'https').split(',')[0].trim();
+  const host = req.headers['x-forwarded-host'] || req.headers.host;
+  if (host) return `${proto}://${host}/api/tiktok/oauth/callback`;
+  if (process.env.TIKTOK_REDIRECT_URI) return process.env.TIKTOK_REDIRECT_URI;
+  return `${(process.env.PUBLIC_URL || 'http://localhost:3000').replace(/\/$/, '')}/api/tiktok/oauth/callback`;
+}
+
 // ส่ง access_token + refresh + ฯลฯ → คำนวณ expires_at ภาคไทย → save DB
 async function saveTokenResponse(data, course = null) {
   const now = Math.floor(Date.now() / 1000);
@@ -42,7 +55,8 @@ async function saveTokenResponse(data, course = null) {
 // — redirect user ไป TikTok เพื่อขอ permission
 // state_suffix=POPUP + brand=<id> ทำให้ callback postMessage กลับไปยัง opener แทนแสดง success page
 router.get('/oauth/start', async (req, res) => {
-  const { clientKey, redirectUri } = await getCreds();
+  const { clientKey } = await getCreds();
+  const redirectUri = ttRedirectUri(req);
   if (!clientKey) return res.status(500).send('TIKTOK_CLIENT_KEY ยังไม่ตั้งค่าใน env');
   const course = (req.query.course || '').toUpperCase();
   const popupMode = req.query.state_suffix === 'POPUP';
@@ -85,7 +99,8 @@ router.get('/oauth/callback', async (req, res) => {
     ? brandHit                            // brand id wins when present
     : (courseHit ? courseHit.toUpperCase() : null);
 
-  const { clientKey, clientSecret, redirectUri } = await getCreds();
+  const { clientKey, clientSecret } = await getCreds();
+  const redirectUri = ttRedirectUri(req);
   if (!clientKey || !clientSecret) return res.status(500).send('TikTok credentials missing');
 
   try {
