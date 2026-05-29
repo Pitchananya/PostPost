@@ -270,9 +270,18 @@ export function pageProfile() {
       </summary>
 
       <div style="margin-top:14px">
-        <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
-          <button class="btn ghost sm" data-aiins-template="content-creative">${raw(I('sparkles', 12))} ${T('Template: Content Creative', 'Template: Content Creative')}</button>
-          <button class="btn ghost sm" data-aiins-template="sales-focused">${raw(I('sparkles', 12))} ${T('Template: Sales-Focused', 'Template: Sales-Focused')}</button>
+        <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center">
+          ${raw(I('sparkles', 13, '#2563EB'))}
+          <select class="select" id="ppAiInsTemplate" style="height:32px;font-size:12.5px;width:auto;max-width:260px;padding:0 10px">
+            <option value="">${T('โหลด Template สำเร็จรูป…', 'Load a template…')}</option>
+            <option value="content-creative">${T('สาย Content Creative', 'Content Creative')}</option>
+            <option value="sales-focused">${T('สายขาย (Direct Response)', 'Sales / Direct Response')}</option>
+            <option value="storytelling">${T('เล่าเรื่องแบรนด์ (Storytelling)', 'Brand Storytelling')}</option>
+            <option value="educational">${T('ให้ความรู้ / SEO', 'Educational / SEO')}</option>
+            <option value="viral-short">${T('ไวรัลสายสั้น (TikTok/Reels)', 'Short-form Viral')}</option>
+            <option value="luxury-premium">${T('แบรนด์พรีเมียม (Luxury)', 'Luxury / Premium')}</option>
+            <option value="community">${T('สร้างคอมมูนิตี้ (Engagement)', 'Community & Engagement')}</option>
+          </select>
           <button class="btn ghost sm" data-aiins-renumber="1">${raw(I('refresh', 12))} ${T('จัดเลขใหม่', 'Renumber')}</button>
           <button class="btn ghost sm" style="color:var(--red)" data-aiins-clear="1">${raw(I('x', 12, '#DC2626'))} ${T('ล้าง', 'Clear')}</button>
         </div>
