@@ -2255,10 +2255,19 @@ render();
       state.shopStats = null;
       state.shopUrl = '';
     }
-    // Mirror PRODUCTS into the module's array so importers (profile.js,
-    // topics.js consumers) read the same brand-scoped list — without this,
-    // the module copy keeps the seed skincare demos.
-    try { window.PP && window.PP.setProducts && window.PP.setProducts(PRODUCTS); } catch(_){}
+    // Expose the brand-scoped arrays so main.js (which loads AFTER this inline
+    // boot) syncs the module copies to THESE — not the stale skincare seed.
+    // setTopics/setProducts are usually undefined here (main.js not loaded yet),
+    // so update window.PP.TOPICS/PRODUCTS directly; main.js reads them on load.
+    // (Topic sync was missing entirely → after reload the Topic Bank showed
+    // another brand's / the seed's topics.)
+    try {
+      window.PP = window.PP || {};
+      window.PP.TOPICS = TOPICS;
+      window.PP.PRODUCTS = PRODUCTS;
+      if (window.PP.setTopics) window.PP.setTopics(TOPICS);
+      if (window.PP.setProducts) window.PP.setProducts(PRODUCTS);
+    } catch(_){}
   })();
 
   // Per-brand channel connection — Facebook / Instagram / TikTok
