@@ -2348,7 +2348,14 @@ render();
       if (!state.scheduleDate) { toast(L('เลือกวันที่ก่อน','Pick a date first'),'error'); return; }
       var dt = new Date(state.scheduleDate + 'T' + (state.scheduleTime || '19:00'));
       if (isNaN(dt.getTime())) { toast(L('วัน/เวลาไม่ถูกต้อง','Invalid date/time'),'error'); return; }
-      if (dt.getTime() < Date.now() + 10 * 60 * 1000) { toast(L('Facebook ต้องตั้งเวลาล่วงหน้าอย่างน้อย 10 นาที','FB needs a time ≥10 min ahead'),'error'); return; }
+      // FB requires scheduled posts ≥10 min ahead. If the chosen time is too
+      // soon/past, bump it to now+11 min and tell the user — don't hard-block.
+      var _minTs = Date.now() + 11 * 60 * 1000;
+      if (dt.getTime() < _minTs) {
+        dt = new Date(_minTs);
+        toast(L('เวลาที่เลือกใกล้/ผ่านไปแล้ว — ปรับเป็น ' + dt.toLocaleString() + ' (FB ต้องล่วงหน้า ≥10 นาที)',
+                'Too soon — bumped to ' + dt.toLocaleString() + ' (FB needs ≥10 min ahead)'));
+      }
       scheduled_at = dt.toISOString();
     }
     var pageName = (ci.facebook && ci.facebook.handle) || ab.name;
@@ -2384,6 +2391,11 @@ render();
     if (sm) {
       e.preventDefault();
       state.scheduleMode = sm.getAttribute('data-schedmode');
+      // Prefill today's date so the field isn't empty when scheduling.
+      if ((state.scheduleMode === 'schedule' || state.scheduleMode === 'ai') && !state.scheduleDate) {
+        var _n = new Date();
+        state.scheduleDate = _n.getFullYear() + '-' + String(_n.getMonth() + 1).padStart(2, '0') + '-' + String(_n.getDate()).padStart(2, '0');
+      }
       // AI pick → prefill the recommended 19:00 slot.
       if (state.scheduleMode === 'ai') state.scheduleTime = '19:00';
       render();
