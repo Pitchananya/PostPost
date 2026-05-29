@@ -816,8 +816,13 @@ function postPreviewHTML() {
   var tabs = ['1:1','4:5','9:16'].map(function(a){
     return '<button class="tab '+(aspect===a?'active':'')+'" data-previewaspect="'+a+'" style="padding:5px 10px">'+a+'</button>';
   }).join('');
+  // Caption page is text-only — hide the image area + image controls so users
+  // don't think this page generates images (that's the Creative page).
+  var isCaption = (state.page === 'caption');
   var imageBlock;
-  if (n > 0) {
+  if (isCaption) {
+    imageBlock = '';
+  } else if (n > 0) {
     var dots = '';
     if (n > 1) {
       dots = '<div style="position:absolute;left:0;right:0;bottom:8px;display:flex;justify-content:center;gap:5px;z-index:2">'
@@ -841,10 +846,14 @@ function postPreviewHTML() {
   } else {
     imageBlock = '<div style="aspect-ratio:'+aspectCss+';background:linear-gradient(135deg,#FFF4E6,#FED7AA 50%,#FECDD3);display:grid;place-items:center;text-align:center;padding:20px;color:#9A3412"><div>'+I('image',32,'#C2693B')+'<div style="font-size:11px;margin-top:8px;font-weight:600">'+T('รูปจะแสดงที่นี่เมื่อสร้าง Creative','Your image appears here')+'</div></div></div>';
   }
+  var tabsBlock = isCaption ? '' : '<div class="tabs" style="padding:3px">'+tabs+'</div>';
+  var dlButtons = isCaption ? '' :
+    ('<button class="btn outline" style="flex:1" data-downloadpng="current" '+(n?'':'disabled')+'>'+I('download',14)+' PNG '+aspect+'</button>'
+     + (n>1 ? '<button class="btn outline" style="flex:1" data-downloadpng="all">'+I('download',14)+' '+T('ทั้งหมด','All')+' ('+n+')</button>' : ''));
   return `<div class="card">
     <div class="cardHeader">
       <h3 class="cardTitle">${T('ตัวอย่างโพสต์','Post preview')}</h3>
-      <div class="tabs" style="padding:3px">${tabs}</div>
+      ${tabsBlock}
     </div>
     <div style="border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#fff">
       <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--line)">
@@ -861,8 +870,7 @@ function postPreviewHTML() {
       </div>
     </div>
     <div style="display:flex;gap:8px;margin-top:12px">
-      <button class="btn outline" style="flex:1" data-downloadpng="current" ${n?'':'disabled'}>${I('download',14)} PNG ${aspect}</button>
-      ${n>1?`<button class="btn outline" style="flex:1" data-downloadpng="all">${I('download',14)} ${T('ทั้งหมด','All')} (${n})</button>`:''}
+      ${dlButtons}
       <button class="btn outline" style="flex:1" data-genall="1">${I('refresh',14)} ${T('สร้างใหม่','Regenerate')}</button>
       <button class="btn primary" style="flex:1.2" data-savedraft="1">${I('library',14)} ${T('บันทึกดราฟ','Save draft')}</button>
     </div>
