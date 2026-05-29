@@ -23,6 +23,7 @@ import { T, t } from '../i18n.js';
 import { I } from '../icons.js';
 import { head } from '../components/head.js';
 import { api } from '../api.js';
+import { escText, escape as escAttr } from '../escape.js';
 
 const STATUS_MAP = {
   published: { th: 'โพสต์สำเร็จ', en: 'Posted',    pill: 'green',  dot: '#16A34A' },
@@ -52,6 +53,128 @@ async function loadAutomationData() {
   try { if (state.page === 'automation' && typeof window.render === 'function') window.render(); } catch (_) {}
 }
 
+// Silent background refresh — refetch WITHOUT flipping to a loading state, so
+// the table swaps in place when a scheduled post fires (no flash). Powers the
+// real-time status updates.
+function refreshAutomationData() {
+  Promise.all([api('/api/analytics/summary'), api('/api/content')])
+    .then(([summary, all]) => {
+      window.PP._automationCache = { loading: false, summary, contents: (all && all.contents) || [] };
+      try { if (state.page === 'automation' && typeof window.render === 'function') window.render(); } catch (_) {}
+    })
+    .catch(() => {});
+}
+
+// Real-time: while the Automation Log is open, poll every 15s so statuses
+// (scheduled → published / failed) update on their own — whether the change
+// came from the in-app due-poller OR the external cron. Bound once.
+function startAutoLive() {
+  if (window.PP && window.PP._autoLiveTimer) return;
+  window.PP = window.PP || {};
+  window.PP._autoLiveTimer = setInterval(() => {
+    if (state.page !== 'automation') return;   // only refresh while viewing the log
+    if (window.PP._automationCache && window.PP._automationCache.loading) return;
+    refreshAutomationData();
+  }, 15000);
+}
+
+// Click a row → detail modal. Reads the cached row (already has last_error +
+// post_results), so no extra fetch. Shows WHY a post failed and offers
+// Retry / Delete. Bound once on document.
+function bindLogView() {
+  if (window.PP && window.PP._logViewBound) return;
+  window.PP = window.PP || {};
+  window.PP._logViewBound = true;
+  document.addEventListener('click', (e) => {
+    const el = e.target.closest('[data-logview]');
+    if (!el) return;
+    e.preventDefault();
+    const id = Number(el.getAttribute('data-logview'));
+    const row = ((window.PP._automationCache || {}).contents || []).find((c) => c.id === id);
+    if (row) openLogDetail(row);
+  });
+}
+
+function openLogDetail(row) {
+  const s = STATUS_MAP[row.status] || STATUS_MAP.published;
+  const fmt = (iso) => iso ? new Date(iso).toLocaleString(state.lang === 'th' ? 'th-TH' : 'en-US') : '—';
+  const pr = row.post_results || {};
+  const plats = (row.platforms && row.platforms.length) ? row.platforms : ['facebook'];
+
+  const metaRow = (th, en, value) =>
+    `<div style="display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--line);font-size:13px"><span style="color:var(--muted)">${T(th, en)}</span><span style="color:var(--ink);font-weight:600;text-align:right;word-break:break-word">${value}</span></div>`;
+
+  const platLines = plats.map((p) => {
+    const r = pr[p] || {};
+    const ok = r.success || r.ok || !!r.post_id || !!r.id;
+    const right = ok
+      ? (r.permalink ? `<a href="${escAttr(r.permalink)}" target="_blank" rel="noopener" style="color:var(--blue);font-weight:600">${T('ดูโพสต์ ↗', 'View post ↗')}</a>` : `<span style="color:var(--green);font-weight:600">${T('สำเร็จ', 'OK')}</span>`)
+      : `<span style="color:${row.status === 'failed' ? 'var(--red)' : 'var(--muted)'};font-weight:600">${escText(r.error || (row.status === 'scheduled' ? T('รอโพสต์', 'pending') : T('—', '—')))}</span>`;
+    return `<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--line);font-size:13px">${I(p, 16, p === 'facebook' ? '#1877F2' : p === 'instagram' ? '#E1306C' : '#0F172A')}<span style="text-transform:capitalize;flex:1">${p}</span>${right}</div>`;
+  }).join('');
+
+  const errBox = (row.status === 'failed' && row.last_error)
+    ? `<div style="background:#FEE2E2;border:1px solid #FCA5A5;border-radius:12px;padding:12px;margin-bottom:14px">
+         <div style="font-size:11px;font-weight:800;color:#991B1B;letter-spacing:.04em;margin-bottom:4px">${T('สาเหตุที่ล้มเหลว', 'WHY IT FAILED')}</div>
+         <div style="font-size:13px;color:#991B1B;word-break:break-word">${escText(row.last_error)}</div>
+       </div>` : '';
+
+  const actions = row.status === 'failed'
+    ? `<button class="btn outline sm" data-logretry="${row.id}">${I('refresh', 13)} ${T('ลองใหม่', 'Retry')}</button><button class="btn ghost sm" data-logdelete="${row.id}" style="color:var(--red)">${I('x', 13, '#DC2626')} ${T('ลบ', 'Delete')}</button>`
+    : row.status === 'scheduled'
+    ? `<button class="btn ghost sm" data-logdelete="${row.id}" style="color:var(--red)">${I('x', 13, '#DC2626')} ${T('ยกเลิกการตั้งเวลา', 'Cancel schedule')}</button>`
+    : '';
+
+  const ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(15,8,30,.55);z-index:200;display:flex;align-items:center;justify-content:center;padding:24px;backdrop-filter:blur(4px)';
+  ov.innerHTML = `<div style="background:var(--surface);border-radius:20px;max-width:560px;width:100%;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 30px 80px rgba(15,8,30,.45)">
+    <div style="padding:16px 20px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px">
+      <span class="pill ${s.pill}"><span class="dot" style="background:${s.dot};width:6px;height:6px"></span> ${T(s.th, s.en)}</span>
+      <div style="flex:1;font-size:13px;color:var(--muted)">${fmt(row.when || row.published_at || row.scheduled_at)}</div>
+      <button data-logclose="1" style="width:30px;height:30px;border-radius:99px;border:0;background:var(--cream2);cursor:pointer;display:grid;place-items:center">${I('x', 15, 'var(--muted)')}</button>
+    </div>
+    <div style="padding:18px 20px;overflow-y:auto">
+      ${errBox}
+      <div style="font-size:11px;font-weight:800;color:var(--purple);letter-spacing:.04em;margin-bottom:6px">HOOK</div>
+      <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:14px;word-break:break-word">${escText(row.hook || '—')}</div>
+      ${row.caption ? `<div style="font-size:11px;font-weight:800;color:var(--purple);letter-spacing:.04em;margin-bottom:6px">CAPTION</div><div style="font-size:13px;color:var(--ink2);white-space:pre-wrap;word-break:break-word;background:var(--cream2);border-radius:10px;padding:10px;margin-bottom:14px;max-height:200px;overflow:auto">${escText(row.caption)}</div>` : ''}
+      <div style="font-size:11px;font-weight:800;color:var(--purple);letter-spacing:.04em;margin:4px 0 6px">${T('ช่องทาง', 'CHANNELS')}</div>
+      ${platLines}
+      <div style="margin-top:12px">
+        ${metaRow('คอร์ส / แบรนด์', 'Course', escText(row.course || '—'))}
+        ${metaRow('ตั้งเวลาไว้', 'Scheduled for', fmt(row.scheduled_at))}
+        ${row.published_at ? metaRow('โพสต์เมื่อ', 'Published at', fmt(row.published_at)) : ''}
+        ${row.last_attempt_at ? metaRow('พยายามล่าสุด', 'Last attempt', fmt(row.last_attempt_at)) : ''}
+        ${row.retry_count ? metaRow('จำนวนครั้งที่ลอง', 'Attempts', row.retry_count) : ''}
+      </div>
+    </div>
+    ${actions ? `<div style="padding:12px 20px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end">${actions}</div>` : ''}
+  </div>`;
+  ov.addEventListener('click', async (e) => {
+    if (e.target === ov || e.target.closest('[data-logclose]')) { ov.remove(); return; }
+    const rt = e.target.closest('[data-logretry]');
+    if (rt) {
+      rt.disabled = true;
+      try { await api('/api/content/' + row.id + '/retry', { method: 'POST' }); } catch (_) {}
+      window.PP._automationCache = null; window.PP._calCache = null;
+      ov.remove();
+      if (typeof window.render === 'function') window.render();
+      return;
+    }
+    const dl = e.target.closest('[data-logdelete]');
+    if (dl) {
+      if (!confirm(T('ลบรายการนี้?', 'Delete this entry?'))) return;
+      try { await api('/api/content/' + row.id, { method: 'DELETE' }); } catch (_) {}
+      window.PP._automationCache = null; window.PP._calCache = null;
+      ov.remove();
+      if (typeof window.render === 'function') window.render();
+      return;
+    }
+  });
+  document.body.appendChild(ov);
+  document.addEventListener('keydown', function esc(e) { if (e.key === 'Escape') { ov.remove(); document.removeEventListener('keydown', esc); } });
+}
+
 function formatTime(iso) {
   if (!iso) return '—';
   const d = new Date(iso);
@@ -76,9 +199,12 @@ function platformIndicators(post) {
 
 export function pageAutomation() {
   loadAutomationData();
+  bindLogView();
+  startAutoLive();
   const cache = window.PP._automationCache || { loading: true };
 
   const actions = `
+    <span style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--green);font-weight:700;margin-right:4px"><span class="dot" style="width:7px;height:7px;background:var(--green);border-radius:99px"></span>${T('อัปเดตสดทุก 15 วิ', 'Live · 15s')}</span>
     <button class="btn outline sm" data-automation-refresh="1">${I('refresh', 14)} ${T('รีเฟรช', 'Refresh')}</button>
   `;
 
@@ -167,18 +293,18 @@ export function pageAutomation() {
           const status = r.status || 'published';
           const s = STATUS_MAP[status] || STATUS_MAP.published;
           const indicators = platformIndicators(r);
-          return `<tr>
+          return `<tr data-logview="${r.id}" style="cursor:pointer">
             <td>
               <div style="font-size:14px;font-weight:700;color:var(--purple)">${formatTime(r.when)}</div>
               <div style="font-size:11px;color:var(--muted)">${formatDate(r.when)}</div>
             </td>
             <td>
-              <div style="font-size:13px;font-weight:600;color:var(--purple);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:380px">${(r.hook || '').slice(0, 100) || '—'}</div>
+              <div style="font-size:13px;font-weight:600;color:var(--purple);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:380px">${escText((r.hook || '').slice(0, 100)) || '—'}</div>
             </td>
             <td><div style="display:flex;gap:6px">${indicators.map(([ic, st]) => `<div style="position:relative;display:inline-flex">${I(ic, 18, ic === 'facebook' ? '#1877F2' : ic === 'instagram' ? '#E1306C' : '#0F172A')}<span style="position:absolute;bottom:-2px;right:-2px;width:7px;height:7px;border-radius:99px;background:${st === 'ok' ? 'var(--green)' : st === 'fail' ? 'var(--red)' : 'var(--yellow)'};border:1.5px solid #fff"></span></div>`).join('')}</div></td>
             <td><span class="pill ${s.pill}"><span class="dot" style="background:${s.dot};width:6px;height:6px"></span> ${T(s.th, s.en)}</span></td>
-            <td style="font-size:12px;color:var(--ink)">${r.course || '—'}</td>
-            <td><button class="btn ghost sm iconOnly">${I('chev_right', 14)}</button></td>
+            <td style="font-size:12px;color:var(--ink)">${escText(r.course || '—')}</td>
+            <td><button class="btn ghost sm iconOnly" data-logview="${r.id}">${I('chev_right', 14)}</button></td>
           </tr>`;
         }).join('')}
       </tbody>
