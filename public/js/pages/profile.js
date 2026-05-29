@@ -243,7 +243,7 @@ export function pageProfile() {
           <label class="label">${raw(T('คำอธิบายแบรนด์', 'Brand description'))}</label>
           <button class="btn ghost sm" data-aiwrite="1" style="color:var(--blue);height:26px;padding:0 8px">${raw(I('sparkles', 12, '#2563EB'))} ${raw(T('ให้ AI ช่วยเขียน', 'AI write for me'))}</button>
         </div>
-        <textarea class="textarea" rows="4" id="ppBrandDesc">${state.brandDesc || activeBrand.desc || T('ร้าน HappyPrice ขายสกินแคร์ออร์แกนิคจากดอกกุหลาบเขาใหญ่ เน้นผิวบอบบางแพ้ง่าย กลุ่มลูกค้าหญิงวัย 25-40 ปี', 'HappyPrice sells organic skincare from Khao Yai roses, focused on sensitive skin, for women aged 25-40.')}</textarea>
+        <textarea class="textarea" rows="4" id="ppBrandDesc" placeholder="${T('เช่น ร้าน HappyPrice ขายสกินแคร์ออร์แกนิคจากดอกกุหลาบเขาใหญ่ เน้นผิวบอบบางแพ้ง่าย กลุ่มลูกค้าหญิงวัย 25-40 ปี', 'e.g. HappyPrice sells organic skincare from Khao Yai roses — sensitive skin, women aged 25-40.')}">${state.brandDesc || activeBrand.desc || ''}</textarea>
         <div class="hint" style="display:flex;justify-content:space-between">
           <span>${T('AI ใช้ข้อความนี้ทุกครั้งที่สร้างคอนเทนต์', 'AI reads this on every generation')}</span>
         </div>
