@@ -344,6 +344,7 @@ export function pageProfile() {
           ${raw(I('sparkles', 13, '#2563EB'))}
           <select class="select" id="ppAiInsTemplate" style="height:32px;font-size:12.5px;width:auto;max-width:260px;padding:0 10px">
             <option value="">${T('ชุดสำเร็จรูป (เลือกให้ทั้งชุด)…', 'Quick preset…')}</option>
+            <option value="manual">${T('✍️ ทำเอง — เลือกปุ่มเอง', '✍️ Do it myself — pick manually')}</option>
             <option value="content-creative">${T('สาย Content Creative', 'Content Creative')}</option>
             <option value="sales-focused">${T('สายขาย (Direct Response)', 'Sales / Direct Response')}</option>
             <option value="storytelling">${T('เล่าเรื่องแบรนด์ (Storytelling)', 'Brand Storytelling')}</option>

@@ -1968,6 +1968,13 @@ render();
     // AI Instruction quick preset — pre-select a bundle of builder options.
     if (t && t.id==='ppAiInsTemplate') {
       var _kind = t.value;
+      // "ทำเอง" — no preset; keep current picks and just nudge the user to the
+      // per-section buttons below. Reset the dropdown back to the placeholder.
+      if (_kind === 'manual') {
+        t.value = '';
+        toast(state.lang==='th' ? 'เลือกปุ่มแต่ละหัวข้อด้านล่างได้เลย — ไม่ต้องใช้ชุดสำเร็จรูป' : 'Pick the buttons per section below — no preset needed');
+        return;
+      }
       if (!_kind) return;
       var _aibTpl = BRANDS.filter(function(b){ return b.id===state.brand; })[0];
       if (!_aibTpl) { t.value=''; return; }
