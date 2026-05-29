@@ -54,15 +54,15 @@ function businessOptions(sel) {
 // Each section's chosen options compile into brand.aiInstruction (what the
 // backend actually reads). ctitle is the language-neutral compile heading.
 const AI_INS_SECTIONS = [
-  { key: 'identity',   th: 'บทบาท (Identity)',       en: 'Identity',         ctitle: 'IDENTITY',        single: true, opts: ['ผู้เชี่ยวชาญ Content Creative', 'Copywriter สายขาย', 'ครีเอเตอร์สายไวรัล', 'ที่ปรึกษาแบรนด์'] },
-  { key: 'persona',    th: 'โทนการสื่อสาร (Tone)',    en: 'Tone',             ctitle: 'PERSONA & TONE',  opts: ['เป็นกันเอง', 'ทางการ', 'สนุกสนาน', 'หรูหรา', 'จริงจัง', 'อบอุ่น'] },
+  { key: 'identity',   th: 'บทบาท (Identity)',       en: 'Identity',         ctitle: 'IDENTITY',        single: true, opts: ['ผู้เชี่ยวชาญ Content Creative', 'Copywriter สายขาย', 'ครีเอเตอร์สายไวรัล', 'ที่ปรึกษาแบรนด์', 'ที่ปรึกษาการเงิน', 'นักพยากรณ์สายมู'] },
+  { key: 'persona',    th: 'โทนการสื่อสาร (Tone)',    en: 'Tone',             ctitle: 'PERSONA & TONE',  opts: ['เป็นกันเอง', 'ทางการ', 'สนุกสนาน', 'หรูหรา', 'จริงจัง', 'อบอุ่น', 'น่าเชื่อถือ', 'ขลัง/ศักดิ์สิทธิ์'] },
   { key: 'goals',      th: 'เป้าหมาย (Goals)',        en: 'Goals',            ctitle: 'GOALS',           opts: ['เพิ่ม engagement', 'เพิ่มยอดขาย', 'สร้าง awareness', 'สร้าง community', 'คิดหัวข้อ 30/เดือน'] },
   { key: 'platform',   th: 'แพลตฟอร์ม',               en: 'Platform',         ctitle: 'PLATFORM',        opts: ['Facebook', 'Instagram', 'TikTok', 'YouTube', 'LINE'] },
-  { key: 'rules',      th: 'กฎ (Rules)',              en: 'Rules',            ctitle: 'RULES',           opts: ['ห้ามคำเสี่ยงโดนแบน', 'ห้ามหัวข้อซ้ำ', 'ห้ามการันตี 100%', 'ลงท้ายด้วย CTA', 'ห้ามเคลมเกินจริง'] },
+  { key: 'rules',      th: 'กฎ (Rules)',              en: 'Rules',            ctitle: 'RULES',           opts: ['ห้ามคำเสี่ยงโดนแบน', 'ห้ามหัวข้อซ้ำ', 'ห้ามการันตี 100%', 'ลงท้ายด้วย CTA', 'ห้ามเคลมเกินจริง', 'ใส่ disclaimer ความเสี่ยง'] },
   { key: 'frameworks', th: 'Hook Frameworks',         en: 'Hook frameworks',  ctitle: 'HOOK FRAMEWORKS', opts: ['ขยี้ปัญหา + ผลลัพธ์ + เวลา', 'ความโลภ + ความกลัว', 'ตั้งคำถามชวนสงสัย', 'ตัวเลขช็อก', 'before / after', 'storytelling'] },
   { key: 'style',      th: 'สไตล์การตอบ (Style)',     en: 'Style',            ctitle: 'STYLE',           opts: ['bullet points', 'numbering', 'ตาราง', 'ย่อหน้าสั้น', 'อ้างอิงแหล่งข้อมูล'] },
   { key: 'length',     th: 'ความยาว',                 en: 'Length',           ctitle: 'LENGTH',          single: true, opts: ['สั้นกระชับ', 'ปานกลาง', 'ละเอียด'] },
-  { key: 'visual',     th: 'แนวภาพ (Visual)',         en: 'Visual style',     ctitle: 'VISUAL STYLE',    opts: ['premium', 'clean', 'minimal', 'luxury', 'สดใส', 'อบอุ่น', 'Korean premium wellness', 'glassmorphism cards', 'sage-green + cream + gold', 'อินโฟกราฟิกหลายกล่อง', 'ขนสัตว์สมจริง', 'แสง glow + sparkle', '4K ultra detailed'] },
+  { key: 'visual',     th: 'แนวภาพ (Visual)',         en: 'Visual style',     ctitle: 'VISUAL STYLE',    opts: ['premium', 'clean', 'minimal', 'luxury', 'สดใส', 'อบอุ่น', 'Korean premium wellness', 'glassmorphism cards', 'sage-green + cream + gold', 'อินโฟกราฟิกหลายกล่อง', 'ขนสัตว์สมจริง', 'แสง glow + sparkle', '4K ultra detailed', 'มงคล ทอง-ม่วง ประกาย'] },
   { key: 'safety',     th: 'ความปลอดภัย (Safety)',    en: 'Safety',           ctitle: 'SAFETY',          opts: ['ไม่เปิดเผยข้อมูลภายใน', 'ไม่ให้คำแนะนำผิดกฎหมาย'] },
 ];
 
@@ -95,6 +95,12 @@ const AI_INS_PRESETS = {
   // Premium Korean pet-wellness infographic look (per user's poster brief) —
   // pre-selects the rich VISUAL STYLE so AI image prompts follow the aesthetic.
   'infographic-premium': { identity: ['ที่ปรึกษาแบรนด์'], persona: ['หรูหรา'], goals: ['สร้าง awareness'], style: ['numbering'], length: ['ละเอียด'], visual: ['Korean premium wellness', 'glassmorphism cards', 'sage-green + cream + gold', 'อินโฟกราฟิกหลายกล่อง', 'ขนสัตว์สมจริง', 'แสง glow + sparkle', '4K ultra detailed', 'premium', 'clean'] },
+  // สายมู — ดูดวง / เครื่องราง / วัตถุมงคล / ฮวงจุ้ย. Mystical but compliant:
+  // no 100% guarantees, no ban-risk wording (FB/TikTok police superstition claims).
+  'mystic':           { identity: ['นักพยากรณ์สายมู'], persona: ['ขลัง/ศักดิ์สิทธิ์', 'อบอุ่น'], goals: ['สร้าง community', 'เพิ่ม engagement'], rules: ['ห้ามการันตี 100%', 'ห้ามคำเสี่ยงโดนแบน'], frameworks: ['storytelling', 'ตั้งคำถามชวนสงสัย', 'ความโลภ + ความกลัว'], style: ['ย่อหน้าสั้น'], length: ['ปานกลาง'], visual: ['มงคล ทอง-ม่วง ประกาย', 'อบอุ่น'] },
+  // การเงิน — ลงทุน / ประกัน / สินเชื่อ / วางแผนการเงิน. Trust-first: numbers,
+  // sources, and a risk disclaimer; never guarantee returns.
+  'finance':          { identity: ['ที่ปรึกษาการเงิน'], persona: ['น่าเชื่อถือ', 'ทางการ'], goals: ['สร้าง awareness', 'เพิ่มยอดขาย'], rules: ['ห้ามการันตี 100%', 'ห้ามเคลมเกินจริง', 'ใส่ disclaimer ความเสี่ยง', 'ลงท้ายด้วย CTA'], frameworks: ['ตัวเลขช็อก', 'ขยี้ปัญหา + ผลลัพธ์ + เวลา'], style: ['numbering', 'อ้างอิงแหล่งข้อมูล'], length: ['ละเอียด'], visual: ['clean', 'minimal', 'premium'] },
 };
 function aiInsPreset(kind) { return AI_INS_PRESETS[kind] ? JSON.parse(JSON.stringify(AI_INS_PRESETS[kind])) : null; }
 
@@ -343,6 +349,8 @@ export function pageProfile() {
             <option value="viral-short">${T('ไวรัลสายสั้น (TikTok/Reels)', 'Short-form Viral')}</option>
             <option value="luxury-premium">${T('แบรนด์พรีเมียม (Luxury)', 'Luxury / Premium')}</option>
             <option value="community">${T('สร้างคอมมูนิตี้ (Engagement)', 'Community & Engagement')}</option>
+            <option value="mystic">${T('สายมู (ดูดวง/เครื่องราง)', 'Mystic / Fortune')}</option>
+            <option value="finance">${T('การเงิน (ลงทุน/ประกัน)', 'Finance / Investment')}</option>
             <option value="infographic-premium">${T('อินโฟกราฟิกพรีเมียม (เกาหลี/สัตว์เลี้ยง)', 'Premium Korean infographic')}</option>
           </select>
           <button class="btn ghost sm" style="color:var(--red)" data-aiins-clear="1">${raw(I('x', 12, '#DC2626'))} ${T('ล้างทั้งหมด', 'Clear all')}</button>
