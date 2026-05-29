@@ -798,7 +798,6 @@ function generateInputHTML() {
           </optgroup>
         </select></div>`}
       <div style="margin-left:auto;display:flex;gap:8px">
-        <button class="btn outline">${I('upload',15)} ${T('อัปโหลดรูป','Upload')}</button>
         <button class="btn primary" data-genall="1" ${state.genLoading?'disabled':''}>${I('sparkles',16)} ${state.genLoading?T('AI กำลังสร้าง…','Generating…'):T('สร้างทั้งหมด','Generate All')}</button>
       </div>
     </div>
