@@ -320,6 +320,9 @@ export function pageAvatar() {
   ];
   const dur4 = state.avatarClipDuration || 0;
   const ivl4 = state.avatarBgInterval || 0;
+  // A value the user typed in the "custom seconds" box = one that isn't any preset.
+  const isCustomDur = dur4 > 0 && !totalDurs.some((o) => o.v === dur4);
+  const isCustomIvl = ivl4 > 0 && !switchIvls.some((o) => o.v === ivl4);
   const slots4 = (dur4 > 0 && ivl4 > 0) ? Math.ceil(dur4 / ivl4) : (dur4 > 0 ? 1 : 0);
   let slotsLine = '';
   if (!dur4) {
@@ -338,22 +341,30 @@ export function pageAvatar() {
       <div style="font-size:10.5px;font-weight:800;color:var(--purple);letter-spacing:.04em;text-transform:uppercase;margin-bottom:6px;display:flex;align-items:center;gap:5px">
         ${I('play', 11, '#5B21B6')} ${T('ความยาวคลิป', 'Total clip length')}
       </div>
-      <div style="display:flex;gap:5px;flex-wrap:wrap">
+      <div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center">
         ${totalDurs.map((o) => {
           const on = (state.avatarClipDuration || 0) === o.v;
           return `<button class="pill ${on ? 'orange' : ''}" data-clipdur="${o.v}" style="height:30px;font-size:11.5px;padding:0 12px">${t({ th: o.th, en: o.en })}</button>`;
         }).join('')}
+        <span style="display:inline-flex;align-items:center;gap:4px;height:30px;padding:0 10px;border-radius:99px;border:1px solid ${isCustomDur ? 'var(--orange)' : 'var(--line)'};background:${isCustomDur ? 'var(--orange-soft)' : '#fff'}">
+          <input type="number" min="1" max="600" inputmode="numeric" id="ppClipDurCustom" value="${isCustomDur ? dur4 : ''}" placeholder="${T('กี่วิ', 'sec')}" style="width:48px;border:0;background:transparent;font-size:11.5px;font-weight:700;color:var(--purple);text-align:center;outline:none"/>
+          <span style="font-size:10.5px;color:var(--muted)">${T('วิ', 'sec')}</span>
+        </span>
       </div>
     </div>
     <div>
       <div style="font-size:10.5px;font-weight:800;color:var(--purple);letter-spacing:.04em;text-transform:uppercase;margin-bottom:6px;display:flex;align-items:center;gap:5px">
         ${I('refresh', 11, '#5B21B6')} ${T('สลับฉากบ่อยแค่ไหน', 'Switch scene every')}
       </div>
-      <div style="display:flex;gap:5px;flex-wrap:wrap">
+      <div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center">
         ${switchIvls.map((o) => {
           const on = (state.avatarBgInterval || 0) === o.v;
           return `<button class="pill ${on ? 'orange' : ''}" data-bginterval="${o.v}" style="height:30px;font-size:11.5px;padding:0 12px">${t({ th: o.th, en: o.en })}</button>`;
         }).join('')}
+        <span style="display:inline-flex;align-items:center;gap:4px;height:30px;padding:0 10px;border-radius:99px;border:1px solid ${isCustomIvl ? 'var(--orange)' : 'var(--line)'};background:${isCustomIvl ? 'var(--orange-soft)' : '#fff'}">
+          <input type="number" min="1" max="600" inputmode="numeric" id="ppBgIntervalCustom" value="${isCustomIvl ? ivl4 : ''}" placeholder="${T('กี่วิ', 'sec')}" style="width:48px;border:0;background:transparent;font-size:11.5px;font-weight:700;color:var(--purple);text-align:center;outline:none"/>
+          <span style="font-size:10.5px;color:var(--muted)">${T('วิ', 'sec')}</span>
+        </span>
       </div>
     </div>
     ${slotsLine}

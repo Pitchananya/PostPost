@@ -1901,6 +1901,20 @@ render();
     if (t.id==='ppAvatarScript') { state.avatarScript = t.value; return; }
     if (t.id==='ppAvatarBgSearch') { state.avatarBgSearch = t.value; return; }
     if (t.id==='ppTtvPrompt') { state.ttvPrompt = t.value; return; }
+    // Custom clip length / scene-switch seconds — mirror to state WITHOUT a
+    // re-render so the number field keeps focus while typing. The visual
+    // highlight + slot-count preview refresh on `change` (blur) below.
+    if (t.id==='ppClipDurCustom') {
+      var _cd = parseInt(t.value, 10);
+      state.avatarClipDuration = (_cd > 0) ? Math.min(_cd, 600) : 0;
+      return;
+    }
+    if (t.id==='ppBgIntervalCustom') {
+      var _bi = parseInt(t.value, 10);
+      state.avatarBgInterval = (_bi > 0) ? Math.min(_bi, 600) : 0;
+      state.avatarBgRotateIdx = 0;
+      return;
+    }
     if (t.id==='ppWorkspaceName') {
       state.workspaceName = t.value;
       try {
@@ -1953,6 +1967,13 @@ render();
   });
   document.addEventListener('change', function(e){
     var t = e.target;
+    // Custom clip length / scene-switch seconds committed (blur/Enter) — state
+    // was already mirrored on `input`; re-render to refresh the active highlight
+    // and the "= N scenes" preview.
+    if (t && (t.id==='ppClipDurCustom' || t.id==='ppBgIntervalCustom')) {
+      render();
+      return;
+    }
     if (t && t.id==='ppBizType') {
       var ab = liveBrand();
       if (ab) {
