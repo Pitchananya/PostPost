@@ -159,6 +159,17 @@ export function pageProfile() {
     actions
   ))}
 
+  ${state.brandJustSaved ? raw(`<div style="margin-bottom:18px;padding:14px 18px;border-radius:14px;background:#DCFCE7;border:1px solid #86EFAC;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+    <div style="display:flex;align-items:center;gap:8px;color:#15803D;font-weight:800;font-size:14px">${I('check', 16, '#16A34A')} ${T('บันทึกโปรไฟล์แล้ว ✓', 'Profile saved ✓')}</div>
+    <div style="font-size:12.5px;color:#166534;flex:1;min-width:150px">${T('เริ่มสร้างคอนเทนต์ได้เลย:', 'Now go create content:')}</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn outline sm" data-go="caption">${I('type', 13)} ${T('สร้าง Caption', 'Caption')}</button>
+      <button class="btn outline sm" data-go="creative">${I('image', 13)} ${T('สร้าง Creative', 'Creative')}</button>
+      <button class="btn outline sm" data-go="avatar">${I('bot', 13)} Talking Avatar</button>
+      <button class="btn outline sm" data-go="textvideo">${I('video', 13)} Text to Video</button>
+    </div>
+  </div>`) : ''}
+
   <!-- === Brand switcher === -->
   <div class="card" style="margin-bottom:18px">
     <div class="cardHeader">

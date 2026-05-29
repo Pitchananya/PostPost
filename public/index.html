@@ -1897,7 +1897,7 @@ render();
     } catch(_){ try { window.scrollTo(0, 0); } catch(__){} }
     // Auto-clear the badge after a few seconds.
     try { clearTimeout(window.__ppSavedTimer); } catch(_){}
-    window.__ppSavedTimer = setTimeout(function(){ state.brandJustSaved = false; if (state.page === 'profile') render(); }, 4000);
+    window.__ppSavedTimer = setTimeout(function(){ state.brandJustSaved = false; if (state.page === 'profile') render(); }, 10000);
   }
   document.addEventListener('click', function(e){
     if (e.target.closest('[data-savebrand]')) { e.preventDefault(); saveBrandProfile(); }
