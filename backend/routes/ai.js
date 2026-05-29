@@ -3850,9 +3850,25 @@ router.post('/tts', async (req, res) => {
   }
 });
 
-// 🎙️ POST /ai/transcribe — speech-to-text via Gemini (uploaded audio → Thai script)
-// body: { audio_base64 (raw base64 OR full data: URL), mime?, lang='th' }
-// returns: { ok, text, model }
+// Map an audio mime type to the short codec name OpenRouter/OpenAI expect in
+// an input_audio content part (they take the codec, not the full mime).
+function audioFormatFromMime(mime) {
+  const m = (mime || '').toLowerCase();
+  if (m.includes('wav')) return 'wav';
+  if (m.includes('mp3') || m.includes('mpeg')) return 'mp3';
+  if (m.includes('webm')) return 'webm';
+  if (m.includes('ogg')) return 'ogg';
+  if (m.includes('m4a') || m.includes('mp4') || m.includes('aac')) return 'm4a';
+  if (m.includes('flac')) return 'flac';
+  return 'mp3';
+}
+
+// 🎙️ POST /ai/transcribe — speech-to-text (uploaded audio → Thai script).
+// Primary: Google AI (Gemini) direct (free tier). Fallback: OpenRouter, which
+// uses its OWN provider credits so it bypasses an exhausted personal Google
+// quota — routes the audio to a multimodal chat model via an input_audio part.
+// body: { audio_base64 (raw base64 OR full data: URL), mime?, lang='th', model? }
+// returns: { ok, text, model, via }
 router.post('/transcribe', async (req, res) => {
   let { audio_base64, mime, lang = 'th', model: modelOverride } = req.body || {};
   if (!audio_base64 || typeof audio_base64 !== 'string') {
@@ -3869,72 +3885,130 @@ router.post('/transcribe', async (req, res) => {
     return res.status(413).json({ error: 'audio too large — keep it under ~6MB / 60s for transcription' });
   }
 
-  const apiKey = process.env.GOOGLE_AI_API_KEY;
-  if (!apiKey) return res.status(400).json({ error: 'GOOGLE_AI_API_KEY not set — ตั้ง env ก่อนใช้ถอดเสียง (ดู .env.example)' });
-
-  // Try models in order — different API keys are provisioned for different
-  // models, and individual models throttle (503). Fall through on those.
-  const models = [
-    modelOverride || process.env.GEMINI_TRANSCRIBE_MODEL,
-    'gemini-2.0-flash',
-    'gemini-flash-latest',
-    'gemini-2.5-flash',
-  ].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i);
+  const googleKey = process.env.GOOGLE_AI_API_KEY;
+  const orKey = process.env.OPENROUTER_API_KEY;
+  if (!googleKey && !orKey) {
+    return res.status(400).json({ error: 'GOOGLE_AI_API_KEY หรือ OPENROUTER_API_KEY not set — ตั้ง env อย่างน้อย 1 ตัวก่อนใช้ถอดเสียง (ดู .env.example)' });
+  }
 
   const langName = lang === 'th' ? 'Thai' : (lang || 'the original language');
   const prompt = `Transcribe this audio to ${langName} text exactly as spoken. `
     + `Output ONLY the transcript text — no timestamps, no speaker labels, no quotation marks, no commentary.`;
-  const reqBody = JSON.stringify({
-    contents: [{ parts: [
-      { text: prompt },
-      { inline_data: { mime_type: mime, data: audio_base64 } },
-    ] }],
-    generationConfig: { temperature: 0 },
-  });
 
   let lastErr = '';
   let sawQuota = false, sawDenied = false;
-  for (const model of models) {
+
+  // 1) Google AI (Gemini) direct — free tier, tried first when a key is set.
+  //    Try models in order: different keys are provisioned for different
+  //    models, and individual models throttle (503). Fall through on those.
+  if (googleKey) {
+    const models = [
+      modelOverride || process.env.GEMINI_TRANSCRIBE_MODEL,
+      'gemini-2.0-flash',
+      'gemini-flash-latest',
+      'gemini-2.5-flash',
+    ].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i);
+    const reqBody = JSON.stringify({
+      contents: [{ parts: [
+        { text: prompt },
+        { inline_data: { mime_type: mime, data: audio_base64 } },
+      ] }],
+      generationConfig: { temperature: 0 },
+    });
+    for (const model of models) {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort('transcribe timeout 60s'), 60_000);
+      try {
+        const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${googleKey}`, {
+          method: 'POST',
+          signal: ctrl.signal,
+          headers: { 'Content-Type': 'application/json' },
+          body: reqBody,
+        });
+        clearTimeout(timer);
+        if (!r.ok) {
+          const err = (await r.text()).slice(0, 300);
+          console.warn(`[ai/transcribe] ${model} → ${r.status}: ${err.slice(0, 160)}`);
+          lastErr = `Gemini ${r.status}: ${err.slice(0, 160)}`;
+          if (r.status === 429) sawQuota = true;
+          if (r.status === 403) sawDenied = true;
+          // 403 (denied)/404 (no access)/429 (quota)/503 (busy) → try next
+          // model; any other hard error → stop the Gemini loop and let the
+          // OpenRouter fallback (if configured) take over.
+          if ([403, 404, 429, 503].includes(r.status)) continue;
+          break;
+        }
+        const data = await r.json();
+        const parts = data?.candidates?.[0]?.content?.parts || [];
+        const text = parts.map((p) => p?.text || '').join('').trim();
+        if (!text) {
+          console.error('[ai/transcribe] empty transcript. raw=', JSON.stringify(data).slice(0, 500));
+          lastErr = 'no transcript returned — เสียงอาจสั้น/เงียบเกินไป หรือฟอร์แมตไม่รองรับ';
+          continue;
+        }
+        return res.json({ ok: true, text, model, via: 'google' });
+      } catch (e) {
+        clearTimeout(timer);
+        console.warn(`[ai/transcribe] ${model} threw: ${e.message}`);
+        lastErr = e.message;
+      }
+    }
+  }
+
+  // 2) OpenRouter fallback — OpenRouter bills its OWN provider credits, so this
+  //    works even when the personal Google quota is exhausted. Sends the audio
+  //    to a multimodal chat model via an input_audio content part. The default
+  //    is a Gemini audio model; override with OPENROUTER_TRANSCRIBE_MODEL
+  //    (e.g. openai/gpt-4o-audio-preview) if a provider rejects the audio.
+  if (orKey) {
+    const orModel = modelOverride || process.env.OPENROUTER_TRANSCRIBE_MODEL || 'google/gemini-2.0-flash-001';
+    const fmt = audioFormatFromMime(mime);
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort('transcribe timeout 60s'), 60_000);
     try {
-      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+      const r = await fetch(OPENROUTER_API, {
         method: 'POST',
         signal: ctrl.signal,
-        headers: { 'Content-Type': 'application/json' },
-        body: reqBody,
+        headers: {
+          'Authorization': `Bearer ${orKey}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': process.env.PUBLIC_URL || 'https://postpost.adsventure.ltd',
+          'X-Title': 'OEM Content Factory',
+        },
+        body: JSON.stringify({
+          model: orModel,
+          temperature: 0,
+          max_tokens: 2000,
+          messages: [{ role: 'user', content: [
+            { type: 'text', text: prompt },
+            { type: 'input_audio', input_audio: { data: audio_base64, format: fmt } },
+          ] }],
+        }),
       });
       clearTimeout(timer);
       if (!r.ok) {
         const err = (await r.text()).slice(0, 300);
-        console.warn(`[ai/transcribe] ${model} → ${r.status}: ${err.slice(0, 160)}`);
-        lastErr = `Gemini ${r.status}: ${err.slice(0, 160)}`;
-        if (r.status === 429) sawQuota = true;
-        if (r.status === 403) sawDenied = true;
-        // 403 (denied)/404 (no access)/503 (busy) → try next model; else stop.
-        if ([403, 404, 429, 503].includes(r.status)) continue;
-        return res.status(500).json({ error: lastErr });
+        console.warn(`[ai/transcribe] OpenRouter ${orModel} → ${r.status}: ${err.slice(0, 160)}`);
+        lastErr = `OpenRouter ${r.status}: ${err.slice(0, 160)}`;
+      } else {
+        const data = await r.json();
+        const text = (data?.choices?.[0]?.message?.content || '').trim();
+        if (text) return res.json({ ok: true, text, model: orModel, via: 'openrouter' });
+        console.error('[ai/transcribe] OpenRouter empty transcript. raw=', JSON.stringify(data).slice(0, 500));
+        lastErr = 'OpenRouter returned empty transcript — โมเดลอาจไม่รองรับ audio input (ลองตั้ง OPENROUTER_TRANSCRIBE_MODEL เป็น openai/gpt-4o-audio-preview)';
       }
-      const data = await r.json();
-      const parts = data?.candidates?.[0]?.content?.parts || [];
-      const text = parts.map((p) => p?.text || '').join('').trim();
-      if (!text) {
-        console.error('[ai/transcribe] empty transcript. raw=', JSON.stringify(data).slice(0, 500));
-        lastErr = 'no transcript returned — เสียงอาจสั้น/เงียบเกินไป หรือฟอร์แมตไม่รองรับ';
-        continue;
-      }
-      return res.json({ ok: true, text, model });
     } catch (e) {
       clearTimeout(timer);
-      console.warn(`[ai/transcribe] ${model} threw: ${e.message}`);
+      console.warn(`[ai/transcribe] OpenRouter threw: ${e.message}`);
       lastErr = e.message;
     }
   }
+
   let hint = '';
-  if (sawQuota) hint = 'Google AI key โควต้าหมด — เปิด billing บน Google AI Studio หรือรอโควต้า reset (หรือใส่ OPENAI_API_KEY เพื่อใช้ Whisper)';
-  else if (sawDenied) hint = 'Google AI key ไม่มีสิทธิ์เข้าโมเดลถอดเสียง — เช็คว่าเปิด Generative Language API + billing แล้ว';
+  if (sawQuota && !orKey) hint = 'Google AI key โควต้าหมด — เปิด billing บน Google AI Studio, รอโควต้า reset, หรือใส่ OPENROUTER_API_KEY เพื่อให้ fallback ผ่าน OpenRouter อัตโนมัติ';
+  else if (sawDenied && !orKey) hint = 'Google AI key ไม่มีสิทธิ์เข้าโมเดลถอดเสียง — เช็คว่าเปิด Generative Language API + billing แล้ว (หรือใส่ OPENROUTER_API_KEY เพื่อ fallback)';
   // api() on the frontend surfaces `error`, so lead with the actionable hint.
-  res.status(500).json({ error: hint || lastErr || 'transcription failed across all models', detail: lastErr, hint });
+  res.status(500).json({ error: hint || lastErr || 'transcription failed across all providers', detail: lastErr, hint });
 });
 
 // 🎬 POST /ai/video-script — generate 9:16 Reel script (hook + body + cta) for a topic
