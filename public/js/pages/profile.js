@@ -327,11 +327,13 @@ export function pageProfile() {
           <div style="display:flex;align-items:center;gap:10px">
             <h3 class="cardTitle">${raw(T('AI Instruction (Advanced)', 'AI Instruction (Advanced)'))}</h3>
             <span class="pill purple">${raw(T('Power user', 'Power user'))}</span>
-            ${activeBrand.aiInstruction ? raw(`<span class="pill green" style="font-size:10px">${T('ตั้งแล้ว', 'Set')} · ${activeBrand.aiInstruction.length} ${T('ตัวอักษร', 'chars')}</span>`) : ''}
+            ${activeBrand.aiInstruction
+              ? raw(`<span class="pill green" style="font-size:10px">${T('ตั้งแล้ว', 'Set')} · ${activeBrand.aiInstruction.length} ${T('ตัวอักษร', 'chars')}</span>`)
+              : raw(`<span class="pill orange" style="font-size:10px">${T('⭐ ควรตั้งค่า', '⭐ Recommended')}</span>`)}
           </div>
           <p class="cardSub">${raw(T(
-            'คุมพฤติกรรม AI ลึกกว่า Brand Voice — เลือกจากปุ่มทีละหัวข้อ (บทบาท / โทน / เป้าหมาย / กฎ / ฯลฯ) ไม่ต้องพิมพ์เอง',
-            'Finer control than Brand Voice — pick options per section (identity / tone / goals / rules / …), no typing required'
+            'คุมพฤติกรรม AI ลึกกว่า Brand Voice — เลือกจากปุ่มทีละหัวข้อ (บทบาท / โทน / เป้าหมาย / กฎ / ฯลฯ) ไม่ต้องพิมพ์เอง · <b style="color:var(--orange3)">ควรตั้งส่วนนี้ก่อนสร้างคอนเทนต์</b> เพื่อให้ AI เขียนตรงแบรนด์ที่สุด',
+            'Finer control than Brand Voice — pick options per section (identity / tone / goals / rules / …), no typing required · <b style="color:var(--orange3)">Set this before generating</b> so AI matches your brand best'
           ))}</p>
         </div>
         <span class="micro" style="color:var(--muted)">▼</span>
