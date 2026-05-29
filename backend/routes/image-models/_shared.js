@@ -95,10 +95,15 @@ export function parseImageUrlToReturn(url) {
 // Maps the OPENROUTER_IMAGE_SIZE env var to a short prompt-friendly aspect
 // hint. Kept here so both models tag the prompt the same way.
 export function aspectHintFromEnv() {
-  const size = process.env.OPENROUTER_IMAGE_SIZE || '1024x1024';
+  const size = process.env.OPENROUTER_IMAGE_SIZE || '';
   if (size === '1024x1536') return 'portrait 2:3';
   if (size === '1536x1024') return 'landscape 3:2';
-  return 'square 1:1';
+  if (size === '1024x1350') return 'vertical 4:5 portrait';
+  if (size === '1024x1920') return 'tall vertical 9:16 portrait';
+  // No forced square — the per-request "IMAGE FORMAT" line in the prompt now
+  // drives the aspect (4:5 / 9:16 / 1:1), so the model composes for it instead
+  // of always rendering a square that later gets cropped.
+  return '';
 }
 
 // Shared headers — auth + the metadata OpenRouter recommends sending so

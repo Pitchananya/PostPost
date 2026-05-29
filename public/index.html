@@ -3079,6 +3079,15 @@ render();
   // user can trace what's happening end-to-end in DevTools.
   async function generateOneImage(prompt, model) {
     var t0 = Date.now();
+    // Tell the model to COMPOSE for the picked aspect (not just crop a square
+    // afterwards). The backend no longer forces "square 1:1", so this governs.
+    var _asp = state.previewAspect || '4:5';
+    var _aspTxt = {
+      '1:1':  'Square 1:1 format.',
+      '4:5':  'Vertical 4:5 portrait format — taller than wide (1080x1350). Compose the FULL scene to fill this tall frame; do NOT make it square.',
+      '9:16': 'Tall vertical 9:16 portrait format — full-height (1080x1920). Compose the FULL scene to fill this very tall frame; do NOT make it square.'
+    }[_asp] || '';
+    if (_aspTxt) prompt = String(prompt || '') + '\n\nIMAGE FORMAT: ' + _aspTxt;
     var promptPreview = String(prompt || '').slice(0, 60).replace(/\s+/g, ' ');
     if (isSlowImageModel(model)) {
       console.log('[image-gen] 🐢 slow model →', model, '· async path · prompt:', promptPreview+'…');
