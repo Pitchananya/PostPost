@@ -406,6 +406,7 @@ export function pageProfile() {
         <h3 class="cardTitle">${raw(T('เชื่อมต่อช่องทางโพสต์', 'Connect posting channels'))}</h3>
         <p class="cardSub">${raw(T('แต่ละแบรนด์เชื่อมเพจ Facebook / IG ของตัวเอง', 'Each brand connects its own Facebook / IG pages'))} · <b style="color:var(--purple)">${escText(activeBrand.name)}</b></p>
       </div>
+      <button class="btn ghost sm" style="color:var(--blue)" data-connectguide="1">${raw(I('info', 13, '#2563EB'))} ${raw(T('อ่านคู่มือเชื่อมต่อ', 'Connection guide'))}</button>
     </div>
     <div style="display:flex;flex-direction:column;gap:10px">
       ${raw([

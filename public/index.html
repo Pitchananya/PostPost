@@ -1640,8 +1640,57 @@ render();
     document.addEventListener('keydown', function esc(e){ if (e.key==='Escape'){ ov.remove(); document.removeEventListener('keydown', esc); } });
     document.body.appendChild(ov);
   }
+  // Channel-connection guide modal — detailed FB / IG / TikTok steps.
+  function connectGuideModal(){
+    var L = function(th,en){ return state.lang==='th'?th:en; };
+    var steps = function(arr){ return '<ol style="margin:8px 0 0;padding-left:20px;font-size:12.5px;color:var(--ink2);line-height:1.85">'+arr.map(function(s){return '<li>'+s+'</li>';}).join('')+'</ol>'; };
+    var sec = function(icon,color,title,sub,body){
+      return '<div style="border:1px solid var(--line);border-radius:16px;padding:16px">'
+        + '<div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">'
+        +   '<div style="width:38px;height:38px;border-radius:10px;background:'+color+'1a;color:'+color+';display:grid;place-items:center;flex-shrink:0">'+I(icon,18,color)+'</div>'
+        +   '<div><div style="font-size:15px;font-weight:800;color:var(--purple)">'+title+'</div><div style="font-size:11.5px;color:var(--muted)">'+sub+'</div></div>'
+        + '</div>' + body + '</div>';
+    };
+    var fb = sec('facebook','#1877F2', 'Facebook Page', L('เชื่อมง่ายสุด · พร้อมโพสต์ได้เลย','Easiest · ready to post right away'),
+      steps([
+        L('กดปุ่ม <b>"เชื่อมต่อ"</b> ที่แถว Facebook Page','Tap <b>"Connect"</b> on the Facebook Page row'),
+        L('ล็อกอิน Facebook ด้วยบัญชีที่เป็น <b>แอดมินเพจ</b>','Log in with the account that <b>admins the Page</b>'),
+        L('หน้า "เลือกเพจ" → เลือก <b>"เลือกใช้เพจปัจจุบันเท่านั้น"</b> แล้ว <b>ติ๊ก ☑️ เพจที่ต้องการ</b> — สำคัญมาก ถ้าไม่ติ๊กจะเชื่อมไม่ได้','On "Choose Pages" → pick <b>"current pages only"</b> and <b>tick the page</b> — important, or it will not connect'),
+        L('หน้าธุรกิจ → กด <b>"เลือกทั้งหมด"</b>','On Business → tap <b>"Select all"</b>'),
+        L('หน้า Instagram (ถ้ามี) → ติ๊กบัญชี IG ที่ผูกกับเพจ','On Instagram (if shown) → tick the IG account linked to the Page'),
+        L('กด <b>"ดำเนินการต่อ" / "บันทึก"</b> ไปจนจบ','Tap <b>"Continue" / "Save"</b> through to the end'),
+        L('กลับมาที่แอป → <b>เลือกเพจ</b> ที่จะผูกกับแบรนด์นี้ → ขึ้น "เชื่อมแล้ว ✓"','Back in the app → <b>pick the page</b> for this brand → shows "Connected"'),
+      ])
+      + '<div style="margin-top:8px;font-size:11px;color:var(--muted)">'+L('* 1 แบรนด์ = 1 เพจ · อยากเปลี่ยนเพจ กด "เชื่อมใหม่ + เลือกเพจอื่น"','* 1 brand = 1 page · to switch, use "Reconnect & pick another page"')+'</div>');
+    var ig = sec('instagram','#E1306C', 'Instagram Business', L('ต้องผูกกับเพจ Facebook ก่อน','Must be linked to a Facebook Page'),
+      steps([
+        L('บัญชี IG ต้องเป็น <b>Business / Creator</b> และ <b>ผูกกับเพจ Facebook</b> แล้ว','Your IG must be a <b>Business/Creator</b> account <b>linked to a Facebook Page</b>'),
+        L('วิธีผูก: แอป Instagram → Settings → Account type → <b>Switch to Professional</b> → เชื่อมกับเพจ FB','To link: Instagram app → Settings → Account type → <b>Switch to Professional</b> → connect the FB Page'),
+        L('เชื่อม Facebook ให้เสร็จก่อน — บัญชี IG ที่ผูกอยู่จะเลือกได้ในขั้นตอนเชื่อม Facebook','Connect Facebook first — the linked IG account is selectable during the Facebook flow'),
+      ]));
+    var tt = sec('tiktok','#0F172A', 'TikTok', L('ต้องตั้งค่าฝั่ง TikTok Developer','Needs TikTok Developer setup'),
+      steps([
+        L('ต้องมีแอปที่ <b>developers.tiktok.com</b> (Login Kit + Content Posting API) + ใส่ Redirect URI','Need an app at <b>developers.tiktok.com</b> (Login Kit + Content Posting API) + a Redirect URI'),
+        L('Content Posting API ต้องผ่าน <b>audit จาก TikTok</b> ก่อน จึงจะโพสต์สาธารณะได้ — ก่อนผ่าน โพสต์ได้แค่เป็น draft/ส่วนตัว','The Content Posting API needs a <b>TikTok audit</b> before public posts — until then posts are draft/private only'),
+        L('ถ้ายังตั้งค่าไม่เสร็จ ติดต่อแอดมินระบบเพื่อเปิดใช้','If setup is incomplete, contact your admin to enable it'),
+      ]));
+    var ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(16,8,30,.6);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:28px;font-family:Prompt,sans-serif';
+    ov.innerHTML = '<div style="background:#fff;border-radius:24px;max-width:640px;width:100%;max-height:88vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 70px rgba(38,20,71,.4)">'
+      + '<div style="padding:20px 24px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px">'
+        + '<div style="flex:1"><div style="font-size:18px;font-weight:800;color:var(--purple)">'+L('คู่มือเชื่อมต่อช่องทาง','Channel Connection Guide')+'</div>'
+        + '<div style="font-size:12px;color:var(--muted)">'+L('เชื่อมเพจ Facebook / IG / TikTok ของแบรนด์ ทีละขั้นตอน','Connect Facebook / IG / TikTok step by step')+'</div></div>'
+        + '<button class="btn outline sm" data-connectguideclose="1">'+L('ปิด','Close')+'</button>'
+      + '</div>'
+      + '<div style="overflow-y:auto;padding:18px;display:flex;flex-direction:column;gap:12px">'+fb+ig+tt+'</div>'
+    + '</div>';
+    ov.addEventListener('click', function(e){ if (e.target===ov || e.target.closest('[data-connectguideclose]')) ov.remove(); });
+    document.addEventListener('keydown', function esc(e){ if (e.key==='Escape'){ ov.remove(); document.removeEventListener('keydown', esc); } });
+    document.body.appendChild(ov);
+  }
   document.addEventListener('click', function(e){
     if (e.target.closest('[data-archeguide]')) archeGuideModal();
+    if (e.target.closest('[data-connectguide]')) connectGuideModal();
   });
 
   // Detailed Shopee-link guide with illustrated steps
@@ -6655,7 +6704,7 @@ render();
 
   // no dead clicks — any button without a wired action gives feedback
   var HANDLED = '[data-go],[data-lang],[data-set],[data-set-step],[data-toggle],'
-    + '[data-voice],[data-brand],[data-product],[data-archetype],[data-archeguide],[data-archeclose],'
+    + '[data-voice],[data-brand],[data-product],[data-archetype],[data-archeguide],[data-archeclose],[data-connectguide],[data-connectguideclose],'
     + '[data-addbrand],[data-delbrand],[data-aiwrite],[data-usedesc],[data-usedesc-s],[data-changelogo],[data-shopeesync],'
     + '[data-shopguide],[data-shopguideclose],[data-prodview],[data-pdclose],[data-savebrand],'
     + '[data-chconnect],[data-chdisconnect],[data-chsave],[data-chclose],'
