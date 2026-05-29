@@ -22,7 +22,7 @@ export function topbarHTML() {
     const map = {
       profile: T('Profile', 'Profile'), topics: 'Topic Bank',
       caption: T('สร้าง Caption', 'Generate Caption'),
-      creative: T('สร้าง Creative', 'Generate Creative'),
+      creative: T('สร้างรูปภาพ', 'Create images'),
       avatar: 'Talking Avatar', textvideo: 'Text to Video',
       automation: 'Automation Log', analytics: 'Analytics',
       calendar: T('ปฏิทิน', 'Calendar'), library: T('คลังคอนเทนต์', 'Library'),

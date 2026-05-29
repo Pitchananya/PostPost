@@ -37,7 +37,7 @@ export function pageCreative() {
 
   const actions = `<button class="btn outline sm">${I('library', 14)} ${T('เทมเพลต', 'Templates')}</button>`;
 
-  return html`${raw(head('CREATE', T('สร้าง Creative · รูป + อัลบั้ม', 'Generate creative · image + album'),
+  return html`${raw(head('CREATE', T('สร้างรูปภาพ · รูปเดี่ยว + อัลบั้ม', 'Create images · single + album'),
     T('สร้างรูปเดี่ยวหรืออัลบั้ม 6 ภาพพร้อมแคปชั่นต่อสไลด์', 'Single image or 6-slide album with per-slide caption'),
     actions
   ))}
@@ -46,7 +46,7 @@ export function pageCreative() {
 
   <div class="tabs lg" style="margin-bottom:18px">
     <button class="tab" data-go="caption">${raw(I('type', 14))} ${raw(T('Caption · Hook · Hashtag · บทความ', 'Caption · Hook · Hashtag · Article'))}</button>
-    <button class="tab active">${raw(I('image', 14))} ${raw(T('Creative · รูป + อัลบั้ม', 'Creative · Image + album'))}</button>
+    <button class="tab active">${raw(I('image', 14))} ${raw(T('รูปภาพ · เดี่ยว + อัลบั้ม', 'Images · single + album'))}</button>
   </div>
 
   ${raw(generateInputHTML())}

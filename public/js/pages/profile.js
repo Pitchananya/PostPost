@@ -164,7 +164,7 @@ export function pageProfile() {
     <div style="font-size:12.5px;color:#166534;flex:1;min-width:150px">${T('เริ่มสร้างคอนเทนต์ได้เลย:', 'Now go create content:')}</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn outline sm" data-go="caption">${I('type', 13)} ${T('สร้าง Caption', 'Caption')}</button>
-      <button class="btn outline sm" data-go="creative">${I('image', 13)} ${T('สร้าง Creative', 'Creative')}</button>
+      <button class="btn outline sm" data-go="creative">${I('image', 13)} ${T('สร้างรูปภาพ', 'Images')}</button>
       <button class="btn outline sm" data-go="avatar">${I('bot', 13)} Talking Avatar</button>
       <button class="btn outline sm" data-go="textvideo">${I('video', 13)} Text to Video</button>
     </div>

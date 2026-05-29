@@ -46,7 +46,7 @@ export function pageCaption() {
 
   <div class="tabs lg" style="margin-bottom:18px">
     <button class="tab active" data-go="caption">${raw(I('type', 14))} ${raw(T('Caption · Hook · Hashtag · บทความ', 'Caption · Hook · Hashtag · Article'))}</button>
-    <button class="tab" data-go="creative">${raw(I('image', 14))} ${raw(T('Creative · รูป + อัลบั้ม', 'Creative · Image + album'))}</button>
+    <button class="tab" data-go="creative">${raw(I('image', 14))} ${raw(T('รูปภาพ · เดี่ยว + อัลบั้ม', 'Images · single + album'))}</button>
   </div>
 
   ${raw(generateInputHTML())}

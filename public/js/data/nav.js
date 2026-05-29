@@ -13,7 +13,7 @@ export const NAV = {
     { id: 'profile',  icon: 'users',     label: { th: 'Profile', en: 'Profile' } },
     { id: 'topics',   icon: 'lightbulb', label: { th: 'Topic Bank', en: 'Topic Bank' } },
     { id: 'caption',  icon: 'wand',      label: { th: 'สร้าง Caption', en: 'Generate Caption' } },
-    { id: 'creative', icon: 'image',     label: { th: 'สร้าง Creative', en: 'Generate Creative' } },
+    { id: 'creative', icon: 'image',     label: { th: 'สร้างรูปภาพ', en: 'Create images' } },
     { id: 'avatar',   icon: 'bot',       label: { th: 'Talking Avatar', en: 'Talking Avatar' }, tag: 'NEW' },
     { id: 'textvideo',icon: 'video',     label: { th: 'Text to Video', en: 'Text to Video' }, tag: 'NEW' },
   ],

@@ -185,7 +185,7 @@ const NAV = {
     { id: 'profile', icon: 'users', label: { th: 'Profile', en: 'Profile' } },
     { id: 'topics', icon: 'lightbulb', label: { th: 'Topic Bank', en: 'Topic Bank' } },
     { id: 'caption', icon: 'wand', label: { th: 'สร้าง Caption', en: 'Generate Caption' } },
-    { id: 'creative', icon: 'image', label: { th: 'สร้าง Creative', en: 'Generate Creative' } },
+    { id: 'creative', icon: 'image', label: { th: 'สร้างรูปภาพ', en: 'Create images' } },
     { id: 'avatar', icon: 'bot', label: { th: 'Talking Avatar', en: 'Talking Avatar' }, tag: 'NEW' },
     { id: 'textvideo', icon: 'video', label: { th: 'Text to Video', en: 'Text to Video' }, tag: 'NEW' },
   ],
@@ -843,7 +843,7 @@ function postPreviewHTML() {
       + navBtns + dots
       + '</div>';
   } else {
-    imageBlock = '<div style="aspect-ratio:'+aspectCss+';background:linear-gradient(135deg,#FFF4E6,#FED7AA 50%,#FECDD3);display:grid;place-items:center;text-align:center;padding:20px;color:#9A3412"><div>'+I('image',32,'#C2693B')+'<div style="font-size:11px;margin-top:8px;font-weight:600">'+T('รูปจะแสดงที่นี่เมื่อสร้าง Creative','Your image appears here')+'</div></div></div>';
+    imageBlock = '<div style="aspect-ratio:'+aspectCss+';background:linear-gradient(135deg,#FFF4E6,#FED7AA 50%,#FECDD3);display:grid;place-items:center;text-align:center;padding:20px;color:#9A3412"><div>'+I('image',32,'#C2693B')+'<div style="font-size:11px;margin-top:8px;font-weight:600">'+T('รูปจะแสดงที่นี่เมื่อกดสร้างรูป','Your image appears here')+'</div></div></div>';
   }
   var tabsBlock = isCaption ? '' : '<div class="tabs" style="padding:3px">'+tabs+'</div>';
   var dlButtons = isCaption ? '' :
@@ -1715,7 +1715,7 @@ render();
       if (String(d.topic||'').toLowerCase().indexOf(ql) >= 0)
         results.push({ icon:'type', label:d.topic, sub:L('ดราฟ','Draft'), act:function(){ state.page='library'; } });
     });
-    [['profile','Profile'],['topics','Topic Bank'],['caption',L('สร้าง Caption','Caption')],['creative',L('สร้าง Creative','Creative')],['avatar','Talking Avatar'],['textvideo','Text to Video'],['automation','Automation Log'],['analytics','Analytics'],['calendar',L('ปฏิทิน','Calendar')],['library',L('คลังคอนเทนต์','Library')]].forEach(function(pg){
+    [['profile','Profile'],['topics','Topic Bank'],['caption',L('สร้าง Caption','Caption')],['creative',L('สร้างรูปภาพ','Create images')],['avatar','Talking Avatar'],['textvideo','Text to Video'],['automation','Automation Log'],['analytics','Analytics'],['calendar',L('ปฏิทิน','Calendar')],['library',L('คลังคอนเทนต์','Library')]].forEach(function(pg){
       if (pg[1].toLowerCase().indexOf(ql) >= 0)
         results.push({ icon:'chev_right', label:pg[1], sub:L('ไปที่หน้า','Go to page'), act:function(){ state.page=pg[0]; } });
     });
@@ -5011,7 +5011,7 @@ render();
       +   '<button class="btn outline sm" data-pickdraftclose="1">'+L('ปิด','Close')+'</button></div>'
       + '<div style="overflow-y:auto;padding:18px">'
       +   ((state.drafts||[]).length === 0
-          ? '<div style="padding:32px 20px;text-align:center;background:var(--cream2);border-radius:14px;border:1px dashed var(--line3)">'+I('library',32,'#A39BAE')+'<div style="font-size:13.5px;font-weight:700;color:var(--ink);margin:10px 0 4px">'+L('ยังไม่มี Draft','No drafts yet')+'</div><div class="micro" style="margin-bottom:14px">'+L('ไปสร้างที่หน้า "สร้าง Creative" ก่อน','Create one on the Creative page first')+'</div><button class="btn primary sm" data-pickdraftgo="creative">'+I('plus',13)+' '+L('ไปสร้างคอนเทนต์','Create content')+'</button></div>'
+          ? '<div style="padding:32px 20px;text-align:center;background:var(--cream2);border-radius:14px;border:1px dashed var(--line3)">'+I('library',32,'#A39BAE')+'<div style="font-size:13.5px;font-weight:700;color:var(--ink);margin:10px 0 4px">'+L('ยังไม่มี Draft','No drafts yet')+'</div><div class="micro" style="margin-bottom:14px">'+L('ไปสร้างที่หน้า "สร้างรูปภาพ" ก่อน','Create one on the Images page first')+'</div><button class="btn primary sm" data-pickdraftgo="creative">'+I('plus',13)+' '+L('ไปสร้างคอนเทนต์','Create content')+'</button></div>'
           : unschedHtml + schedHtml)
       + '</div></div>';
     ov.addEventListener('click', function(e){

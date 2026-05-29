@@ -41,7 +41,7 @@ const PAGE_LABELS = {
   profile:    { th: 'โปรไฟล์',           en: 'Profile' },
   topics:     { th: 'Topic Bank',        en: 'Topic Bank' },
   caption:    { th: 'สร้าง Caption',     en: 'Caption' },
-  creative:   { th: 'สร้าง Creative',    en: 'Creative' },
+  creative:   { th: 'สร้างรูปภาพ',       en: 'Create images' },
   avatar:     { th: 'Talking Avatar',    en: 'Talking Avatar' },
   textvideo:  { th: 'Text to Video',     en: 'Text to Video' },
   automation: { th: 'Automation Log',    en: 'Automation' },
