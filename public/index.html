@@ -881,6 +881,15 @@ function publishCardHTML() {
   const _pubBrand = BRANDS.find(b => b.id === state.brand) || BRANDS[0];
   const _pubCh = (_pubBrand && _pubBrand.ch) || [];
   const _pubInfo = (_pubBrand && _pubBrand.channelInfo) || {};
+  // AI-pick mode shows the chosen slot + why; manual schedule shows a generic tip.
+  var _schedHint = state.scheduleMode === 'ai'
+    ? ('<b>'+T('AI เลือกเวลาให้:','AI picked:')+'</b> ' + (function(){
+        var d = state.scheduleDate, t = state.scheduleTime || '19:00';
+        var w = d ? new Date(d + 'T' + t) : null;
+        var dl = (w && !isNaN(w.getTime())) ? w.toLocaleDateString(state.lang==='th'?'th-TH':'en-US',{weekday:'short',day:'numeric',month:'short'}) : '';
+        return dl + ' ' + t + (state.lang==='th'?' น.':'') + ' — ' + aiTimeReason(t);
+      })())
+    : ('<b>'+T('AI แนะนำ:','AI suggests:')+'</b> ' + T('19:00–21:00 คือช่วงที่คนไทย active สูงสุด','7–9 PM is peak activity for Thai users'));
   return `<div class="card">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
       ${I('rocket',18,'#FF7A1A')}
@@ -927,7 +936,7 @@ function publishCardHTML() {
     </div>
     <div style="padding:10px 12px;border-radius:12px;background:var(--blue-soft);border:1px solid #DBE5FF;display:flex;align-items:center;gap:10px;margin-bottom:14px">
       ${I('sparkles',14,'#2563EB')}
-      <div style="flex:1;font-size:11.5px;line-height:1.5;color:#1E40AF"><b>${T('AI แนะนำ:','AI suggests:')}</b> ${T('19:00 น. คือเวลาที่ผู้ติดตามของคุณ active สูงสุด','7:00 PM is when your followers are most active.')}</div>
+      <div style="flex:1;font-size:11.5px;line-height:1.5;color:#1E40AF">${_schedHint}</div>
     </div>` : `<div style="padding:10px 12px;border-radius:12px;background:var(--orange-soft);border:1px solid var(--orange);font-size:11.5px;color:#9A3412;margin-bottom:14px">${I('rocket',13,'#9A3412')} ${T('จะโพสต์ทันทีที่กดปุ่มด้านล่าง','Posts immediately when you tap the button below')}</div>`}
     <div style="display:flex;gap:8px">
       <button class="btn outline" style="flex:1" data-savedraft="1" ${state.publishing?'disabled':''}>${I('library',14)} ${T('Draft','Draft')}</button>
@@ -2497,6 +2506,30 @@ render();
       state.publishing = false; render();
     }
   }
+  // "AI เลือกเวลา" — pick the next optimal posting slot. Heuristic based on Thai
+  // social peak windows (evenings strongest; lunch secondary). Picks the next
+  // upcoming peak ≥15 min ahead, else tomorrow evening. Sets date + time on state.
+  function aiPickSchedule(){
+    var now = new Date();
+    var weekend = (now.getDay() === 0 || now.getDay() === 6);
+    var slots = weekend ? [11, 13, 19, 20] : [12, 18, 19, 21];   // peak hours (local)
+    var pick = null;
+    for (var i = 0; i < slots.length; i++) {
+      var c = new Date(now); c.setHours(slots[i], 0, 0, 0);
+      if (c.getTime() >= now.getTime() + 15 * 60 * 1000) { pick = c; break; }
+    }
+    if (!pick) { pick = new Date(now); pick.setDate(pick.getDate() + 1); pick.setHours(19, 0, 0, 0); }  // all passed → tomorrow 19:00
+    state.scheduleDate = pick.getFullYear() + '-' + String(pick.getMonth() + 1).padStart(2, '0') + '-' + String(pick.getDate()).padStart(2, '0');
+    state.scheduleTime = String(pick.getHours()).padStart(2, '0') + ':' + String(pick.getMinutes()).padStart(2, '0');
+  }
+  function aiTimeReason(t){
+    var h = parseInt(String(t || '19:00').split(':')[0], 10);
+    if (h >= 11 && h < 14) return (state.lang==='th') ? 'ช่วงพักเที่ยง คนเช็คฟีดเยอะ' : 'lunch break — high feed activity';
+    if (h >= 17 && h < 22) return (state.lang==='th') ? 'ช่วงเย็น–ค่ำ คนไทยเล่นโซเชียลสูงสุด' : 'evening peak — most active for Thai users';
+    if (h >= 14 && h < 17) return (state.lang==='th') ? 'ช่วงบ่าย คนพักเบรก' : 'afternoon break';
+    return (state.lang==='th') ? 'เวลาที่คนเข้าถึงได้ดี' : 'a solid reach window';
+  }
+  try { if (window.PP) window.PP.aiTimeReason = aiTimeReason; } catch(_){}
   document.addEventListener('click', function(e){
     var sm = e.target.closest('[data-schedmode]');
     if (sm) {
@@ -2507,8 +2540,8 @@ render();
         var _n = new Date();
         state.scheduleDate = _n.getFullYear() + '-' + String(_n.getMonth() + 1).padStart(2, '0') + '-' + String(_n.getDate()).padStart(2, '0');
       }
-      // AI pick → prefill the recommended 19:00 slot.
-      if (state.scheduleMode === 'ai') state.scheduleTime = '19:00';
+      // AI pick → compute the next optimal slot (sets both date + time).
+      if (state.scheduleMode === 'ai') aiPickSchedule();
       render();
       return;
     }
