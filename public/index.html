@@ -1147,6 +1147,7 @@ document.addEventListener('click', (e) => {
     e.preventDefault();
     state.profileMenuOpen = false;
     state.user = null; state.tenant = null;
+    try { if (window.PP && window.PP._duePoller) { clearInterval(window.PP._duePoller); window.PP._duePoller = null; } } catch(_){}
     try { localStorage.removeItem('postpost_token'); } catch(_){}
     try { if (window.PP && window.PP.token && window.PP.token.set) window.PP.token.set(''); } catch(_){}
     toast(state.lang==='th'?'ออกจากระบบแล้ว':'Signed out','success');
@@ -1473,6 +1474,7 @@ render();
       // Capture the real account for the topbar/profile UI (/me adds name+tenant).
       try { applyMe(await api('/api/auth/me')); } catch(_){ if (d.user) state.user = d.user; }
       state.page = 'profile'; render();
+      try { startDuePoller(); } catch(_){}
       toast(state.lang==='th'?'✓ เข้าสู่ระบบสำเร็จ':'✓ Signed in','success');
     } catch(e){
       console.error('[login] failed:', e);
@@ -6570,6 +6572,33 @@ render();
     } catch(_){}
   }
 
+  // While the app is open, flush due scheduled posts every minute. Vercel has
+  // NO background process, so without an external pinger a scheduled post would
+  // never fire on its own — this makes "post at the scheduled time" work for
+  // anyone who has PostPost open. The server claims rows atomically (scheduled →
+  // processing), so multiple tabs / the real cron can't double-post. For 24/7
+  // posting even when the app is CLOSED, also point an external cron at
+  // /api/cron/run-scheduled?key=CRON_SECRET (every minute).
+  function startDuePoller(){
+    try {
+      if (window.PP && window.PP._duePoller) return;   // already running
+      window.PP = window.PP || {};
+      var tick = function(){
+        if (!getTok()) return;                         // signed out — no-op
+        api('/api/automation/run-now', { method:'POST', body:{} })
+          .then(function(r){
+            if (r && r.processed) {                    // a scheduled post just went live
+              try { window.PP._automationCache = null; window.PP._calCache = null; } catch(_){}
+              try { if (typeof render === 'function' && (state.page === 'automation' || state.page === 'calendar')) render(); } catch(_){}
+            }
+          })
+          .catch(function(){});
+      };
+      tick();                                          // flush anything already due right now
+      window.PP._duePoller = setInterval(tick, 60000);
+    } catch(_){}
+  }
+
   // boot — a returning user with a valid token lands straight in the app
   (async function(){
     if (getTok()) {
@@ -6578,6 +6607,7 @@ render();
         applyMe(me);
         state.page = 'profile';
         render();
+        startDuePoller();
         // Pull cloud state in background (silent — merge into local + re-render if changed)
         if (typeof cloudPullOnBoot === 'function') cloudPullOnBoot();
       }
