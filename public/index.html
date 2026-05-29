@@ -2328,14 +2328,20 @@ render();
     var hook = hookObj ? (hookObj.text || '') : '';
     var caption = state.genCaption || '';
     var hashtags = state.genHashtags || [];
-    var imgs = state.genImages || [];
+    // Match the preview: it renders the Boolean-filtered list, so index the
+    // same way (skips failed/null slots) — otherwise a null-first array posts
+    // text-only even though the preview shows a real image.
+    var imgs = (state.genImages || []).filter(Boolean);
     var img = imgs[state.previewIndex] || imgs[0] || '';
     if (!img && !caption && !hook) {
       toast(L('ยังไม่มีคอนเทนต์ — กด "สร้างทั้งหมด" ให้ AI สร้างรูป/แคปชั่นก่อน','No content yet — generate image/caption first'),'error');
       return;
     }
-    var image_base64 = '';
+    // genImages entries are EITHER a data: URL (sync models) OR a hosted
+    // http(s) URL (async models stored on Supabase). Send the right field.
+    var image_base64 = '', image_url = '';
     if (img && /^data:/.test(img)) { var mm = img.match(/^data:[^;]+;base64,(.*)$/); image_base64 = mm ? mm[1] : ''; }
+    else if (img && /^https?:\/\//.test(img)) { image_url = img; }
     // Scheduled time (schedule / ai modes).
     var scheduled_at = '';
     if (state.scheduleMode === 'schedule' || state.scheduleMode === 'ai') {
@@ -2358,6 +2364,7 @@ render();
         course: ab.id,
         hook: hook, caption: caption, hashtags: hashtags,
         image_base64: image_base64 || undefined,
+        image_url: image_url || undefined,
         scheduled_at: scheduled_at || undefined,
       }});
       if (r && r.ok) {
