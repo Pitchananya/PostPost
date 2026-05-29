@@ -275,6 +275,17 @@ export function pageProfile() {
           <button class="btn ghost sm" data-aiins-template="sales-focused">${raw(I('sparkles', 12))} ${T('Template: Sales-Focused', 'Template: Sales-Focused')}</button>
           <button class="btn ghost sm" style="color:var(--red)" data-aiins-clear="1">${raw(I('x', 12, '#DC2626'))} ${T('ล้าง', 'Clear')}</button>
         </div>
+        <div style="margin-bottom:10px">
+          <div class="micro" style="color:var(--muted);margin-bottom:5px">${raw(I('plus', 11, '#6B6473'))} ${T('แทรกทีละหัวข้อ (คลิกเพื่อเพิ่มลงท้าย):', 'Insert a section (appends to the end):')}</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            ${raw([
+              ['identity', 'IDENTITY'], ['persona', 'PERSONA & TONE'], ['goals', 'GOALS & KPIs'],
+              ['workflow', 'WORKFLOW'], ['rules', 'RULES'], ['frameworks', 'HOOK FRAMEWORKS'],
+              ['style', 'STYLE GUIDE'], ['safety', 'SAFETY'], ['business', T('ข้อมูลธุรกิจ', 'Business info')],
+              ['visual', 'VISUAL STYLE'],
+            ].map(([k, label]) => `<button class="pill" data-aiins-section="${k}" style="height:26px;font-size:11px;padding:0 10px">+ ${label}</button>`).join(''))}
+          </div>
+        </div>
         <textarea
           class="textarea" id="ppBrandAiInstruction" rows="14"
           placeholder="${T(
@@ -283,6 +294,7 @@ export function pageProfile() {
           )}"
           style="font-family:var(--mono);font-size:12px;line-height:1.7;resize:vertical;min-height:280px"
         >${activeBrand.aiInstruction || ''}</textarea>
+        <div class="micro" style="margin-top:4px;color:var(--muted);text-align:right"><span id="ppAiInsCount">${(activeBrand.aiInstruction || '').length}</span> / 8,000</div>
         <div class="micro" style="margin-top:6px;color:var(--muted);line-height:1.55">
           💡 ${raw(T(
             'AI จะใช้ instruction นี้นำหน้า prompt มาตรฐาน (brand profile + voice + archetype ยังถูกส่งให้ AI ด้วย) · บันทึกอัตโนมัติ 2 วินาทีหลังหยุดพิมพ์ · max 8,000 ตัวอักษร',

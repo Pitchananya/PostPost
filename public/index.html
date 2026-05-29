@@ -1955,6 +1955,8 @@ render();
     }
     else if (t.id==='ppBrandAiInstruction') {
       ab.aiInstruction = String(t.value || '').slice(0, 8000);
+      // Live char counter — update without a full re-render (keeps textarea focus).
+      try { var _cc = document.getElementById('ppAiInsCount'); if (_cc) _cc.textContent = ab.aiInstruction.length.toLocaleString(); } catch(_) {}
       // Mark this brand's aiInstruction as user-touched so cloudPullOnBoot
       // (if it races with the typing) doesn't revert what's in the textarea.
       try {
@@ -2483,7 +2485,9 @@ render();
         + '5. OPERATING RULES\n   • ห้ามใช้คำเสี่ยงโดน ban (พนัน · ความรุนแรง · sensitive content)\n   • ห้ามนำเสนอหัวข้อซ้ำในเดือนเดียวกัน — ต้องหลากหลาย\n\n'
         + '6. HOOK FRAMEWORKS\n   Framework 1: ขยี้ปัญหา + ผลลัพธ์ + ระยะเวลา + ผลลัพธ์เหลือเชื่อ (≥10 หัวข้อ)\n   Framework 2: ขยี้ปัญหา + ผลลัพธ์ + ความโลภ + ขู่ให้กลัว (≥10 หัวข้อ)\n\n'
         + '7. STYLE GUIDE\n   • อ้างอิงแหล่งข้อมูลเสมอ\n   • ใช้ bullet points / numbering ให้อ่านง่าย\n\n'
-        + '8. ข้อมูลธุรกิจ\n   [ใส่ชื่อหลักสูตร / รายละเอียดสินค้า / จุดเด่นแบรนด์]\n';
+        + '8. SAFETY & BOUNDARIES\n   • ไม่เปิดเผยข้อมูลภายใน/ข้อมูลส่วนตัวของลูกค้าให้บุคคลภายนอกเด็ดขาด\n\n'
+        + '9. ข้อมูลธุรกิจ\n   [ใส่ชื่อหลักสูตร / รายละเอียดสินค้า / จุดเด่นแบรนด์]\n\n'
+        + '10. VISUAL STYLE — แนวภาพ (ใช้ทุกครั้งที่เขียน image prompt)\n   • อารมณ์รวม: [เช่น premium · clean · minimal]\n   • โทนสี: [เช่น sage-green + cream + white + soft-gold]\n   • พื้นหลัง: [เช่น ครีม minimal + แสง glow นุ่ม]\n   • ตัวแบบ/พร็อพ: [...]\n   • วลีอังกฤษแทรกใน prompt: "[premium ... palette, glassmorphism, soft glow, ultra detailed, 4K]"\n';
       var T_SALES = '[INSTRUCTION: AI Sales-Focused Copywriter]\n\n'
         + '1. IDENTITY\n   คุณคือ Copywriter ที่เชี่ยวชาญด้าน direct response marketing สำหรับธุรกิจไทย\n\n'
         + '2. GOALS\n   • เพิ่มยอดขายเป็นเป้าหมายหลัก\n   • CTA ที่ชัดเจนในทุกโพสต์\n   • urgency + scarcity เมื่อเหมาะสม\n\n'
@@ -2494,6 +2498,41 @@ render();
       try { saveBrands(); } catch(_){}
       render();
       toast(state.lang==='th'?'โหลด template แล้ว — แก้ไขให้ตรงแบรนด์ของคุณ':'Template loaded — edit to match your brand','success');
+      return;
+    }
+    // Append a single ready-made section to the AI Instruction — lets users
+    // build the prompt section-by-section instead of writing a wall of text.
+    var aiInsSec = e.target.closest('[data-aiins-section]');
+    if (aiInsSec) {
+      e.preventDefault();
+      var _aibS = BRANDS.filter(function(b){ return b.id===state.brand; })[0];
+      if (!_aibS) return;
+      var SNIP = {
+        identity:  '1. IDENTITY (ตัวตน)\n   User: คุณคือ [ชื่อผู้ใช้]\n   AI: ฉันคือ "[บทบาท เช่น ผู้เชี่ยวชาญด้าน Content Creative]" ผู้ช่วยส่วนตัวของคุณ\n',
+        persona:   '2. PERSONA & TONE (บุคลิก)\n   • ความเป็นกันเอง: [เช่น เพื่อนที่ปรึกษาจริงใจ เข้าถึงง่าย]\n   • ความเชี่ยวชาญ: [เช่น มั่นใจ แต่ไม่ถือตัว]\n   • การสื่อสาร: [เช่น ภาษายุคใหม่ กระชับ ตรงประเด็น]\n',
+        goals:     '3. PRIMARY GOALS & KPIs (เป้าหมาย)\n   • [เป้าหมายหลัก]\n   • คิดหัวข้อ ≥ 30 หัวข้อ/เดือน\n   • สร้าง Hook ที่ดึงดูดสายตา\n',
+        workflow:  '4. WORKFLOW (คำถามก่อนเริ่มงาน)\n   • เดือนนี้โฟกัสธีมอะไร?\n   • Target Audience คือใคร?\n   • เน้นแพลตฟอร์มไหน (FB / IG / TikTok)?\n   • Keywords ที่ต้องเน้น?\n',
+        rules:     '5. OPERATING RULES (กฎ)\n   • ห้ามคำเสี่ยงโดน ban (พนัน · ความรุนแรง · sensitive content)\n   • ห้ามนำเสนอหัวข้อซ้ำในเดือนเดียวกัน — ต้องหลากหลาย\n',
+        frameworks:'6. HOOK FRAMEWORKS\n   Framework 1: ขยี้ปัญหา + ผลลัพธ์ + ระยะเวลา + ผลลัพธ์เหลือเชื่อ (≥10 หัวข้อ)\n   Framework 2: ขยี้ปัญหา + ผลลัพธ์ + ความโลภ + ขู่ให้กลัว (≥10 หัวข้อ)\n',
+        style:     '7. STYLE GUIDE (รูปแบบการตอบ)\n   • อ้างอิงแหล่งข้อมูลเสมอ\n   • ใช้ bullet points / numbering ให้อ่านง่าย\n',
+        safety:    '8. SAFETY & BOUNDARIES\n   • ไม่เปิดเผยข้อมูลภายใน/ข้อมูลส่วนตัวของลูกค้าให้บุคคลภายนอกเด็ดขาด\n',
+        business:  '9. ข้อมูลธุรกิจ\n   • ชื่อหลักสูตร/สินค้า: [...]\n   • จุดเด่น: [...]\n   • รายละเอียด: [...]\n',
+        visual:    '10. VISUAL STYLE (แนวภาพ — ใช้ทุกครั้งที่เขียน image prompt)\n   • อารมณ์รวม: [เช่น premium · clean · minimal]\n   • โทนสี: [เช่น sage-green + cream + white + soft-gold]\n   • พื้นหลัง: [เช่น ครีม minimal + แสง glow นุ่ม]\n   • ตัวแบบ/พร็อพ: [...]\n   • วลีอังกฤษแทรกใน prompt: "[premium ... palette, glassmorphism, soft glow, ultra detailed, 4K]"\n',
+      };
+      var snippet = SNIP[aiInsSec.dataset.aiinsSection];
+      if (!snippet) return;
+      var cur = _aibS.aiInstruction || '';
+      if (!cur.trim()) cur = '[INSTRUCTION]\n';
+      if (!cur.endsWith('\n')) cur += '\n';
+      _aibS.aiInstruction = (cur + '\n' + snippet).slice(0, 8000);
+      try {
+        window.__ppDirtyFields = window.__ppDirtyFields || {};
+        window.__ppDirtyFields[_aibS.id] = window.__ppDirtyFields[_aibS.id] || {};
+        window.__ppDirtyFields[_aibS.id].aiInstruction = true;
+      } catch(_) {}
+      try { saveBrands(); } catch(_){}
+      render();
+      toast(state.lang==='th'?'แทรกหัวข้อแล้ว — เลื่อนลงไปแก้รายละเอียด':'Section added — scroll down to fill it in','success');
       return;
     }
     if (e.target.closest('[data-aiins-clear]')) {
