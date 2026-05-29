@@ -62,7 +62,7 @@ const AI_INS_SECTIONS = [
   { key: 'frameworks', th: 'Hook Frameworks',         en: 'Hook frameworks',  ctitle: 'HOOK FRAMEWORKS', opts: ['ขยี้ปัญหา + ผลลัพธ์ + เวลา', 'ความโลภ + ความกลัว', 'ตั้งคำถามชวนสงสัย', 'ตัวเลขช็อก', 'before / after', 'storytelling'] },
   { key: 'style',      th: 'สไตล์การตอบ (Style)',     en: 'Style',            ctitle: 'STYLE',           opts: ['bullet points', 'numbering', 'ตาราง', 'ย่อหน้าสั้น', 'อ้างอิงแหล่งข้อมูล'] },
   { key: 'length',     th: 'ความยาว',                 en: 'Length',           ctitle: 'LENGTH',          single: true, opts: ['สั้นกระชับ', 'ปานกลาง', 'ละเอียด'] },
-  { key: 'visual',     th: 'แนวภาพ (Visual)',         en: 'Visual style',     ctitle: 'VISUAL STYLE',    opts: ['premium', 'clean', 'minimal', 'luxury', 'สดใส', 'อบอุ่น'] },
+  { key: 'visual',     th: 'แนวภาพ (Visual)',         en: 'Visual style',     ctitle: 'VISUAL STYLE',    opts: ['premium', 'clean', 'minimal', 'luxury', 'สดใส', 'อบอุ่น', 'Korean premium wellness', 'glassmorphism cards', 'sage-green + cream + gold', 'อินโฟกราฟิกหลายกล่อง', 'ขนสัตว์สมจริง', 'แสง glow + sparkle', '4K ultra detailed'] },
   { key: 'safety',     th: 'ความปลอดภัย (Safety)',    en: 'Safety',           ctitle: 'SAFETY',          opts: ['ไม่เปิดเผยข้อมูลภายใน', 'ไม่ให้คำแนะนำผิดกฎหมาย'] },
 ];
 
@@ -92,6 +92,9 @@ const AI_INS_PRESETS = {
   'viral-short':      { identity: ['ครีเอเตอร์สายไวรัล'], persona: ['สนุกสนาน'], platform: ['TikTok', 'Instagram'], frameworks: ['ตัวเลขช็อก', 'ตั้งคำถามชวนสงสัย'], length: ['สั้นกระชับ'] },
   'luxury-premium':   { identity: ['ที่ปรึกษาแบรนด์'], persona: ['หรูหรา'], rules: ['ห้ามเคลมเกินจริง'], visual: ['luxury', 'minimal', 'premium'], length: ['สั้นกระชับ'] },
   'community':        { identity: ['ครีเอเตอร์สายไวรัล'], persona: ['เป็นกันเอง', 'อบอุ่น'], goals: ['สร้าง community', 'เพิ่ม engagement'], frameworks: ['ตั้งคำถามชวนสงสัย'] },
+  // Premium Korean pet-wellness infographic look (per user's poster brief) —
+  // pre-selects the rich VISUAL STYLE so AI image prompts follow the aesthetic.
+  'infographic-premium': { identity: ['ที่ปรึกษาแบรนด์'], persona: ['หรูหรา'], goals: ['สร้าง awareness'], style: ['numbering'], length: ['ละเอียด'], visual: ['Korean premium wellness', 'glassmorphism cards', 'sage-green + cream + gold', 'อินโฟกราฟิกหลายกล่อง', 'ขนสัตว์สมจริง', 'แสง glow + sparkle', '4K ultra detailed', 'premium', 'clean'] },
 };
 function aiInsPreset(kind) { return AI_INS_PRESETS[kind] ? JSON.parse(JSON.stringify(AI_INS_PRESETS[kind])) : null; }
 
@@ -340,6 +343,7 @@ export function pageProfile() {
             <option value="viral-short">${T('ไวรัลสายสั้น (TikTok/Reels)', 'Short-form Viral')}</option>
             <option value="luxury-premium">${T('แบรนด์พรีเมียม (Luxury)', 'Luxury / Premium')}</option>
             <option value="community">${T('สร้างคอมมูนิตี้ (Engagement)', 'Community & Engagement')}</option>
+            <option value="infographic-premium">${T('อินโฟกราฟิกพรีเมียม (เกาหลี/สัตว์เลี้ยง)', 'Premium Korean infographic')}</option>
           </select>
           <button class="btn ghost sm" style="color:var(--red)" data-aiins-clear="1">${raw(I('x', 12, '#DC2626'))} ${T('ล้างทั้งหมด', 'Clear all')}</button>
         </div>
