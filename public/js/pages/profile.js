@@ -146,7 +146,10 @@ export function pageProfile() {
   else if (state.productSort === 'rating') viewProducts.sort((a, b) => (b.rating || 0) - (a.rating || 0));
   const filterOn = !!(state.productSort || state.productInStockOnly);
 
-  const actions = `<button class="btn outline sm">${I('info', 14)} ${T('ดูสคริปต์ AI', 'View AI prompt')}</button>
+  const savedBadge = state.brandJustSaved
+    ? `<span class="pill green" style="height:30px;display:inline-flex;align-items:center;gap:5px;font-weight:800">${I('check', 13, '#16A34A')} ${T('บันทึกแล้ว ✓', 'Saved ✓')}</span>`
+    : '';
+  const actions = `${savedBadge}<button class="btn outline sm">${I('info', 14)} ${T('ดูสคริปต์ AI', 'View AI prompt')}</button>
      <button class="btn primary sm" data-savebrand="1">${I('check', 14)} ${T('บันทึก', 'Save')}</button>`;
 
   return html`${raw(head(
@@ -570,5 +573,9 @@ export function pageProfile() {
         ? `${T('ย่อรายการสินค้า', 'Show less')} ${I('chev_up', 14)}`
         : `${T('ดูสินค้าอีก ' + (viewProducts.length - 5) + ' รายการ', 'Show ' + (viewProducts.length - 5) + ' more')} ${I('chev_down', 14)}`}</button>
     </div>`) : ''}
+  </div>
+
+  <div style="margin-top:24px;display:flex;justify-content:center;flex-wrap:wrap;gap:10px">
+    <button class="btn primary" data-savebrand="1" style="min-width:300px;justify-content:center;font-size:15px;height:50px;box-shadow:0 6px 18px rgba(255,122,26,.35)">${raw(I('check', 18))} ${raw(T('บันทึกโปรไฟล์แบรนด์', 'Save brand profile'))}</button>
   </div>`;
 }

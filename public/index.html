@@ -1886,8 +1886,18 @@ render();
       if (bt) df.sub = true;
     } catch(_) {}
     saveBrands();
+    state.brandJustSaved = true;                 // green "saved" badge at the top
     toast(state.lang==='th'?'บันทึกโปรไฟล์แบรนด์แล้ว ✓':'Brand profile saved ✓','success');
     render();
+    // Scroll the content back to the top so the user sees the saved status.
+    try {
+      var _m = document.querySelector('.main');
+      if (_m && _m.scrollTo) _m.scrollTo({ top: 0, behavior: 'smooth' });
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch(_){ try { window.scrollTo(0, 0); } catch(__){} }
+    // Auto-clear the badge after a few seconds.
+    try { clearTimeout(window.__ppSavedTimer); } catch(_){}
+    window.__ppSavedTimer = setTimeout(function(){ state.brandJustSaved = false; if (state.page === 'profile') render(); }, 4000);
   }
   document.addEventListener('click', function(e){
     if (e.target.closest('[data-savebrand]')) { e.preventDefault(); saveBrandProfile(); }
