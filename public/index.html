@@ -2268,9 +2268,22 @@ render();
           'Facebook granted 1 page — tap to link it to '+ab.name+', or use "Reconnect & pick another page" below')
       : L('account ของคุณมี '+pages.length+' เพจ — เลือกอันที่จะผูกกับ '+ab.name,
           pages.length+' pages — pick one for '+ab.name);
+    // How-to guide: FB only returns the pages the user granted at login, so to
+    // attach a different page they must reconnect and re-select on FB's screen.
+    var guide = '<div style="margin:0 14px 12px;padding:12px 14px;border-radius:12px;background:var(--blue-soft);border:1px solid #DBE5FF">'
+      + '<div style="font-size:12.5px;font-weight:800;color:#1E40AF;margin-bottom:6px;display:flex;align-items:center;gap:6px">'+I('info',13,'#1E40AF')+' '+L('วิธีสลับ / เพิ่มเพจอื่น','How to switch / add another page')+'</div>'
+      + '<ol style="margin:0;padding-left:18px;font-size:11.5px;color:#1E3A5F;line-height:1.75">'
+      +   '<li>'+L('กดปุ่ม <b>"เชื่อมใหม่ + เลือกเพจอื่น"</b> ด้านล่าง','Tap <b>"Reconnect &amp; pick another page"</b> below')+'</li>'
+      +   '<li>'+L('ในหน้าต่าง Facebook ที่เด้งขึ้น ถ้ามีคำว่า <b>"แก้ไขการตั้งค่า"</b> ให้กดก่อน','On the Facebook popup, tap <b>"Edit settings"</b> if it appears')+'</li>'
+      +   '<li>'+L('ที่หน้า <b>"เลือกเพจที่ต้องการให้เข้าถึง"</b> → ติ๊ก ☑️ เพจที่ต้องการ (หรือกด "เลือกทั้งหมด")','On <b>"Choose Pages"</b>, tick the page(s) you want (or "Select all")')+'</li>'
+      +   '<li>'+L('กด <b>"ดำเนินการต่อ"</b> ไปจนจบ แล้วกลับมาเลือกเพจที่นี่','Tap <b>"Continue"</b> to the end, then pick the page here')+'</li>'
+      + '</ol>'
+      + '<div style="font-size:10.5px;color:#64748B;margin-top:7px">'+L('* เห็นแค่เพจเดียวเพราะตอน login ก่อนหน้าเลือกให้สิทธิ์ไว้แค่เพจเดียว','* Only one page shows because just one was granted at the previous login')+'</div>'
+      + '</div>';
     ov.innerHTML = '<div style="background:#fff;border-radius:24px;max-width:520px;width:100%;max-height:88vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 70px rgba(38,20,71,.4)">'
       + '<div style="padding:18px 22px;border-bottom:1px solid var(--line)"><div style="font-size:16px;font-weight:800;color:var(--purple)">'+L('เลือกเพจ Facebook','Pick a Facebook Page')+'</div><div class="micro" style="margin-top:2px">'+subtitle+'</div></div>'
       + '<div style="overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:8px">'+rows+'</div>'
+      + guide
       // Footer: reconnect with FB's page re-selection. Closing the picker
       // then re-running OAuth with auth_type=reauthorize forces Facebook to
       // show its "which pages do you allow?" screen again — the only way to
