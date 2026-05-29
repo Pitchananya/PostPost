@@ -2507,24 +2507,29 @@ render();
       e.preventDefault();
       var _aibS = BRANDS.filter(function(b){ return b.id===state.brand; })[0];
       if (!_aibS) return;
+      // Each section = { t: heading, b: body with inline choice lists }.
+      // The leading number is assigned dynamically so sections stay 1,2,3…
+      // in the order the user inserts them (no fixed numbers, no gaps).
       var SNIP = {
-        identity:  '1. IDENTITY (ตัวตน)\n   User: คุณคือ [ชื่อผู้ใช้]\n   AI: ฉันคือ "[บทบาท เช่น ผู้เชี่ยวชาญด้าน Content Creative]" ผู้ช่วยส่วนตัวของคุณ\n',
-        persona:   '2. PERSONA & TONE (บุคลิก)\n   • ความเป็นกันเอง: [เช่น เพื่อนที่ปรึกษาจริงใจ เข้าถึงง่าย]\n   • ความเชี่ยวชาญ: [เช่น มั่นใจ แต่ไม่ถือตัว]\n   • การสื่อสาร: [เช่น ภาษายุคใหม่ กระชับ ตรงประเด็น]\n',
-        goals:     '3. PRIMARY GOALS & KPIs (เป้าหมาย)\n   • [เป้าหมายหลัก]\n   • คิดหัวข้อ ≥ 30 หัวข้อ/เดือน\n   • สร้าง Hook ที่ดึงดูดสายตา\n',
-        workflow:  '4. WORKFLOW (คำถามก่อนเริ่มงาน)\n   • เดือนนี้โฟกัสธีมอะไร?\n   • Target Audience คือใคร?\n   • เน้นแพลตฟอร์มไหน (FB / IG / TikTok)?\n   • Keywords ที่ต้องเน้น?\n',
-        rules:     '5. OPERATING RULES (กฎ)\n   • ห้ามคำเสี่ยงโดน ban (พนัน · ความรุนแรง · sensitive content)\n   • ห้ามนำเสนอหัวข้อซ้ำในเดือนเดียวกัน — ต้องหลากหลาย\n',
-        frameworks:'6. HOOK FRAMEWORKS\n   Framework 1: ขยี้ปัญหา + ผลลัพธ์ + ระยะเวลา + ผลลัพธ์เหลือเชื่อ (≥10 หัวข้อ)\n   Framework 2: ขยี้ปัญหา + ผลลัพธ์ + ความโลภ + ขู่ให้กลัว (≥10 หัวข้อ)\n',
-        style:     '7. STYLE GUIDE (รูปแบบการตอบ)\n   • อ้างอิงแหล่งข้อมูลเสมอ\n   • ใช้ bullet points / numbering ให้อ่านง่าย\n',
-        safety:    '8. SAFETY & BOUNDARIES\n   • ไม่เปิดเผยข้อมูลภายใน/ข้อมูลส่วนตัวของลูกค้าให้บุคคลภายนอกเด็ดขาด\n',
-        business:  '9. ข้อมูลธุรกิจ\n   • ชื่อหลักสูตร/สินค้า: [...]\n   • จุดเด่น: [...]\n   • รายละเอียด: [...]\n',
-        visual:    '10. VISUAL STYLE (แนวภาพ — ใช้ทุกครั้งที่เขียน image prompt)\n   • อารมณ์รวม: [เช่น premium · clean · minimal]\n   • โทนสี: [เช่น sage-green + cream + white + soft-gold]\n   • พื้นหลัง: [เช่น ครีม minimal + แสง glow นุ่ม]\n   • ตัวแบบ/พร็อพ: [...]\n   • วลีอังกฤษแทรกใน prompt: "[premium ... palette, glassmorphism, soft glow, ultra detailed, 4K]"\n',
+        identity:  { t: 'IDENTITY (ตัวตน)', b: '   User: คุณคือ [ชื่อผู้ใช้]\n   AI: ฉันคือ "[บทบาท]" ผู้ช่วยส่วนตัวของคุณ\n   • ตัวเลือกบทบาท: ผู้เชี่ยวชาญ Content Creative · Copywriter สายขาย · ครีเอเตอร์สายไวรัล · ที่ปรึกษาแบรนด์\n' },
+        persona:   { t: 'PERSONA & TONE (บุคลิก)', b: '   • โทนการสื่อสาร (เลือก/ลบที่ไม่ใช้): เป็นกันเอง · ทางการ · สนุกสนาน · หรูหรา · จริงจัง · อบอุ่น\n   • ระดับภาษา: ภาษาพูด · กึ่งทางการ · ทางการ\n   • มุมมอง: เพื่อนที่ปรึกษา · ผู้เชี่ยวชาญ · พี่สาว/พี่ชาย\n' },
+        goals:     { t: 'PRIMARY GOALS & KPIs (เป้าหมาย)', b: '   • เป้าหมายหลัก (เลือก): เพิ่ม engagement · เพิ่มยอดขาย · สร้าง awareness · สร้าง community\n   • คิดหัวข้อ ≥ 30 หัวข้อ/เดือน\n   • สร้าง Hook ที่ดึงดูดสายตา\n' },
+        workflow:  { t: 'WORKFLOW (คำถามก่อนเริ่มงาน)', b: '   • เดือนนี้โฟกัสธีมอะไร?\n   • Target Audience คือใคร?\n   • เน้นแพลตฟอร์มไหน (FB · IG · TikTok · YouTube)?\n   • Keywords ที่ต้องเน้น?\n' },
+        rules:     { t: 'OPERATING RULES (กฎ)', b: '   • ห้ามคำเสี่ยงโดน ban (พนัน · ความรุนแรง · sensitive content)\n   • ห้ามหัวข้อซ้ำในเดือนเดียวกัน — ต้องหลากหลาย\n   • ตัวเลือกเพิ่ม: ห้ามคำการันตี 100% · ห้ามเคลมเกินจริง · ลงท้ายด้วย CTA ทุกครั้ง\n' },
+        frameworks:{ t: 'HOOK FRAMEWORKS', b: '   Framework 1: ขยี้ปัญหา + ผลลัพธ์ + ระยะเวลา + ผลลัพธ์เหลือเชื่อ (≥10 หัวข้อ)\n   Framework 2: ขยี้ปัญหา + ผลลัพธ์ + ความโลภ + ขู่ให้กลัว (≥10 หัวข้อ)\n   ตัวเลือกเพิ่ม: ตั้งคำถามชวนสงสัย · ตัวเลขช็อก · before/after · เล่าเรื่อง (storytelling)\n' },
+        style:     { t: 'STYLE GUIDE (รูปแบบการตอบ)', b: '   • รูปแบบ (เลือก): bullet points · numbering · ตาราง · ย่อหน้าสั้น\n   • อ้างอิงแหล่งข้อมูลเมื่อจำเป็น\n   • ความยาว: สั้นกระชับ · ปานกลาง · ละเอียด\n' },
+        safety:    { t: 'SAFETY & BOUNDARIES', b: '   • ไม่เปิดเผยข้อมูลภายใน/ข้อมูลส่วนตัวของลูกค้าให้บุคคลภายนอกเด็ดขาด\n' },
+        business:  { t: 'ข้อมูลธุรกิจ', b: '   • ชื่อหลักสูตร/สินค้า: [...]\n   • จุดเด่น: [...]\n   • รายละเอียด: [...]\n' },
+        visual:    { t: 'VISUAL STYLE (แนวภาพ — ใช้ทุกครั้งที่เขียน image prompt)', b: '   • อารมณ์รวม (เลือก): premium · clean · minimal · luxury · สดใส · อบอุ่น\n   • โทนสี: [เช่น sage-green + cream + white + soft-gold]\n   • พื้นหลัง: [เช่น ครีม minimal + แสง glow นุ่ม]\n   • ตัวแบบ/พร็อพ: [...]\n   • วลีอังกฤษแทรกใน prompt: "[premium ... palette, glassmorphism, soft glow, ultra detailed, 4K]"\n' },
       };
-      var snippet = SNIP[aiInsSec.dataset.aiinsSection];
-      if (!snippet) return;
+      var def = SNIP[aiInsSec.dataset.aiinsSection];
+      if (!def) return;
       var cur = _aibS.aiInstruction || '';
       if (!cur.trim()) cur = '[INSTRUCTION]\n';
       if (!cur.endsWith('\n')) cur += '\n';
-      _aibS.aiInstruction = (cur + '\n' + snippet).slice(0, 8000);
+      // Next number = how many top-level "N." headings already exist + 1.
+      var nextNum = (cur.match(/^\d+\.\s/gm) || []).length + 1;
+      _aibS.aiInstruction = (cur + '\n' + nextNum + '. ' + def.t + '\n' + def.b).slice(0, 8000);
       try {
         window.__ppDirtyFields = window.__ppDirtyFields || {};
         window.__ppDirtyFields[_aibS.id] = window.__ppDirtyFields[_aibS.id] || {};
@@ -2533,6 +2538,24 @@ render();
       try { saveBrands(); } catch(_){}
       render();
       toast(state.lang==='th'?'แทรกหัวข้อแล้ว — เลื่อนลงไปแก้รายละเอียด':'Section added — scroll down to fill it in','success');
+      return;
+    }
+    // Re-sequence every top-level "N." heading to 1,2,3… (fixes gaps after
+    // deleting/reordering sections).
+    if (e.target.closest('[data-aiins-renumber]')) {
+      e.preventDefault();
+      var _aibN = BRANDS.filter(function(b){ return b.id===state.brand; })[0];
+      if (!_aibN || !(_aibN.aiInstruction || '').trim()) return;
+      var _rn = 0;
+      _aibN.aiInstruction = _aibN.aiInstruction.replace(/^\d+\.\s/gm, function(){ _rn++; return _rn + '. '; });
+      try {
+        window.__ppDirtyFields = window.__ppDirtyFields || {};
+        window.__ppDirtyFields[_aibN.id] = window.__ppDirtyFields[_aibN.id] || {};
+        window.__ppDirtyFields[_aibN.id].aiInstruction = true;
+      } catch(_) {}
+      try { saveBrands(); } catch(_){}
+      render();
+      toast(state.lang==='th'?'จัดเลขหัวข้อใหม่แล้ว ✓':'Renumbered sections ✓','success');
       return;
     }
     if (e.target.closest('[data-aiins-clear]')) {

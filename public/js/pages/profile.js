@@ -273,6 +273,7 @@ export function pageProfile() {
         <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
           <button class="btn ghost sm" data-aiins-template="content-creative">${raw(I('sparkles', 12))} ${T('Template: Content Creative', 'Template: Content Creative')}</button>
           <button class="btn ghost sm" data-aiins-template="sales-focused">${raw(I('sparkles', 12))} ${T('Template: Sales-Focused', 'Template: Sales-Focused')}</button>
+          <button class="btn ghost sm" data-aiins-renumber="1">${raw(I('refresh', 12))} ${T('จัดเลขใหม่', 'Renumber')}</button>
           <button class="btn ghost sm" style="color:var(--red)" data-aiins-clear="1">${raw(I('x', 12, '#DC2626'))} ${T('ล้าง', 'Clear')}</button>
         </div>
         <div style="margin-bottom:10px">
