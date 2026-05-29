@@ -97,7 +97,7 @@ export function pageAutomation() {
 
   return html`${raw(head('OPERATIONS', 'Automation Log',
     T('ประวัติการโพสต์อัตโนมัติ · ดึงจากระบบจริง', 'Auto-post history · live data'),
-    raw(actions)
+    actions
   ))}
 
   ${cache.loading ? raw(`<div class="card" style="text-align:center;padding:32px;color:var(--muted)">
