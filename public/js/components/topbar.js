@@ -48,7 +48,7 @@ export function topbarHTML() {
         <input placeholder="${T('ค้นหาโพสต์, สินค้า, หัวข้อ...', 'Search posts, products, topics...')}" />
         <span class="searchKbd">⌘K</span>
       </div>
-      <div class="chWidget" title="${T('เชื่อมต่อ ช่องทางโพสต์', 'Connected channels')}">
+      <div class="chWidget" data-go="profile" title="${T('จัดการ / เชื่อมช่องทางโพสต์', 'Manage / connect channels')}" style="cursor:pointer">
         ${(function () {
           const ab = BRANDS.find((b) => b.id === state.brand) || BRANDS[0];
           const ch = (ab && ab.ch) || [];
