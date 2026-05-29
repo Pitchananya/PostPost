@@ -2351,13 +2351,21 @@ render();
       if (!state.scheduleDate) { toast(L('เลือกวันที่ก่อน','Pick a date first'),'error'); return; }
       var dt = new Date(state.scheduleDate + 'T' + (state.scheduleTime || '19:00'));
       if (isNaN(dt.getTime())) { toast(L('วัน/เวลาไม่ถูกต้อง','Invalid date/time'),'error'); return; }
-      // FB requires scheduled posts ≥10 min ahead. If the chosen time is too
-      // soon/past, bump it to now+11 min and tell the user — don't hard-block.
-      var _minTs = Date.now() + 11 * 60 * 1000;
+      // FB requires scheduled posts ≥10 min ahead. If too soon/past, SNAP the
+      // picker fields to the next clean 5-min valid slot and ask the user to
+      // tap again — so the input and the confirm dialog always show the same
+      // time (no silent mismatch).
+      var _minTs = Date.now() + 10 * 60 * 1000;
       if (dt.getTime() < _minTs) {
-        dt = new Date(_minTs);
-        toast(L('เวลาที่เลือกใกล้/ผ่านไปแล้ว — ปรับเป็น ' + dt.toLocaleString() + ' (FB ต้องล่วงหน้า ≥10 นาที)',
-                'Too soon — bumped to ' + dt.toLocaleString() + ' (FB needs ≥10 min ahead)'));
+        var _b = new Date(_minTs + 60 * 1000);
+        _b.setSeconds(0, 0);
+        _b.setMinutes(_b.getMinutes() + ((5 - (_b.getMinutes() % 5)) % 5));
+        state.scheduleDate = _b.getFullYear() + '-' + String(_b.getMonth() + 1).padStart(2, '0') + '-' + String(_b.getDate()).padStart(2, '0');
+        state.scheduleTime = String(_b.getHours()).padStart(2, '0') + ':' + String(_b.getMinutes()).padStart(2, '0');
+        toast(L('เวลาใกล้/ผ่านไปแล้ว — ปรับเป็น ' + state.scheduleTime + ' น. · กด "ตั้งเวลาโพสต์" อีกครั้งเพื่อยืนยัน',
+                'Too soon — moved to ' + state.scheduleTime + '. Tap "Schedule" again to confirm'));
+        render();
+        return;
       }
       scheduled_at = dt.toISOString();
     }
