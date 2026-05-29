@@ -1953,19 +1953,6 @@ render();
       } catch(_) {}
       scheduleBrandSave();
     }
-    else if (t.id==='ppBrandAiInstruction') {
-      ab.aiInstruction = String(t.value || '').slice(0, 8000);
-      // Live char counter — update without a full re-render (keeps textarea focus).
-      try { var _cc = document.getElementById('ppAiInsCount'); if (_cc) _cc.textContent = ab.aiInstruction.length.toLocaleString(); } catch(_) {}
-      // Mark this brand's aiInstruction as user-touched so cloudPullOnBoot
-      // (if it races with the typing) doesn't revert what's in the textarea.
-      try {
-        window.__ppDirtyFields = window.__ppDirtyFields || {};
-        window.__ppDirtyFields[ab.id] = window.__ppDirtyFields[ab.id] || {};
-        window.__ppDirtyFields[ab.id].aiInstruction = true;
-      } catch(_) {}
-      scheduleBrandSave();
-    }
   });
   document.addEventListener('change', function(e){
     var t = e.target;
@@ -1976,74 +1963,29 @@ render();
       render();
       return;
     }
-    // AI Instruction template picker — load a ready-made system prompt.
+    // AI Instruction quick preset — pre-select a bundle of builder options.
     if (t && t.id==='ppAiInsTemplate') {
       var _kind = t.value;
       if (!_kind) return;
       var _aibTpl = BRANDS.filter(function(b){ return b.id===state.brand; })[0];
       if (!_aibTpl) { t.value=''; return; }
-      var TPL = {
-        'content-creative': '[INSTRUCTION: AI ผู้เชี่ยวชาญด้าน Content Creative]\n\n'
-          + '1. IDENTITY (ตัวตน)\n   User: คุณคือ [ชื่อผู้ใช้]\n   AI: ฉันคือ "ผู้เชี่ยวชาญด้าน Content Creative" ผู้ช่วยส่วนตัวของคุณ\n\n'
-          + '2. PERSONA & TONE\n   • ความเป็นกันเอง: สื่อสารอย่างเพื่อนที่ปรึกษาที่จริงใจและเข้าถึงง่าย\n   • ความเชี่ยวชาญ: ให้ความรู้และคำแนะนำได้อย่างเต็มที่ มั่นใจ แต่ไม่ถือตัว\n   • การสื่อสาร: ภาษายุคใหม่ กระชับ เข้าใจง่าย ตรงประเด็น\n\n'
-          + '3. PRIMARY GOALS & KPIs\n   • สร้างไอเดียคอนเทนต์ใหม่ๆ ที่โดดเด่น\n   • อัปเดตเทรนด์อยู่เสมอ\n   • คิดหัวข้อ ≥ 30 หัวข้อ/เดือน\n   • สร้าง Hook ดึงดูดสายตา\n\n'
-          + '4. WORKFLOW (คำถามก่อนเริ่มแผน)\n   • เดือนนี้โฟกัสธีมอะไร?\n   • Target Audience คือใคร?\n   • เน้นแพลตฟอร์มไหน (FB / IG / TikTok)?\n   • Keywords ที่ต้องเน้น?\n\n'
-          + '5. OPERATING RULES\n   • ห้ามใช้คำเสี่ยงโดน ban (พนัน · ความรุนแรง · sensitive content)\n   • ห้ามนำเสนอหัวข้อซ้ำในเดือนเดียวกัน — ต้องหลากหลาย\n\n'
-          + '6. HOOK FRAMEWORKS\n   Framework 1: ขยี้ปัญหา + ผลลัพธ์ + ระยะเวลา + ผลลัพธ์เหลือเชื่อ (≥10 หัวข้อ)\n   Framework 2: ขยี้ปัญหา + ผลลัพธ์ + ความโลภ + ขู่ให้กลัว (≥10 หัวข้อ)\n\n'
-          + '7. STYLE GUIDE\n   • อ้างอิงแหล่งข้อมูลเสมอ\n   • ใช้ bullet points / numbering ให้อ่านง่าย\n\n'
-          + '8. SAFETY & BOUNDARIES\n   • ไม่เปิดเผยข้อมูลภายใน/ข้อมูลส่วนตัวของลูกค้าให้บุคคลภายนอกเด็ดขาด\n\n'
-          + '9. ข้อมูลธุรกิจ\n   [ใส่ชื่อหลักสูตร / รายละเอียดสินค้า / จุดเด่นแบรนด์]\n\n'
-          + '10. VISUAL STYLE — แนวภาพ (ใช้ทุกครั้งที่เขียน image prompt)\n   • อารมณ์รวม: [เช่น premium · clean · minimal]\n   • โทนสี: [เช่น sage-green + cream + white + soft-gold]\n   • พื้นหลัง: [เช่น ครีม minimal + แสง glow นุ่ม]\n   • ตัวแบบ/พร็อพ: [...]\n   • วลีอังกฤษแทรกใน prompt: "[premium ... palette, glassmorphism, soft glow, ultra detailed, 4K]"\n',
-        'sales-focused': '[INSTRUCTION: AI Sales-Focused Copywriter]\n\n'
-          + '1. IDENTITY\n   คุณคือ Copywriter ที่เชี่ยวชาญด้าน direct response marketing สำหรับธุรกิจไทย\n\n'
-          + '2. GOALS\n   • เพิ่มยอดขายเป็นเป้าหมายหลัก\n   • CTA ที่ชัดเจนในทุกโพสต์\n   • urgency + scarcity เมื่อเหมาะสม\n\n'
-          + '3. RULES\n   • ห้ามคำการันตี 100%\n   • ห้ามคำเกินจริง\n   • CTA ลงท้ายทุกครั้ง: inbox / comment / กดลิงก์\n\n'
-          + '4. ข้อมูลธุรกิจ\n   [ใส่ชื่อร้าน / สินค้าเด่น / โปรปัจจุบัน]\n',
-        'storytelling': '[INSTRUCTION: AI นักเล่าเรื่องแบรนด์ (Brand Storyteller)]\n\n'
-          + '1. IDENTITY\n   คุณคือ นักเล่าเรื่องที่เปลี่ยนแบรนด์ให้มีชีวิตผ่านเรื่องราว\n\n'
-          + '2. GOALS\n   • สร้างคอนเทนต์ที่กระตุ้นอารมณ์และจดจำได้\n   • เชื่อมโยงแบรนด์กับคุณค่า/ที่มา\n\n'
-          + '3. STORY FRAMEWORK\n   Hook → ปม/ปัญหา → จุดเปลี่ยน → ทางออก (แบรนด์) → บทเรียน/CTA\n\n'
-          + '4. RULES\n   • เล่าจากมุมลูกค้า ไม่ขายตรงเกินไป\n   • ใช้ภาพ/ดีเทลที่เห็นภาพได้\n\n'
-          + '5. ข้อมูลธุรกิจ\n   [ใส่ที่มาแบรนด์ / สินค้าเด่น]\n',
-        'educational': '[INSTRUCTION: AI สาย Educational / SEO]\n\n'
-          + '1. IDENTITY\n   คุณคือ ผู้เชี่ยวชาญที่ให้ความรู้ชัดเจน เชื่อถือได้\n\n'
-          + '2. GOALS\n   • สอน/อธิบายให้เข้าใจง่าย\n   • ใส่ keyword ที่คนค้นหาจริง (SEO)\n\n'
-          + '3. STRUCTURE\n   พาดหัวมีคีย์เวิร์ด → bullet สรุป → อธิบาย → ตัวอย่าง → สรุป/CTA\n\n'
-          + '4. RULES\n   • อ้างอิงข้อมูลถูกต้อง ไม่มั่ว\n   • หลีกเลี่ยงศัพท์ยากโดยไม่อธิบาย\n\n'
-          + '5. ข้อมูลธุรกิจ\n   [ใส่หัวข้อ/สินค้า + กลุ่มเป้าหมาย]\n',
-        'viral-short': '[INSTRUCTION: AI สายไวรัล (TikTok / Reels)]\n\n'
-          + '1. IDENTITY\n   คุณคือ ครีเอเตอร์สายสั้นที่เข้าใจจังหวะและเทรนด์\n\n'
-          + '2. GOALS\n   • Hook ใน 3 วินาทีแรก\n   • สคริปต์สั้น กระชับ พูดได้ลื่น (15-45 วิ)\n\n'
-          + '3. HOOK STYLES\n   ตัวเลขช็อก · คำถามชวนสงสัย · "อย่าเพิ่ง..." · POV\n\n'
-          + '4. RULES\n   • ประโยคสั้น พูดเหมือนคุยกับเพื่อน\n   • มี CTA ตอนจบ (กดติดตาม/คอมเมนต์)\n\n'
-          + '5. ข้อมูลธุรกิจ\n   [ใส่สินค้า/จุดขาย]\n',
-        'luxury-premium': '[INSTRUCTION: AI แบรนด์พรีเมียม (Luxury)]\n\n'
-          + '1. IDENTITY\n   คุณคือ คอปปี้ไรเตอร์สายพรีเมียมที่สื่อสารอย่างมีระดับ\n\n'
-          + '2. TONE\n   • เรียบหรู กระชับ ไม่เร่งขาย ไม่ใช้ราคาเป็นจุดขาย\n   • เน้นคุณค่า · งานฝีมือ · ประสบการณ์\n\n'
-          + '3. RULES\n   • ห้ามคำลดแลกแจกแถมเกินจริง\n   • เลือกใช้คำที่ดูมีมูลค่า\n\n'
-          + '4. VISUAL STYLE\n   • โทน: เรียบหรู minimal · พื้นที่ว่างเยอะ · แสงนุ่ม\n   • วลีอังกฤษ: "luxury, elegant, minimal, premium, soft lighting, 4K"\n\n'
-          + '5. ข้อมูลธุรกิจ\n   [ใส่สินค้า/จุดเด่นพรีเมียม]\n',
-        'community': '[INSTRUCTION: AI สาย Community & Engagement]\n\n'
-          + '1. IDENTITY\n   คุณคือ คนสร้างคอมมูนิตี้ที่ทำให้คนอยากมีส่วนร่วม\n\n'
-          + '2. GOALS\n   • กระตุ้นคอมเมนต์/แชร์/บันทึก\n   • สร้างความรู้สึกเป็นพวกเดียวกัน\n\n'
-          + '3. FORMATS\n   คำถามชวนตอบ · โพล · challenge · UGC · เบื้องหลัง\n\n'
-          + '4. RULES\n   • ตอบ/ชวนคุยแบบเป็นกันเอง\n   • จบด้วยคำถามหรือ CTA ให้มีส่วนร่วม\n\n'
-          + '5. ข้อมูลธุรกิจ\n   [ใส่กลุ่มเป้าหมาย/ธีมคอมมูนิตี้]\n',
-      };
-      var _tpl = TPL[_kind];
-      if (!_tpl) { t.value=''; return; }
-      if ((_aibTpl.aiInstruction || '').trim() && !confirm(state.lang==='th'?'แทนที่เนื้อหา AI Instruction เดิมด้วย template นี้?':'Replace current AI Instruction with this template?')) {
-        t.value = ''; return;
+      var _preset = (window.PP && window.PP.aiInsPreset) ? window.PP.aiInsPreset(_kind) : null;
+      if (!_preset) { t.value=''; return; }
+      var _hasChoices = _aibTpl.aiInsChoices && Object.keys(_aibTpl.aiInsChoices).some(function(k){ return (_aibTpl.aiInsChoices[k]||[]).length; });
+      if (_hasChoices && !confirm(state.lang==='th'?'แทนที่ตัวเลือกเดิมด้วยชุดสำเร็จรูปนี้?':'Replace your current picks with this preset?')) {
+        t.value=''; return;
       }
-      _aibTpl.aiInstruction = _tpl;
+      _aibTpl.aiInsChoices = _preset;
+      _aibTpl.aiInstruction = (window.PP && window.PP.compileAiIns) ? window.PP.compileAiIns(_aibTpl) : (_aibTpl.aiInstruction||'');
       try {
         window.__ppDirtyFields = window.__ppDirtyFields || {};
         window.__ppDirtyFields[_aibTpl.id] = window.__ppDirtyFields[_aibTpl.id] || {};
         window.__ppDirtyFields[_aibTpl.id].aiInstruction = true;
+        window.__ppDirtyFields[_aibTpl.id].aiInsChoices = true;
       } catch(_) {}
       try { saveBrands(); } catch(_){}
       render();
-      toast(state.lang==='th'?'โหลด template แล้ว — แก้ไขให้ตรงแบรนด์ของคุณ':'Template loaded — edit to match your brand','success');
+      toast(state.lang==='th'?'โหลดชุดสำเร็จรูปแล้ว — ปรับเพิ่มได้ตามใจ':'Preset loaded — tweak as you like','success');
       return;
     }
     if (t && t.id==='ppBizType') {
@@ -2540,71 +2482,48 @@ render();
       state.analyticsDays = parseInt(adEl.dataset.analyticsDays, 10) || 7;
       render();
     }
-    // AI Instruction — load template into the textarea
-    // Append a single ready-made section to the AI Instruction — lets users
-    // build the prompt section-by-section instead of writing a wall of text.
-    var aiInsSec = e.target.closest('[data-aiins-section]');
-    if (aiInsSec) {
+    // AI Instruction builder — toggle a section option (pure selection, no typing).
+    // Each click flips one option in brand.aiInsChoices[section], then the
+    // instruction string is recompiled from the picks (window.PP.compileAiIns).
+    var aiPick = e.target.closest('[data-aiins-pick]');
+    if (aiPick) {
       e.preventDefault();
-      var _aibS = BRANDS.filter(function(b){ return b.id===state.brand; })[0];
-      if (!_aibS) return;
-      // Each section = { t: heading, b: body with inline choice lists }.
-      // The leading number is assigned dynamically so sections stay 1,2,3…
-      // in the order the user inserts them (no fixed numbers, no gaps).
-      var SNIP = {
-        identity:  { t: 'IDENTITY (ตัวตน)', b: '   User: คุณคือ [ชื่อผู้ใช้]\n   AI: ฉันคือ "[บทบาท]" ผู้ช่วยส่วนตัวของคุณ\n   • ตัวเลือกบทบาท: ผู้เชี่ยวชาญ Content Creative · Copywriter สายขาย · ครีเอเตอร์สายไวรัล · ที่ปรึกษาแบรนด์\n' },
-        persona:   { t: 'PERSONA & TONE (บุคลิก)', b: '   • โทนการสื่อสาร (เลือก/ลบที่ไม่ใช้): เป็นกันเอง · ทางการ · สนุกสนาน · หรูหรา · จริงจัง · อบอุ่น\n   • ระดับภาษา: ภาษาพูด · กึ่งทางการ · ทางการ\n   • มุมมอง: เพื่อนที่ปรึกษา · ผู้เชี่ยวชาญ · พี่สาว/พี่ชาย\n' },
-        goals:     { t: 'PRIMARY GOALS & KPIs (เป้าหมาย)', b: '   • เป้าหมายหลัก (เลือก): เพิ่ม engagement · เพิ่มยอดขาย · สร้าง awareness · สร้าง community\n   • คิดหัวข้อ ≥ 30 หัวข้อ/เดือน\n   • สร้าง Hook ที่ดึงดูดสายตา\n' },
-        workflow:  { t: 'WORKFLOW (คำถามก่อนเริ่มงาน)', b: '   • เดือนนี้โฟกัสธีมอะไร?\n   • Target Audience คือใคร?\n   • เน้นแพลตฟอร์มไหน (FB · IG · TikTok · YouTube)?\n   • Keywords ที่ต้องเน้น?\n' },
-        rules:     { t: 'OPERATING RULES (กฎ)', b: '   • ห้ามคำเสี่ยงโดน ban (พนัน · ความรุนแรง · sensitive content)\n   • ห้ามหัวข้อซ้ำในเดือนเดียวกัน — ต้องหลากหลาย\n   • ตัวเลือกเพิ่ม: ห้ามคำการันตี 100% · ห้ามเคลมเกินจริง · ลงท้ายด้วย CTA ทุกครั้ง\n' },
-        frameworks:{ t: 'HOOK FRAMEWORKS', b: '   Framework 1: ขยี้ปัญหา + ผลลัพธ์ + ระยะเวลา + ผลลัพธ์เหลือเชื่อ (≥10 หัวข้อ)\n   Framework 2: ขยี้ปัญหา + ผลลัพธ์ + ความโลภ + ขู่ให้กลัว (≥10 หัวข้อ)\n   ตัวเลือกเพิ่ม: ตั้งคำถามชวนสงสัย · ตัวเลขช็อก · before/after · เล่าเรื่อง (storytelling)\n' },
-        style:     { t: 'STYLE GUIDE (รูปแบบการตอบ)', b: '   • รูปแบบ (เลือก): bullet points · numbering · ตาราง · ย่อหน้าสั้น\n   • อ้างอิงแหล่งข้อมูลเมื่อจำเป็น\n   • ความยาว: สั้นกระชับ · ปานกลาง · ละเอียด\n' },
-        safety:    { t: 'SAFETY & BOUNDARIES', b: '   • ไม่เปิดเผยข้อมูลภายใน/ข้อมูลส่วนตัวของลูกค้าให้บุคคลภายนอกเด็ดขาด\n' },
-        business:  { t: 'ข้อมูลธุรกิจ', b: '   • ชื่อหลักสูตร/สินค้า: [...]\n   • จุดเด่น: [...]\n   • รายละเอียด: [...]\n' },
-        visual:    { t: 'VISUAL STYLE (แนวภาพ — ใช้ทุกครั้งที่เขียน image prompt)', b: '   • อารมณ์รวม (เลือก): premium · clean · minimal · luxury · สดใส · อบอุ่น\n   • โทนสี: [เช่น sage-green + cream + white + soft-gold]\n   • พื้นหลัง: [เช่น ครีม minimal + แสง glow นุ่ม]\n   • ตัวแบบ/พร็อพ: [...]\n   • วลีอังกฤษแทรกใน prompt: "[premium ... palette, glassmorphism, soft glow, ultra detailed, 4K]"\n' },
-      };
-      var def = SNIP[aiInsSec.dataset.aiinsSection];
-      if (!def) return;
-      var cur = _aibS.aiInstruction || '';
-      if (!cur.trim()) cur = '[INSTRUCTION]\n';
-      if (!cur.endsWith('\n')) cur += '\n';
-      // Next number = how many top-level "N." headings already exist + 1.
-      var nextNum = (cur.match(/^\d+\.\s/gm) || []).length + 1;
-      _aibS.aiInstruction = (cur + '\n' + nextNum + '. ' + def.t + '\n' + def.b).slice(0, 8000);
+      var _aibP = BRANDS.filter(function(b){ return b.id===state.brand; })[0];
+      if (!_aibP) return;
+      if (!_aibP.aiInsChoices || typeof _aibP.aiInsChoices !== 'object') _aibP.aiInsChoices = {};
+      var _pk = aiPick.getAttribute('data-aiins-pick');
+      var _pv = aiPick.getAttribute('data-aiins-val');
+      var _single = aiPick.getAttribute('data-aiins-single') === '1';
+      var _arr = Array.isArray(_aibP.aiInsChoices[_pk]) ? _aibP.aiInsChoices[_pk].slice() : [];
+      var _ix = _arr.indexOf(_pv);
+      if (_single) { _arr = (_ix >= 0) ? [] : [_pv]; }      // single-select: tap again to clear
+      else if (_ix >= 0) { _arr.splice(_ix, 1); }
+      else { _arr.push(_pv); }
+      _aibP.aiInsChoices[_pk] = _arr;
+      _aibP.aiInstruction = (window.PP && window.PP.compileAiIns) ? window.PP.compileAiIns(_aibP) : (_aibP.aiInstruction || '');
       try {
         window.__ppDirtyFields = window.__ppDirtyFields || {};
-        window.__ppDirtyFields[_aibS.id] = window.__ppDirtyFields[_aibS.id] || {};
-        window.__ppDirtyFields[_aibS.id].aiInstruction = true;
+        window.__ppDirtyFields[_aibP.id] = window.__ppDirtyFields[_aibP.id] || {};
+        window.__ppDirtyFields[_aibP.id].aiInstruction = true;
+        window.__ppDirtyFields[_aibP.id].aiInsChoices = true;
       } catch(_) {}
       try { saveBrands(); } catch(_){}
       render();
-      toast(state.lang==='th'?'แทรกหัวข้อแล้ว — เลื่อนลงไปแก้รายละเอียด':'Section added — scroll down to fill it in','success');
-      return;
-    }
-    // Re-sequence every top-level "N." heading to 1,2,3… (fixes gaps after
-    // deleting/reordering sections).
-    if (e.target.closest('[data-aiins-renumber]')) {
-      e.preventDefault();
-      var _aibN = BRANDS.filter(function(b){ return b.id===state.brand; })[0];
-      if (!_aibN || !(_aibN.aiInstruction || '').trim()) return;
-      var _rn = 0;
-      _aibN.aiInstruction = _aibN.aiInstruction.replace(/^\d+\.\s/gm, function(){ _rn++; return _rn + '. '; });
-      try {
-        window.__ppDirtyFields = window.__ppDirtyFields || {};
-        window.__ppDirtyFields[_aibN.id] = window.__ppDirtyFields[_aibN.id] || {};
-        window.__ppDirtyFields[_aibN.id].aiInstruction = true;
-      } catch(_) {}
-      try { saveBrands(); } catch(_){}
-      render();
-      toast(state.lang==='th'?'จัดเลขหัวข้อใหม่แล้ว ✓':'Renumbered sections ✓','success');
       return;
     }
     if (e.target.closest('[data-aiins-clear]')) {
       e.preventDefault();
       var _aibC = BRANDS.filter(function(b){ return b.id===state.brand; })[0];
       if (!_aibC) return;
-      if (!confirm(state.lang==='th'?'ล้าง AI Instruction ของแบรนด์นี้? (กดยกเลิกถ้าไม่ต้องการ)':'Clear AI Instruction for this brand?')) return;
+      if (!confirm(state.lang==='th'?'ล้างตัวเลือก AI Instruction ทั้งหมดของแบรนด์นี้?':'Clear all AI Instruction picks for this brand?')) return;
+      _aibC.aiInsChoices = {};
       _aibC.aiInstruction = '';
+      try {
+        window.__ppDirtyFields = window.__ppDirtyFields || {};
+        window.__ppDirtyFields[_aibC.id] = window.__ppDirtyFields[_aibC.id] || {};
+        window.__ppDirtyFields[_aibC.id].aiInstruction = true;
+        window.__ppDirtyFields[_aibC.id].aiInsChoices = true;
+      } catch(_) {}
       try { saveBrands(); } catch(_){}
       render();
       return;
@@ -5942,6 +5861,7 @@ render();
             if (df.desc) n.desc = local.desc || '';
             if (df.sub) { n.sub_th = local.sub_th || n.sub_th; n.sub_en = local.sub_en || n.sub_en; }
             if (df.aiInstruction) n.aiInstruction = typeof local.aiInstruction === 'string' ? local.aiInstruction : '';
+            if (df.aiInsChoices) n.aiInsChoices = (local.aiInsChoices && typeof local.aiInsChoices === 'object') ? local.aiInsChoices : {};
             if (df.voiceNotes) n.voiceNotes = typeof local.voiceNotes === 'string' ? local.voiceNotes : '';
           }
           byId[n.id] = n;

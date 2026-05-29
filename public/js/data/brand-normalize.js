@@ -36,5 +36,8 @@ export function normalizeBrand(b) {
     aiInstruction: typeof b.aiInstruction === 'string' ? b.aiInstruction : '',
     // Free-form Brand Voice notes (the "คำอธิบายเสียงเพิ่มเติม" textarea).
     voiceNotes: typeof b.voiceNotes === 'string' ? b.voiceNotes : '',
+    // AI Instruction builder selections — { sectionKey: string[] }. Compiled
+    // into aiInstruction; kept so the picker can re-highlight chosen options.
+    aiInsChoices: (b.aiInsChoices && typeof b.aiInsChoices === 'object' && !Array.isArray(b.aiInsChoices)) ? b.aiInsChoices : {},
   };
 }

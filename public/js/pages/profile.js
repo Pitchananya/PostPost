@@ -50,6 +50,54 @@ function businessOptions(sel) {
   }).join('');
 }
 
+// ── AI Instruction builder — pick from buttons, no typing ──────────────
+// Each section's chosen options compile into brand.aiInstruction (what the
+// backend actually reads). ctitle is the language-neutral compile heading.
+const AI_INS_SECTIONS = [
+  { key: 'identity',   th: 'บทบาท (Identity)',       en: 'Identity',         ctitle: 'IDENTITY',        single: true, opts: ['ผู้เชี่ยวชาญ Content Creative', 'Copywriter สายขาย', 'ครีเอเตอร์สายไวรัล', 'ที่ปรึกษาแบรนด์'] },
+  { key: 'persona',    th: 'โทนการสื่อสาร (Tone)',    en: 'Tone',             ctitle: 'PERSONA & TONE',  opts: ['เป็นกันเอง', 'ทางการ', 'สนุกสนาน', 'หรูหรา', 'จริงจัง', 'อบอุ่น'] },
+  { key: 'goals',      th: 'เป้าหมาย (Goals)',        en: 'Goals',            ctitle: 'GOALS',           opts: ['เพิ่ม engagement', 'เพิ่มยอดขาย', 'สร้าง awareness', 'สร้าง community', 'คิดหัวข้อ 30/เดือน'] },
+  { key: 'platform',   th: 'แพลตฟอร์ม',               en: 'Platform',         ctitle: 'PLATFORM',        opts: ['Facebook', 'Instagram', 'TikTok', 'YouTube', 'LINE'] },
+  { key: 'rules',      th: 'กฎ (Rules)',              en: 'Rules',            ctitle: 'RULES',           opts: ['ห้ามคำเสี่ยงโดนแบน', 'ห้ามหัวข้อซ้ำ', 'ห้ามการันตี 100%', 'ลงท้ายด้วย CTA', 'ห้ามเคลมเกินจริง'] },
+  { key: 'frameworks', th: 'Hook Frameworks',         en: 'Hook frameworks',  ctitle: 'HOOK FRAMEWORKS', opts: ['ขยี้ปัญหา + ผลลัพธ์ + เวลา', 'ความโลภ + ความกลัว', 'ตั้งคำถามชวนสงสัย', 'ตัวเลขช็อก', 'before / after', 'storytelling'] },
+  { key: 'style',      th: 'สไตล์การตอบ (Style)',     en: 'Style',            ctitle: 'STYLE',           opts: ['bullet points', 'numbering', 'ตาราง', 'ย่อหน้าสั้น', 'อ้างอิงแหล่งข้อมูล'] },
+  { key: 'length',     th: 'ความยาว',                 en: 'Length',           ctitle: 'LENGTH',          single: true, opts: ['สั้นกระชับ', 'ปานกลาง', 'ละเอียด'] },
+  { key: 'visual',     th: 'แนวภาพ (Visual)',         en: 'Visual style',     ctitle: 'VISUAL STYLE',    opts: ['premium', 'clean', 'minimal', 'luxury', 'สดใส', 'อบอุ่น'] },
+  { key: 'safety',     th: 'ความปลอดภัย (Safety)',    en: 'Safety',           ctitle: 'SAFETY',          opts: ['ไม่เปิดเผยข้อมูลภายใน', 'ไม่ให้คำแนะนำผิดกฎหมาย'] },
+];
+
+// Compile the picked options (+ auto business info from the brand profile)
+// into the instruction string the AI receives. Sections are numbered in order.
+function compileAiIns(brand) {
+  const ch = (brand && brand.aiInsChoices) || {};
+  const lines = ['[INSTRUCTION]', ''];
+  let n = 0;
+  AI_INS_SECTIONS.forEach((sec) => {
+    const vals = ch[sec.key] || [];
+    if (!vals.length) return;
+    n += 1;
+    lines.push(`${n}. ${sec.ctitle}: ${vals.join(' · ')}`);
+  });
+  const biz = [brand && brand.bizType, (brand && brand.desc) || ''].map((x) => (x || '').trim()).filter(Boolean).join(' · ');
+  if (biz) { n += 1; lines.push(`${n}. ข้อมูลธุรกิจ: ${biz}`); }
+  return n ? lines.join('\n') : '';
+}
+
+// Quick-start presets — option strings MUST match AI_INS_SECTIONS opts exactly.
+const AI_INS_PRESETS = {
+  'content-creative': { identity: ['ผู้เชี่ยวชาญ Content Creative'], persona: ['เป็นกันเอง', 'สนุกสนาน'], goals: ['เพิ่ม engagement', 'คิดหัวข้อ 30/เดือน'], rules: ['ห้ามคำเสี่ยงโดนแบน', 'ห้ามหัวข้อซ้ำ'], frameworks: ['ตั้งคำถามชวนสงสัย', 'storytelling'], style: ['bullet points'], length: ['ปานกลาง'] },
+  'sales-focused':    { identity: ['Copywriter สายขาย'], persona: ['จริงจัง'], goals: ['เพิ่มยอดขาย'], rules: ['ลงท้ายด้วย CTA', 'ห้ามการันตี 100%', 'ห้ามเคลมเกินจริง'], frameworks: ['ความโลภ + ความกลัว', 'ตัวเลขช็อก'], length: ['สั้นกระชับ'] },
+  'storytelling':     { identity: ['ครีเอเตอร์สายไวรัล'], persona: ['อบอุ่น'], goals: ['สร้าง awareness'], frameworks: ['storytelling', 'before / after'], style: ['ย่อหน้าสั้น'], length: ['ปานกลาง'] },
+  'educational':      { identity: ['ที่ปรึกษาแบรนด์'], persona: ['ทางการ'], goals: ['สร้าง awareness'], style: ['numbering', 'อ้างอิงแหล่งข้อมูล'], length: ['ละเอียด'] },
+  'viral-short':      { identity: ['ครีเอเตอร์สายไวรัล'], persona: ['สนุกสนาน'], platform: ['TikTok', 'Instagram'], frameworks: ['ตัวเลขช็อก', 'ตั้งคำถามชวนสงสัย'], length: ['สั้นกระชับ'] },
+  'luxury-premium':   { identity: ['ที่ปรึกษาแบรนด์'], persona: ['หรูหรา'], rules: ['ห้ามเคลมเกินจริง'], visual: ['luxury', 'minimal', 'premium'], length: ['สั้นกระชับ'] },
+  'community':        { identity: ['ครีเอเตอร์สายไวรัล'], persona: ['เป็นกันเอง', 'อบอุ่น'], goals: ['สร้าง community', 'เพิ่ม engagement'], frameworks: ['ตั้งคำถามชวนสงสัย'] },
+};
+function aiInsPreset(kind) { return AI_INS_PRESETS[kind] ? JSON.parse(JSON.stringify(AI_INS_PRESETS[kind])) : null; }
+
+// Expose for the inline click/change handlers in index.html.
+try { if (typeof window !== 'undefined') { window.PP = window.PP || {}; window.PP.compileAiIns = compileAiIns; window.PP.aiInsPreset = aiInsPreset; } } catch (_) {}
+
 // Inline PRODUCT_CATEGORIES — only used by the Profile "Add product manually"
 // form. Keeping it local until/unless another page needs it.
 const PRODUCT_CATEGORIES = [
@@ -273,8 +321,8 @@ export function pageProfile() {
             ${activeBrand.aiInstruction ? raw(`<span class="pill green" style="font-size:10px">${T('ตั้งแล้ว', 'Set')} · ${activeBrand.aiInstruction.length} ${T('ตัวอักษร', 'chars')}</span>`) : ''}
           </div>
           <p class="cardSub">${raw(T(
-            'system prompt แบบยาวให้ AI — paste IDENTITY / WORKFLOW / FRAMEWORKS / RULES ของคุณ · ใช้เมื่อต้องการควบคุม AI ลึกกว่า Brand Voice + Archetype',
-            'Long-form AI system prompt — paste your IDENTITY / WORKFLOW / FRAMEWORKS / RULES · use when you need finer control than Voice + Archetype'
+            'คุมพฤติกรรม AI ลึกกว่า Brand Voice — เลือกจากปุ่มทีละหัวข้อ (บทบาท / โทน / เป้าหมาย / กฎ / ฯลฯ) ไม่ต้องพิมพ์เอง',
+            'Finer control than Brand Voice — pick options per section (identity / tone / goals / rules / …), no typing required'
           ))}</p>
         </div>
         <span class="micro" style="color:var(--muted)">▼</span>
@@ -284,7 +332,7 @@ export function pageProfile() {
         <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center">
           ${raw(I('sparkles', 13, '#2563EB'))}
           <select class="select" id="ppAiInsTemplate" style="height:32px;font-size:12.5px;width:auto;max-width:260px;padding:0 10px">
-            <option value="">${T('โหลด Template สำเร็จรูป…', 'Load a template…')}</option>
+            <option value="">${T('ชุดสำเร็จรูป (เลือกให้ทั้งชุด)…', 'Quick preset…')}</option>
             <option value="content-creative">${T('สาย Content Creative', 'Content Creative')}</option>
             <option value="sales-focused">${T('สายขาย (Direct Response)', 'Sales / Direct Response')}</option>
             <option value="storytelling">${T('เล่าเรื่องแบรนด์ (Storytelling)', 'Brand Storytelling')}</option>
@@ -293,33 +341,29 @@ export function pageProfile() {
             <option value="luxury-premium">${T('แบรนด์พรีเมียม (Luxury)', 'Luxury / Premium')}</option>
             <option value="community">${T('สร้างคอมมูนิตี้ (Engagement)', 'Community & Engagement')}</option>
           </select>
-          <button class="btn ghost sm" data-aiins-renumber="1">${raw(I('refresh', 12))} ${T('จัดเลขใหม่', 'Renumber')}</button>
-          <button class="btn ghost sm" style="color:var(--red)" data-aiins-clear="1">${raw(I('x', 12, '#DC2626'))} ${T('ล้าง', 'Clear')}</button>
+          <button class="btn ghost sm" style="color:var(--red)" data-aiins-clear="1">${raw(I('x', 12, '#DC2626'))} ${T('ล้างทั้งหมด', 'Clear all')}</button>
         </div>
-        <div style="margin-bottom:10px">
-          <div class="micro" style="color:var(--muted);margin-bottom:5px">${raw(I('plus', 11, '#6B6473'))} ${T('แทรกทีละหัวข้อ (คลิกเพื่อเพิ่มลงท้าย):', 'Insert a section (appends to the end):')}</div>
-          <div style="display:flex;gap:6px;flex-wrap:wrap">
-            ${raw([
-              ['identity', 'IDENTITY'], ['persona', 'PERSONA & TONE'], ['goals', 'GOALS & KPIs'],
-              ['workflow', 'WORKFLOW'], ['rules', 'RULES'], ['frameworks', 'HOOK FRAMEWORKS'],
-              ['style', 'STYLE GUIDE'], ['safety', 'SAFETY'], ['business', T('ข้อมูลธุรกิจ', 'Business info')],
-              ['visual', 'VISUAL STYLE'],
-            ].map(([k, label]) => `<button class="pill" data-aiins-section="${k}" style="height:26px;font-size:11px;padding:0 10px">+ ${label}</button>`).join(''))}
-          </div>
-        </div>
-        <textarea
-          class="textarea" id="ppBrandAiInstruction" rows="14"
-          placeholder="${T(
-            'เช่น: [INSTRUCTION: AI ผู้เชี่ยวชาญด้าน Content Creative] · 1. IDENTITY — คุณคือ ฟาติน ผู้ช่วยส่วนตัว · 2. PERSONA & TONE — สื่อสารอย่างเพื่อนที่ปรึกษา · 3. GOALS — สร้าง 30 หัวข้อ/เดือน · 4. WORKFLOW — ถามธีม/audience/แพลตฟอร์ม · 5. RULES — ห้ามคำเสี่ยง ห้ามซ้ำ · 6. HOOK FRAMEWORKS · ... · 10. ข้อมูลธุรกิจ (PFB)',
-            'e.g.: [INSTRUCTION: AI Content Creative Specialist] · 1. IDENTITY — you are Fatin, personal assistant · 2. PERSONA & TONE · 3. GOALS — 30 topics/month · 4. WORKFLOW · 5. RULES · 6. HOOK FRAMEWORKS · ... · 10. Business data (PFB)'
-          )}"
-          style="font-family:var(--mono);font-size:12px;line-height:1.7;resize:vertical;min-height:280px"
-        >${activeBrand.aiInstruction || ''}</textarea>
-        <div class="micro" style="margin-top:4px;color:var(--muted);text-align:right"><span id="ppAiInsCount">${(activeBrand.aiInstruction || '').length}</span> / 8,000</div>
+        <div class="micro" style="color:var(--muted);margin-bottom:12px">${raw(I('check', 11, '#16A34A'))} ${T('เลือกจากปุ่มได้เลย ไม่ต้องพิมพ์ — ระบบรวมเป็น instruction ให้อัตโนมัติ', 'Just tap the buttons — no typing. We compile the instruction for you.')}</div>
+        ${raw(AI_INS_SECTIONS.map((sec) => {
+          const sel = (activeBrand.aiInsChoices && activeBrand.aiInsChoices[sec.key]) || [];
+          return `<div style="margin-bottom:12px">
+            <div class="micro" style="font-weight:800;color:var(--purple);margin-bottom:5px">${T(sec.th, sec.en)}${sec.single ? ` <span style="color:var(--muted);font-weight:500">(${T('เลือก 1', 'pick 1')})</span>` : ''}</div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap">
+              ${sec.opts.map((o) => {
+                const on = sel.indexOf(o) >= 0;
+                return `<button class="pill ${on ? 'orange' : ''}" data-aiins-pick="${sec.key}" data-aiins-val="${escText(o)}"${sec.single ? ' data-aiins-single="1"' : ''} style="height:28px;font-size:11.5px;padding:0 10px">${on ? '✓ ' : ''}${escText(o)}</button>`;
+              }).join('')}
+            </div>
+          </div>`;
+        }).join(''))}
+        <details style="margin-top:10px">
+          <summary class="micro" style="cursor:pointer;color:var(--blue)">${T('ดูข้อความที่ AI จะได้รับ', 'Preview what the AI receives')}</summary>
+          <pre style="white-space:pre-wrap;font-family:var(--mono);font-size:11.5px;line-height:1.6;background:var(--cream2);border:1px solid var(--line);border-radius:10px;padding:12px;margin-top:8px;color:var(--ink)">${activeBrand.aiInstruction || T('(ยังไม่ได้เลือกหัวข้อใด)', '(nothing selected yet)')}</pre>
+        </details>
         <div class="micro" style="margin-top:6px;color:var(--muted);line-height:1.55">
           💡 ${raw(T(
-            'AI จะใช้ instruction นี้นำหน้า prompt มาตรฐาน (brand profile + voice + archetype ยังถูกส่งให้ AI ด้วย) · บันทึกอัตโนมัติ 2 วินาทีหลังหยุดพิมพ์ · max 8,000 ตัวอักษร',
-            'AI prepends this before the standard prompt (brand profile + voice + archetype still get sent too) · auto-saves 2s after you stop typing · max 8,000 chars'
+            'ระบบส่ง brand profile + voice + archetype + ตัวเลือกเหล่านี้ ให้ AI · "ข้อมูลธุรกิจ" ดึงจากโปรไฟล์แบรนด์อัตโนมัติ',
+            'Brand profile + voice + archetype + these picks are sent to the AI · business info is pulled from your brand profile automatically'
           ))}
         </div>
       </div>
