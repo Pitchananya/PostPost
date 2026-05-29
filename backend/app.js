@@ -37,8 +37,10 @@ export function createApp() {
   app.all('/api/cron/run-scheduled', async (req, res) => {
     const expected = process.env.CRON_SECRET;
     const authz = req.headers['authorization'] || '';
+    const bearerOk = expected && authz === `Bearer ${expected}`;
+    const queryOk = expected && req.query.key === expected;   // ?key=<secret> — works with any plain-URL pinger (cron-job.org / UptimeRobot)
     const isVercelCron = req.headers['x-vercel-cron'] === '1';
-    if (expected && authz !== `Bearer ${expected}` && !isVercelCron) {
+    if (expected && !bearerOk && !queryOk && !isVercelCron) {
       return res.status(401).json({ error: 'unauthorized — set CRON_SECRET in env or call from Vercel Cron' });
     }
     try {
