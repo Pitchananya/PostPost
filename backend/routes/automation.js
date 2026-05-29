@@ -520,7 +520,12 @@ async function processSingleRowCarousel(c, images) {
           body: JSON.stringify({
             course: c.course,
             caption,
-            images: images.map(b64 => ({ image_base64: b64 })),
+            // Each entry may be a hosted http(s) URL (async/Supabase images) OR
+            // a base64/data string (sync models) — route each to the field the
+            // /post-carousel handler expects so URL-based carousels also post.
+            images: images.map(s => /^https?:\/\//.test(s)
+              ? { image_url: s }
+              : { image_base64: String(s).replace(/^data:[^;]+;base64,/, '') }),
             tenant_id: currentTenantId(),
           }),
         });

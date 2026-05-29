@@ -2345,41 +2345,64 @@ render();
       return null;
     }
     var slides = imgs.map(_imgPayload).filter(Boolean);
-    // Scheduled time (schedule / ai modes).
-    var scheduled_at = '';
+    // Hashtags fold into the caption we store/send — the cron joins only
+    // hook + caption when it posts, so hashtags must live inside caption.
+    var captionFull = [caption, (hashtags && hashtags.length ? hashtags.join(' ') : '')].filter(Boolean).join('\n\n');
+    var fw = (hookObj && hookObj.framework) || 'F1';
+    var pageName = (ci.facebook && ci.facebook.handle) || ab.name;
+    var nImg = slides.length;
+    var imgNote = nImg >= 2 ? L(' · '+nImg+' รูป (carousel)', ' · '+nImg+' images (carousel)')
+                : (nImg === 1 ? L(' · 1 รูป',' · 1 image') : L(' · ข้อความอย่างเดียว',' · text only'));
+
+    // ─── SCHEDULED (schedule / ai) ─────────────────────────────────────
+    // Create a 'scheduled' contents row; the server cron posts it when due.
+    // This supports ANY future time (even <10 min — cron ticks every minute),
+    // N-image carousels, and makes the post show up in the Log + Calendar.
     if (state.scheduleMode === 'schedule' || state.scheduleMode === 'ai') {
       if (!state.scheduleDate) { toast(L('เลือกวันที่ก่อน','Pick a date first'),'error'); return; }
       var dt = new Date(state.scheduleDate + 'T' + (state.scheduleTime || '19:00'));
       if (isNaN(dt.getTime())) { toast(L('วัน/เวลาไม่ถูกต้อง','Invalid date/time'),'error'); return; }
-      // No 10-min restriction on what the user can pick. FB can only NATIVELY
-      // schedule ≥10 min ahead, so: far enough → real FB schedule; sooner than
-      // that (or past) → just post now instead of blocking.
-      if (dt.getTime() >= Date.now() + 10 * 60 * 1000) {
-        scheduled_at = dt.toISOString();
-      } else {
-        toast(L('เวลาที่เลือกใกล้เกินกว่า FB จะตั้งเวลาได้ (ขั้นต่ำ 10 นาที) — โพสต์ทันทีแทน',
-                'Too soon for FB to schedule (10-min minimum) — posting now instead'));
+      if (dt.getTime() <= Date.now()) { toast(L('เวลาที่เลือกผ่านไปแล้ว — เลือกเวลาในอนาคต','That time is in the past — pick a future time'),'error'); return; }
+      if (!confirm(L('ตั้งเวลาโพสต์ '+dt.toLocaleString()+imgNote+' ไปที่เพจ "'+pageName+'"?',
+                     'Schedule '+dt.toLocaleString()+imgNote+' to page "'+pageName+'"?'))) return;
+      var sbody = {
+        course: ab.id,
+        hook: hook || captionFull.slice(0,120) || L('โพสต์','Post'),
+        caption: captionFull, framework: fw,
+        platforms: ['facebook'], status: 'scheduled', scheduled_at: dt.toISOString(),
+      };
+      if (slides.length >= 2) { sbody.series_images_b64 = imgs; }        // raw data:/http strings — cron maps each
+      else if (slides.length === 1) {
+        if (slides[0].image_url) sbody.media_url = slides[0].image_url;
+        else if (slides[0].image_base64) sbody.image_base64 = slides[0].image_base64;
       }
+      state.publishing = true; render();
+      try {
+        var rs = await api('/api/content', { method:'POST', body: sbody });
+        if (rs && rs.content) {
+          toast(L('ตั้งเวลาโพสต์แล้ว ✓ — ระบบจะโพสต์ให้ตอน '+dt.toLocaleString(), 'Scheduled ✓ — will post at '+dt.toLocaleString()),'success');
+          try { window.PP && window.PP.track && window.PP.track('post_scheduled', { brandId: ab.id, channel: 'facebook', slides: nImg }); } catch(_){}
+          try { if (window.PP) { window.PP._calCache = null; window.PP._automationCache = null; } } catch(_){}
+        } else {
+          toast(L('ตั้งเวลาไม่สำเร็จ: ','Schedule failed: ') + ((rs && rs.error) || 'unknown'),'error');
+        }
+      } catch(e){ toast(L('ตั้งเวลาไม่สำเร็จ: ','Schedule failed: ') + (e.message || ''),'error'); }
+      finally { state.publishing = false; render(); }
+      return;
     }
-    var pageName = (ci.facebook && ci.facebook.handle) || ab.name;
+
+    // ─── POST NOW (direct to FB for instant feedback) ──────────────────
     var igTtOn = ((state.channels && state.channels.instagram !== false) && ci.instagram && ci.instagram.ig_business_id)
               || ((state.channels && state.channels.tiktok !== false) && ci.tiktok && ci.tiktok.open_id);
-    var when = scheduled_at ? (L('ตั้งเวลา ','Schedule ') + new Date(scheduled_at).toLocaleString()) : L('โพสต์ทันที','post now');
-    var nImg = slides.length;
-    var imgNote = nImg >= 2 ? L(' · '+nImg+' รูป (carousel)', ' · '+nImg+' images (carousel)') : (nImg === 1 ? L(' · 1 รูป',' · 1 image') : L(' · ข้อความอย่างเดียว',' · text only'));
-    var confirmMsg = L('ยืนยัน '+when+imgNote+' ไปที่เพจ Facebook "'+pageName+'"?', 'Confirm '+when+imgNote+' to Facebook page "'+pageName+'"?')
+    var confirmMsg = L('ยืนยันโพสต์ทันที'+imgNote+' ไปที่เพจ Facebook "'+pageName+'"?', 'Confirm post now'+imgNote+' to Facebook page "'+pageName+'"?')
       + (igTtOn ? L('\n(ตอนนี้รองรับเฉพาะ Facebook — IG/TikTok เร็วๆนี้)', '\n(Facebook only for now — IG/TikTok soon)') : '');
     if (!confirm(confirmMsg)) return;
     state.publishing = true; render();
     try {
       var r;
       if (slides.length >= 2) {
-        // Multi-image → FB carousel (each photo uploaded unpublished, then one
-        // feed post with attached_media). /post-carousel takes one `caption`,
-        // so combine hook + caption + hashtags here.
-        var fullMsg = [hook, caption, (hashtags && hashtags.length ? hashtags.join(' ') : '')].filter(Boolean).join('\n\n');
         r = await api('/api/facebook/post-carousel', { method:'POST', body:{
-          course: ab.id, caption: fullMsg, images: slides, scheduled_at: scheduled_at || undefined,
+          course: ab.id, caption: [hook, captionFull].filter(Boolean).join('\n\n'), images: slides,
         }});
       } else {
         var one = slides[0] || {};
@@ -2387,12 +2410,26 @@ render();
           course: ab.id, hook: hook, caption: caption, hashtags: hashtags,
           image_base64: one.image_base64 || undefined,
           image_url: one.image_url || undefined,
-          scheduled_at: scheduled_at || undefined,
         }});
       }
       if (r && r.ok) {
-        toast(scheduled_at ? L('ตั้งเวลาโพสต์บน Facebook สำเร็จ ✓','Scheduled on Facebook ✓') : L('โพสต์ขึ้นเพจ Facebook แล้ว ✓'+(nImg>=2?(' ('+nImg+' รูป)'):''),'Posted to Facebook ✓'),'success');
-        try { window.PP && window.PP.track && window.PP.track('post_published', { brandId: ab.id, channel: 'facebook', scheduled: !!scheduled_at, slides: nImg }); } catch(_){}
+        toast(L('โพสต์ขึ้นเพจ Facebook แล้ว ✓'+(nImg>=2?(' ('+nImg+' รูป)'):''),'Posted to Facebook ✓'),'success');
+        try { window.PP && window.PP.track && window.PP.track('post_published', { brandId: ab.id, channel: 'facebook', scheduled: false, slides: nImg }); } catch(_){}
+        // Record a 'published' row so the post appears in the Automation Log
+        // + Calendar. Best-effort (fire-and-forget) — the FB post already
+        // succeeded, so a logging failure must not surface as a post error.
+        try {
+          var mediaUrl = '';
+          for (var mi=0; mi<slides.length; mi++){ if (slides[mi].image_url){ mediaUrl = slides[mi].image_url; break; } }
+          var nowIso = new Date().toISOString();
+          api('/api/content', { method:'POST', body: {
+            course: ab.id, hook: hook || captionFull.slice(0,120) || L('โพสต์','Post'),
+            caption: captionFull, framework: fw, platforms: ['facebook'],
+            status: 'published', scheduled_at: nowIso, published_at: nowIso,
+            media_url: mediaUrl || undefined,
+            post_results: { facebook: { ok: true, id: r.id || r.post_id || null, permalink: r.permalink || null } },
+          }}).then(function(){ try { if (window.PP) { window.PP._calCache = null; window.PP._automationCache = null; } } catch(_){} }).catch(function(){});
+        } catch(_){}
       } else {
         toast(L('โพสต์ไม่สำเร็จ: ','Post failed: ') + ((r && r.error) || 'unknown'),'error');
       }
@@ -6483,7 +6520,7 @@ render();
     + '[data-editcap],[data-editarticle],[data-edithashtags],[data-copycap],[data-copyarticle],[data-regenimg],'
     + '[data-fbreconnect],[data-fbpickclose],'
     + '[data-analytics-days],[data-automation-refresh],'
-    + '[data-schedmode],[data-publishpost]';
+    + '[data-schedmode],[data-publishpost],[data-calnav]';
   document.addEventListener('click', function(e){
     var b = e.target.closest('button, a');
     if (!b) return;

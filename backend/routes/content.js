@@ -20,12 +20,17 @@ router.get('/:id', async (req, res) => {
 });
 
 router.post('/', async (req, res) => {
-  const { course, topic, framework, hook, caption, media_url, image_base64, series_images_b64, series_group_id, platforms, scheduled_at, status, image_prompt, image_job_id } = req.body || {};
+  const { course, topic, framework, hook, caption, media_url, image_base64, series_images_b64, series_group_id, platforms, scheduled_at, status, image_prompt, image_job_id, published_at, post_results } = req.body || {};
   if (!course || !hook) return res.status(400).json({ error: 'course, hook required' });
 
   const { series_meta } = req.body || {};
+  const finalStatus = ['draft', 'scheduled', 'processing', 'published', 'failed'].includes(status) ? status : 'draft';
   const row = {
-    course: ['PFB', 'PHE', 'GURU'].includes(course) ? course : 'PFB',
+    // course = legacy course key (PFB/PHE/GURU) OR a brand id. fbCreds.get()
+    // resolves per-key creds (fb_page_token_<course>) and falls back to the
+    // default page — so the cron can post per-brand. Don't force PFB here or
+    // brand-scoped scheduled posts would route to the wrong Page.
+    course: course ? String(course).slice(0, 60) : 'PFB',
     topic: topic || null,
     framework: framework || 'F1',
     hook: String(hook).slice(0, 500),
@@ -34,12 +39,16 @@ router.post('/', async (req, res) => {
     image_base64: image_base64 || null,
     platforms: Array.isArray(platforms) ? platforms : ['facebook'],
     scheduled_at: scheduled_at ? new Date(scheduled_at).toISOString() : new Date().toISOString(),
-    status: ['draft', 'scheduled', 'processing', 'published', 'failed'].includes(status) ? status : 'draft',
+    status: finalStatus,
+    published_at: published_at ? new Date(published_at).toISOString() : (finalStatus === 'published' ? new Date().toISOString() : null),
     series_group_id: series_group_id || null,
     image_prompt: image_prompt ? String(image_prompt).slice(0, 10000) : null,
     image_job_id: image_job_id ? Number(image_job_id) : null,
     series_meta: series_meta && typeof series_meta === 'object' ? series_meta : null,
   };
+  // post_results = per-platform outcome blob (set by cron; also recorded by the
+  // app when it posts "now" directly, so the Log shows a green success badge).
+  if (post_results && typeof post_results === 'object') row.post_results = post_results;
   // series_images_b64 = JSON array string (กรณี Series carousel — เก็บทุกรูปใน row เดียว)
   if (series_images_b64) {
     if (Array.isArray(series_images_b64)) row.series_images_b64 = JSON.stringify(series_images_b64);

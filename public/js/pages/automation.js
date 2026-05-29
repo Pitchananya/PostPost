@@ -1,16 +1,18 @@
 // public/js/pages/automation.js
 //
-// Automation Log — history of every auto-post. Pulls real data from the
-// backend (/api/analytics/summary for KPI counts, /api/analytics/posts
-// for the published-post list) instead of the Phase-3 mock rows.
+// Automation Log — history of every post. Pulls real data from the backend
+// (/api/analytics/summary for KPI counts, /api/content for the row list)
+// instead of the Phase-3 mock rows.
 //
 // What the page shows:
 //   • 4 KPI cards from /api/analytics/summary.contents (real counts of
 //     published / scheduled / failed / total)
-//   • Status filter tabs (counts match the KPIs above)
-//   • Table of published posts from /api/analytics/posts (with per-
-//     platform success indicators from post_results)
-//   • Friendly empty state when no posts have been published yet
+//   • Status filter tabs (all / posted / scheduled / failed) — each filters
+//     the table by content status
+//   • Table of ALL contents from /api/content (published, scheduled, failed),
+//     timed by published_at (posted) or scheduled_at (pending), with per-
+//     platform success indicators from post_results
+//   • Friendly empty state when nothing has been created yet
 //
 // Data fetched once per page-load, cached on window.PP._automationCache
 // so the filter tabs don't refetch.
@@ -26,6 +28,7 @@ const STATUS_MAP = {
   published: { th: 'โพสต์สำเร็จ', en: 'Posted',    pill: 'green',  dot: '#16A34A' },
   scheduled: { th: 'รอเวลา',       en: 'Scheduled', pill: 'blue',   dot: '#1D4ED8' },
   running:   { th: 'กำลังโพสต์',   en: 'Posting',   pill: 'orange', dot: '#FF7A1A' },
+  processing:{ th: 'กำลังโพสต์',   en: 'Posting',   pill: 'orange', dot: '#FF7A1A' },
   failed:    { th: 'ล้มเหลว',      en: 'Failed',    pill: 'red',    dot: '#DC2626' },
   retry:     { th: 'รอ retry',     en: 'Retrying',  pill: 'yellow', dot: '#D97706' },
   draft:     { th: 'ฉบับร่าง',     en: 'Draft',     pill: 'grey',   dot: '#94A3B8' },
@@ -36,11 +39,13 @@ async function loadAutomationData() {
   if (window.PP._automationCache) return;
   window.PP._automationCache = { loading: true };
   try {
-    const [summary, posts] = await Promise.all([
+    // summary → KPI counts; /api/content → the table (ALL statuses, so the
+    // scheduled / failed filter tabs have real rows, not just published).
+    const [summary, all] = await Promise.all([
       api('/api/analytics/summary'),
-      api('/api/analytics/posts?limit=50'),
+      api('/api/content'),
     ]);
-    window.PP._automationCache = { loading: false, summary, posts };
+    window.PP._automationCache = { loading: false, summary, contents: (all && all.contents) || [] };
   } catch (e) {
     window.PP._automationCache = { loading: false, error: e.message };
   }
@@ -78,7 +83,13 @@ export function pageAutomation() {
   `;
 
   const summary = cache.summary && cache.summary.contents ? cache.summary.contents : null;
-  const posts = (cache.posts && cache.posts.posts) || [];
+  // Table rows from the full contents list. Effective time = published_at for
+  // posted rows, scheduled_at for everything else (so a scheduled row shows
+  // WHEN it will fire, not "—").
+  const allRows = (cache.contents || []).map((c) => ({
+    ...c,
+    when: c.status === 'published' ? (c.published_at || c.scheduled_at) : (c.scheduled_at || c.published_at || c.created_at),
+  })).sort((a, b) => new Date(b.when || 0) - new Date(a.when || 0));
 
   // KPI cards — fall back to 0 when summary missing
   const kpi = summary ? [
@@ -90,10 +101,7 @@ export function pageAutomation() {
   ] : [];
 
   const filter = state.autoFilter || 'all';
-  // We currently only fetch published posts — other statuses need new endpoints.
-  // For now, the table is just the published list regardless of filter (the
-  // tab counts are still real, so the filter UI stays informative).
-  const tableRows = posts;
+  const tableRows = filter === 'all' ? allRows : allRows.filter((r) => (r.status || 'published') === filter);
 
   return html`${raw(head('OPERATIONS', 'Automation Log',
     T('ประวัติการโพสต์อัตโนมัติ · ดึงจากระบบจริง', 'Auto-post history · live data'),
@@ -161,8 +169,8 @@ export function pageAutomation() {
           const indicators = platformIndicators(r);
           return `<tr>
             <td>
-              <div style="font-size:14px;font-weight:700;color:var(--purple)">${formatTime(r.published_at)}</div>
-              <div style="font-size:11px;color:var(--muted)">${formatDate(r.published_at)}</div>
+              <div style="font-size:14px;font-weight:700;color:var(--purple)">${formatTime(r.when)}</div>
+              <div style="font-size:11px;color:var(--muted)">${formatDate(r.when)}</div>
             </td>
             <td>
               <div style="font-size:13px;font-weight:600;color:var(--purple);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:380px">${(r.hook || '').slice(0, 100) || '—'}</div>
