@@ -18,13 +18,27 @@ import { I } from '../icons.js';
 import { escText } from '../escape.js';
 import { BRANDS } from '../data/brands.js';
 
+// Resolve the real signed-in account (state.user, populated from /api/auth/me)
+// into display-ready fields. Falls back gracefully if /me hasn't resolved yet
+// (e.g. derives a name from the email local-part when no display name is set).
+export function accountIdentity() {
+  const u = state.user || {};
+  const name = (u.name && String(u.name).trim()) || (u.email ? u.email.split('@')[0] : '') || T('ผู้ใช้', 'User');
+  const email = u.email || '';
+  const role = u.role || 'member';
+  const roleLabel = role === 'owner' ? T('เจ้าของ', 'Owner') : role === 'admin' ? T('แอดมิน', 'Admin') : T('สมาชิก', 'Member');
+  const initial = (name.trim().charAt(0) || 'U').toUpperCase();
+  return { name, email, role, roleLabel, initial };
+}
+
 export function profileMenuHTML() {
   const ab = BRANDS.filter((b) => b.id === state.brand)[0] || BRANDS[0] || {};
   const brandCount = BRANDS.length;
   const draftCount = (state.drafts || []).length;
   const avatarCount = (state.customAvatars || []).length;
-  const roleLabel = T('Owner · เจ้าของ workspace', 'Owner · Workspace owner');
-  const emailLabel = 'jeffyaitrand@gmail.com';
+  const id = accountIdentity();
+  const roleLabel = id.role === 'owner' ? T('Owner · เจ้าของ workspace', 'Owner · Workspace owner') : id.roleLabel;
+  const emailLabel = id.email;
 
   const item = (icon, th, en, attr, color) => {
     color = color || 'var(--ink)';
@@ -39,10 +53,10 @@ export function profileMenuHTML() {
     + '<div class="profileMenu" style="position:absolute;top:calc(100% + 8px);right:0;width:300px;max-width:calc(100vw - 24px);background:#fff;border:1px solid var(--line);border-radius:16px;box-shadow:0 16px 48px rgba(15,8,30,.18);z-index:60;overflow:hidden;animation:fade .15s ease">'
     + '<div style="padding:18px 16px;background:linear-gradient(135deg,#FFF7ED,#FFE4E6);border-bottom:1px solid var(--line)">'
     +   '<div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">'
-    +     '<div style="width:48px;height:48px;border-radius:99px;background:linear-gradient(135deg,#FF7A1A,#EC4899);color:#fff;display:grid;place-items:center;font-size:20px;font-weight:900;flex-shrink:0">' + T('ป', 'P') + '</div>'
+    +     '<div style="width:48px;height:48px;border-radius:99px;background:linear-gradient(135deg,#FF7A1A,#EC4899);color:#fff;display:grid;place-items:center;font-size:20px;font-weight:900;flex-shrink:0">' + escText(id.initial) + '</div>'
     +     '<div style="flex:1;min-width:0">'
-    +       '<div style="font-size:14px;font-weight:800;color:var(--ink)">' + T('ปอย แสงทอง', 'Poy Sangthong') + '</div>'
-    +       '<div style="font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + emailLabel + '</div>'
+    +       '<div style="font-size:14px;font-weight:800;color:var(--ink)">' + escText(id.name) + '</div>'
+    +       '<div style="font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escText(emailLabel) + '</div>'
     +     '</div>'
     +   '</div>'
     +   '<div style="display:inline-flex;align-items:center;gap:5px;background:rgba(255,122,26,.15);color:#9A3412;padding:3px 9px;border-radius:99px;font-size:10.5px;font-weight:800">'
@@ -85,6 +99,7 @@ export function openProfileDetail(view) {
   const ov = document.createElement('div');
   ov.style.cssText = 'position:fixed;inset:0;background:rgba(15,8,30,.55);z-index:200;display:flex;align-items:center;justify-content:center;padding:24px;backdrop-filter:blur(4px);animation:fade .2s ease';
   const ab = BRANDS.filter((b) => b.id === state.brand)[0] || BRANDS[0] || {};
+  const id = accountIdentity();
 
   const section = (title_th, title_en, html) =>
     '<div style="margin-bottom:20px"><div style="font-size:10.5px;font-weight:800;color:var(--purple);letter-spacing:.05em;text-transform:uppercase;margin-bottom:8px">' + T(title_th, title_en) + '</div>' + html + '</div>';
@@ -113,7 +128,7 @@ export function openProfileDetail(view) {
       }).join('')
     );
   } else if (view === 'settings') {
-    body += section('บัญชี', 'Account', row('Email', 'Email', 'jeffyaitrand@gmail.com') + row('Role', 'Role', 'Owner') + row('สร้างเมื่อ', 'Joined', '2024-08-12'));
+    body += section('บัญชี', 'Account', row('Email', 'Email', escText(id.email)) + row('Role', 'Role', escText(id.roleLabel)));
     body += section('Workspace', 'Workspace', row('แผน', 'Plan', 'Pro · ฿590/เดือน') + row('ที่นั่ง', 'Seats', '2 of 5') + row('การชำระเงินรอบถัดไป', 'Next billing', '2026-06-23'));
     body += section('การเชื่อมต่อ', 'Integrations',
       ['Facebook · 2 pages', 'Instagram · 1 account', 'TikTok · 1 shop', 'Shopee · happyprice.sh', 'Azure Speech (TH)', 'fal.ai (lipsync)'].map((s) =>
@@ -130,7 +145,7 @@ export function openProfileDetail(view) {
       '<a href="mailto:support@postpost.ai" style="display:block;background:var(--cream2);border-radius:10px;padding:12px;color:var(--ink);text-decoration:none;font-size:13px">📩 support@postpost.ai</a>'
     );
   } else {
-    body += section('ข้อมูลพื้นฐาน', 'Basic info', row('ชื่อ', 'Name', 'ปอย แสงทอง') + row('Email', 'Email', 'jeffyaitrand@gmail.com') + row('Role', 'Role', 'Owner') + row('Workspace', 'Workspace', escText(ab.name || 'HappyPrice Shop')));
+    body += section('ข้อมูลพื้นฐาน', 'Basic info', row('ชื่อ', 'Name', escText(id.name)) + row('Email', 'Email', escText(id.email)) + row('Role', 'Role', escText(id.roleLabel)) + row('Workspace', 'Workspace', escText((state.tenant && state.tenant.name) || ab.name || 'HappyPrice Shop')));
     body += section('สถิติของฉัน', 'My activity',
       row('แบรนด์', 'Brands', BRANDS.length) +
       row('คอนเทนต์ดราฟ', 'Drafts', (state.drafts || []).length) +
@@ -141,10 +156,10 @@ export function openProfileDetail(view) {
 
   ov.innerHTML = '<div style="background:var(--surface);border-radius:20px;max-width:520px;width:100%;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 30px 80px rgba(15,8,30,.45)">'
     + '<div style="padding:18px 22px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px;flex-shrink:0">'
-    +   '<div style="width:42px;height:42px;border-radius:99px;background:linear-gradient(135deg,#FF7A1A,#EC4899);color:#fff;display:grid;place-items:center;font-size:18px;font-weight:900">ป</div>'
+    +   '<div style="width:42px;height:42px;border-radius:99px;background:linear-gradient(135deg,#FF7A1A,#EC4899);color:#fff;display:grid;place-items:center;font-size:18px;font-weight:900">' + escText(id.initial) + '</div>'
     +   '<div style="flex:1;min-width:0">'
     +     '<div style="font-size:16px;font-weight:800;color:var(--ink)">' + T('โปรไฟล์ของฉัน', 'My profile') + '</div>'
-    +     '<div style="font-size:11.5px;color:var(--muted)">' + T('ปอย แสงทอง · Owner', 'Poy Sangthong · Owner') + '</div>'
+    +     '<div style="font-size:11.5px;color:var(--muted)">' + escText(id.name + ' · ' + id.roleLabel) + '</div>'
     +   '</div>'
     +   '<button data-profileclose="1" style="width:32px;height:32px;border-radius:99px;border:0;background:var(--cream2);cursor:pointer;display:grid;place-items:center">' + I('x', 16, 'var(--muted)') + '</button>'
     + '</div>'

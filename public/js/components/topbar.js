@@ -13,8 +13,9 @@
 import { state } from '../state.js';
 import { T } from '../i18n.js';
 import { I } from '../icons.js';
+import { escText } from '../escape.js';
 import { BRANDS } from '../data/brands.js';
-import { profileMenuHTML } from './profile-menu.js';
+import { profileMenuHTML, accountIdentity } from './profile-menu.js';
 
 export function topbarHTML() {
   const crumb = (() => {
@@ -28,6 +29,7 @@ export function topbarHTML() {
     };
     return map[state.page] || '';
   })();
+  const acct = accountIdentity();
   return `<div class="topbar">
     <div class="topLeft" style="display:flex;align-items:center;gap:10px;min-width:0;flex:1">
       <!-- Hamburger — only visible ≤768px via CSS — opens the sidebar drawer -->
@@ -64,8 +66,8 @@ export function topbarHTML() {
       <button class="iconBtn bell">${I('bell', 18)}</button>
       <div style="position:relative">
         <button class="profilePill" data-profilemenu="1">
-          <div class="av">${T('ป', 'P')}</div>
-          <div><span>${T('ปอย แสงทอง', 'Poy S.')}</span><small>Owner</small></div>
+          <div class="av">${escText(acct.initial)}</div>
+          <div><span>${escText(acct.name)}</span><small>${escText(acct.roleLabel)}</small></div>
           ${I('chev_down', 12)}
         </button>
         ${state.profileMenuOpen ? profileMenuHTML() : ''}

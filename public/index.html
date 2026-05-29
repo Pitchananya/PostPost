@@ -1146,6 +1146,7 @@ document.addEventListener('click', (e) => {
   if (e.target.closest('[data-signout]')) {
     e.preventDefault();
     state.profileMenuOpen = false;
+    state.user = null; state.tenant = null;
     try { localStorage.removeItem('postpost_token'); } catch(_){}
     try { if (window.PP && window.PP.token && window.PP.token.set) window.PP.token.set(''); } catch(_){}
     toast(state.lang==='th'?'ออกจากระบบแล้ว':'Signed out','success');
@@ -1469,6 +1470,8 @@ render();
       var d = await api('/api/auth/login', { method:'POST', body:{ email: em, password: pw } });
       if (!d || !d.token) throw new Error('no token in response');
       setTok(d.token);
+      // Capture the real account for the topbar/profile UI (/me adds name+tenant).
+      try { applyMe(await api('/api/auth/me')); } catch(_){ if (d.user) state.user = d.user; }
       state.page = 'profile'; render();
       toast(state.lang==='th'?'✓ เข้าสู่ระบบสำเร็จ':'✓ Signed in','success');
     } catch(e){
@@ -6532,11 +6535,22 @@ render();
       : 'This button is being wired to the backend — coming soon');
   });
 
+  // Stash the authenticated account into state so the topbar / profile menu
+  // render the REAL user (name/email/role) instead of placeholder demo data.
+  function applyMe(me){
+    if (!me || !me.user) return;
+    try {
+      state.user = me.user;
+      if (me.tenant) state.tenant = me.tenant;
+    } catch(_){}
+  }
+
   // boot — a returning user with a valid token lands straight in the app
   (async function(){
     if (getTok()) {
       try {
-        await api('/api/auth/me');
+        var me = await api('/api/auth/me');
+        applyMe(me);
         state.page = 'profile';
         render();
         // Pull cloud state in background (silent — merge into local + re-render if changed)

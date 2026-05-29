@@ -250,8 +250,18 @@ export function requireAuth(req, res, next) {
 
 router.get('/me', requireAuth, async (req, res) => {
   let tenant = null;
+  // The JWT carries only { sub, email, role, tenant_id } — no display name.
+  // Pull the real name from the users table so the UI shows the actual
+  // account, not a placeholder.
+  let name = req.user.name || null;
   try { tenant = await db.tenants.getById(req.user.tenant_id || DEFAULT_TENANT_ID); } catch {}
-  res.json({ user: req.user, tenant });
+  try {
+    if (!name && req.user.email) {
+      const u = await db.users.findByEmail(req.user.email);
+      if (u) name = u.name || null;
+    }
+  } catch {}
+  res.json({ user: { ...req.user, name }, tenant });
 });
 
 export default router;

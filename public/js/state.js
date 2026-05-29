@@ -90,6 +90,8 @@ const DEFAULTS = {
   profileMenuOpen: false,  // topbar profile dropdown — opened by clicking the .profilePill
   workspaceName: '',       // account-level workspace name (the "โปรไฟล์รวม" shown in the sidebar) — cloud-synced
   workspaceLogo: '',       // account-level workspace logo (dataURL) shown in the sidebar card — cloud-synced
+  user: null,              // authenticated account { sub, email, role, name } from /api/auth/me — drives the topbar profile pill
+  tenant: null,            // { id, name, plan, ... } of the logged-in workspace from /api/auth/me
 };
 
 // If a pre-boot IIFE in index.html already published window.PP.state, adopt
