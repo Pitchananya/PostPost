@@ -1693,6 +1693,56 @@ render();
     if (e.target.closest('[data-connectguide]')) connectGuideModal();
   });
 
+  // ── Topbar search ── Enter in #ppSearch opens a results modal; ⌘/Ctrl+K focuses it.
+  function doSearch(q){
+    var L = function(th,en){ return state.lang==='th'?th:en; };
+    var esc = function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
+    q = String(q||'').trim();
+    if (!q) return;
+    var ql = q.toLowerCase();
+    var results = [];
+    BRANDS.forEach(function(b){
+      if (String(b.name||'').toLowerCase().indexOf(ql) >= 0)
+        results.push({ icon:'store', label:b.name, sub:L('แบรนด์','Brand'), act:function(){ state.brand=b.id; try{ localStorage.setItem('postpost_active_brand', b.id); }catch(_){ } state.page='profile'; } });
+    });
+    var ab = BRANDS.filter(function(b){ return b.id===state.brand; })[0];
+    ((ab && ab.products) || []).forEach(function(p){
+      var nm = p.name_th || p.name_en || p.name || '';
+      if (String(nm).toLowerCase().indexOf(ql) >= 0)
+        results.push({ icon:'package', label:nm, sub:L('สินค้า','Product'), act:function(){ state.page='profile'; } });
+    });
+    (state.drafts||[]).forEach(function(d){
+      if (String(d.topic||'').toLowerCase().indexOf(ql) >= 0)
+        results.push({ icon:'type', label:d.topic, sub:L('ดราฟ','Draft'), act:function(){ state.page='library'; } });
+    });
+    [['profile','Profile'],['topics','Topic Bank'],['caption',L('สร้าง Caption','Caption')],['creative',L('สร้าง Creative','Creative')],['avatar','Talking Avatar'],['textvideo','Text to Video'],['automation','Automation Log'],['analytics','Analytics'],['calendar',L('ปฏิทิน','Calendar')],['library',L('คลังคอนเทนต์','Library')]].forEach(function(pg){
+      if (pg[1].toLowerCase().indexOf(ql) >= 0)
+        results.push({ icon:'chev_right', label:pg[1], sub:L('ไปที่หน้า','Go to page'), act:function(){ state.page=pg[0]; } });
+    });
+    var ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(16,8,30,.55);backdrop-filter:blur(4px);display:flex;align-items:flex-start;justify-content:center;padding:80px 24px;font-family:Prompt,sans-serif';
+    var rows = results.length
+      ? results.map(function(r,i){ return '<button data-searchidx="'+i+'" style="display:flex;align-items:center;gap:12px;width:100%;text-align:left;padding:12px 14px;border:0;border-bottom:1px solid var(--line);background:#fff;cursor:pointer">'
+          + '<span style="width:30px;height:30px;border-radius:8px;background:var(--cream2);display:grid;place-items:center;flex-shrink:0">'+I(r.icon,15,'#7C3AED')+'</span>'
+          + '<span style="flex:1;min-width:0"><span style="display:block;font-size:13.5px;font-weight:700;color:var(--purple);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(r.label)+'</span><span style="font-size:11px;color:var(--muted)">'+r.sub+'</span></span>'
+          + I('chev_right',14,'#A39BAE')+'</button>'; }).join('')
+      : '<div style="padding:32px;text-align:center;color:var(--muted);font-size:13px">'+L('ไม่พบผลลัพธ์สำหรับ','No results for')+' "'+esc(q)+'"</div>';
+    ov.innerHTML = '<div style="background:#fff;border-radius:18px;max-width:560px;width:100%;max-height:70vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 70px rgba(38,20,71,.4)">'
+      + '<div style="padding:12px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px">'+I('search',15,'#6B6473')+'<span style="font-size:13px;color:var(--ink2)">'+L('ผลการค้นหา','Results')+' · "'+esc(q)+'"</span><button data-searchclose="1" style="margin-left:auto;border:0;background:var(--cream2);border-radius:8px;width:26px;height:26px;cursor:pointer">'+I('x',13,'var(--muted)')+'</button></div>'
+      + '<div style="overflow-y:auto">'+rows+'</div></div>';
+    ov.addEventListener('click', function(e){
+      if (e.target===ov || e.target.closest('[data-searchclose]')) { ov.remove(); return; }
+      var row = e.target.closest('[data-searchidx]');
+      if (row){ var idx=parseInt(row.getAttribute('data-searchidx'),10); ov.remove(); if (results[idx] && results[idx].act){ results[idx].act(); render(); } }
+    });
+    document.addEventListener('keydown', function esc2(e){ if(e.key==='Escape'){ ov.remove(); document.removeEventListener('keydown',esc2); } });
+    document.body.appendChild(ov);
+  }
+  document.addEventListener('keydown', function(e){
+    if ((e.metaKey||e.ctrlKey) && (e.key==='k'||e.key==='K')) { e.preventDefault(); var s=document.getElementById('ppSearch'); if(s) s.focus(); return; }
+    if (e.key==='Enter' && e.target && e.target.id==='ppSearch') { e.preventDefault(); doSearch(e.target.value); }
+  });
+
   // Detailed Shopee-link guide with illustrated steps
   function shopGuideModal(){
     var L = function(th,en){ return state.lang==='th'?th:en; };
@@ -6704,7 +6754,7 @@ render();
 
   // no dead clicks — any button without a wired action gives feedback
   var HANDLED = '[data-go],[data-lang],[data-set],[data-set-step],[data-toggle],'
-    + '[data-voice],[data-brand],[data-product],[data-archetype],[data-archeguide],[data-archeclose],[data-connectguide],[data-connectguideclose],'
+    + '[data-voice],[data-brand],[data-product],[data-archetype],[data-archeguide],[data-archeclose],[data-connectguide],[data-connectguideclose],[data-searchidx],[data-searchclose],'
     + '[data-addbrand],[data-delbrand],[data-aiwrite],[data-usedesc],[data-usedesc-s],[data-changelogo],[data-shopeesync],'
     + '[data-shopguide],[data-shopguideclose],[data-prodview],[data-pdclose],[data-savebrand],'
     + '[data-chconnect],[data-chdisconnect],[data-chsave],[data-chclose],'

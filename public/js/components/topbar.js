@@ -45,7 +45,7 @@ export function topbarHTML() {
     <div class="topRight">
       <div class="search">
         ${I('search', 16, '#6B6473')}
-        <input placeholder="${T('ค้นหาโพสต์, สินค้า, หัวข้อ...', 'Search posts, products, topics...')}" />
+        <input id="ppSearch" autocomplete="off" placeholder="${T('ค้นหาโพสต์, สินค้า, หัวข้อ... (Enter)', 'Search posts, products, topics… (Enter)')}" />
         <span class="searchKbd">⌘K</span>
       </div>
       <div class="chWidget" data-go="profile" title="${T('จัดการ / เชื่อมช่องทางโพสต์', 'Manage / connect channels')}" style="cursor:pointer">
