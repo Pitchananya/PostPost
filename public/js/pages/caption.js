@@ -42,6 +42,14 @@ export function pageCaption() {
     actions
   ))}
 
+  ${state.genLoading ? raw(`<div class="genBanner">
+    <div class="spin"></div>
+    <div style="flex:1">
+      <div style="font-size:15px;font-weight:800">${state.genPhase === 'images' ? T('2/2 · AI กำลังสร้างรูป…', '2/2 · Generating images…') : T('AI กำลังสร้างคอนเทนต์…', 'AI is generating…')}</div>
+      <div style="font-size:12px;opacity:.92">${T('กรุณารอสักครู่ — อย่าปิดหน้านี้หรือกดสร้างซ้ำ', 'Please wait — do not close this page or click generate again')}</div>
+    </div>
+  </div>`) : ''}
+
   ${raw(productPickerHTML())}
 
   <div class="tabs lg" style="margin-bottom:18px">
