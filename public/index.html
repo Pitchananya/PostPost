@@ -2402,19 +2402,24 @@ render();
     // is uploaded in its OWN request (a single image stays under the limit),
     // then we send only URLs. http(s) URLs (async models) pass through.
     async function _hostSlides(list){
-      var needsHost = list.some(function(u){ return /^data:/.test(u); });
-      if (needsHost) toast(L('กำลังอัปโหลดรูป…','Uploading images…'));
+      // Render every slide to the user's picked aspect (deterministic canvas
+      // crop) BEFORE hosting — the FB URL path posts the image AS-IS and the
+      // model output is square, so without this a "4:5"/"9:16" pick posts as a
+      // square. renderImageAtAspect → exact dims (4:5=1080x1350, 9:16=1080x1920).
+      var asp = state.previewAspect || '4:5';
+      if (list.length) toast(L('กำลังเตรียมรูป ('+asp+')…','Preparing images ('+asp+')…'));
       var out = [];
       for (var i=0;i<list.length;i++){
         var u = list[i];
-        if (/^https?:\/\//.test(u)) { out.push(u); continue; }
-        if (/^data:/.test(u)) {
-          try {
-            var up = await api('/api/ai/upload-media', { method:'POST', body:{ data_url: u, kind:'image' } });
-            if (up && up.url) { out.push(up.url); continue; }
-          } catch(_){}
-        }
-        out.push(u); // hosting unavailable — keep as-is (small images may still post)
+        var fixed = null;
+        try { fixed = await renderImageAtAspect(u, asp); } catch(_){ fixed = null; }  // may fail on CORS for remote URLs
+        if (!fixed && /^https?:\/\//.test(u)) { out.push(u); continue; }  // already hosted, couldn't re-crop → keep original
+        var toHost = fixed || u;                                          // data URL at the right aspect (or raw data: fallback)
+        try {
+          var up = await api('/api/ai/upload-media', { method:'POST', body:{ data_url: toHost, kind:'image' } });
+          if (up && up.url) { out.push(up.url); continue; }
+        } catch(_){}
+        out.push(toHost); // hosting unavailable — keep the aspect-corrected data URL
       }
       return out;
     }
